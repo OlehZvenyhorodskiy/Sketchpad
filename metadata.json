@@ -1,0 +1,6 @@
+{
+  "name": "MeCanvas",
+  "description": "Цифровий конспект та канва для нотаток, малювання, аудіо та AI-асистента",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
