@@ -266,40 +266,44 @@ fun InteractiveCanvas(
                         }
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        if (currentTool == ToolType.SELECTOR) {
-                            val id = selectedElementId
-                            val type = selectedElementType
-                            if (id != null && type != null) {
-                                val dx = rawPoint.x - dragStartOffset.x
-                                val dy = rawPoint.y - dragStartOffset.y
-                                if (isResizingCorner) {
-                                    val newW = (elementOriginalSize.x + dx).coerceAtLeast(60f)
-                                    val newH = (elementOriginalSize.y + dy).coerceAtLeast(60f)
-                                    onResizeElement(id, type, newW, newH)
-                                } else {
-                                    val newX = elementOriginalPos.x + dx
-                                    val newY = elementOriginalPos.y + dy
-                                    when (type) {
-                                        "SHAPE" -> onMoveShape(id, newX, newY)
-                                        "IMAGE" -> onMoveImage(id, newX, newY)
-                                        "TEXT" -> onMoveText(id, newX, newY)
-                                        "CHART" -> onMoveChart(id, newX, newY)
+                        when (currentTool) {
+                            ToolType.SELECTOR -> {
+                                val id = selectedElementId
+                                val type = selectedElementType
+                                if (id != null && type != null) {
+                                    val dx = rawPoint.x - dragStartOffset.x
+                                    val dy = rawPoint.y - dragStartOffset.y
+                                    if (isResizingCorner) {
+                                        val newW = (elementOriginalSize.x + dx).coerceAtLeast(60f)
+                                        val newH = (elementOriginalSize.y + dy).coerceAtLeast(60f)
+                                        onResizeElement(id, type, newW, newH)
+                                    } else {
+                                        val newX = elementOriginalPos.x + dx
+                                        val newY = elementOriginalPos.y + dy
+                                        when (type) {
+                                            "SHAPE" -> onMoveShape(id, newX, newY)
+                                            "IMAGE" -> onMoveImage(id, newX, newY)
+                                            "TEXT" -> onMoveText(id, newX, newY)
+                                            "CHART" -> onMoveChart(id, newX, newY)
+                                        }
                                     }
                                 }
                             }
-                        } else if (currentTool == ToolType.ERASER) {
-                            eraserTouchPos = rawPoint
-                            onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
-                        } else {
-                            activeStrokePoints.add(
-                                StrokePoint(
-                                    x = rawPoint.x,
-                                    y = rawPoint.y,
-                                    pressure = pressure,
-                                    tilt = tilt,
-                                    timestampMs = System.currentTimeMillis()
+                            ToolType.ERASER -> {
+                                eraserTouchPos = rawPoint
+                                onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
+                            }
+                            else -> {
+                                activeStrokePoints.add(
+                                    StrokePoint(
+                                        x = rawPoint.x,
+                                        y = rawPoint.y,
+                                        pressure = pressure,
+                                        tilt = tilt,
+                                        timestampMs = System.currentTimeMillis()
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
