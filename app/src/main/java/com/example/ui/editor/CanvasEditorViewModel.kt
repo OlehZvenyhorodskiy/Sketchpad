@@ -13,11 +13,13 @@ import com.example.core.drawing.DrawingEngine
 import com.example.core.drawing.RulerState
 import com.example.data.models.AudioRecordingEntity
 import com.example.data.models.BackgroundPattern
+import com.example.data.models.BlendMode
 import com.example.data.models.CanvasEntity
 import com.example.data.models.ChartElementEntity
 import com.example.data.models.EraserMode
 import com.example.data.models.HslaColor
 import com.example.data.models.ImageElementEntity
+import com.example.data.models.LayerEntity
 import com.example.data.models.PageEntity
 import com.example.data.models.PageSizePreset
 import com.example.data.models.ShapeEntity
@@ -45,7 +47,6 @@ class CanvasEditorViewModel(
 
     private val audioRecorderManager = AudioRecorderManager(context)
     private val geminiService = GeminiAssistantService()
-    private val exportManager = ExportManager(context)
 
     val audioStatus: StateFlow<RecordingStatus> = audioRecorderManager.status
 
@@ -87,7 +88,24 @@ class CanvasEditorViewModel(
     private val _rulerState = MutableStateFlow(RulerState())
     val rulerState: StateFlow<RulerState> = _rulerState.asStateFlow()
 
-    // Undo / Redo history per page snapshot
+    private val _isSlidersVertical = MutableStateFlow(false)
+    val isSlidersVertical: StateFlow<Boolean> = _isSlidersVertical.asStateFlow()
+
+    private val _activeLayerId = MutableStateFlow<String?>(null)
+    val activeLayerId: StateFlow<String?> = _activeLayerId.asStateFlow()
+
+    private val _showLayersPanel = MutableStateFlow(false)
+    val showLayersPanel: StateFlow<Boolean> = _showLayersPanel.asStateFlow()
+
+    fun toggleLayersPanel() { _showLayersPanel.value = !_showLayersPanel.value }
+
+    fun toggleSliderOrientation() {
+        _isSlidersVertical.value = !_isSlidersVertical.value
+    }
+
+    // Command Pattern Undo / Redo history
+    private val commandUndoStack = ArrayDeque<com.example.data.models.CanvasCommand>(100)
+    private val commandRedoStack = ArrayDeque<com.example.data.models.CanvasCommand>(100)
     private val pageUndoHistory = mutableListOf<PageEntity>()
     private val pageRedoHistory = mutableListOf<PageEntity>()
 
@@ -166,12 +184,110 @@ class CanvasEditorViewModel(
         _rulerState.value = state
     }
 
+    private fun ensureLayersExist(page: PageEntity): PageEntity {
+        if (page.layers.isEmpty()) {
+            val defaultLayer = LayerEntity(
+                id = UUID.randomUUID().toString(), name = "Фон",
+                strokes = page.strokes, shapes = page.shapes,
+                textBlocks = page.textBlocks, images = page.images, charts = page.charts
+            )
+            return page.copy(
+                layers = listOf(defaultLayer), activeLayerId = defaultLayer.id,
+                strokes = emptyList(), shapes = emptyList(),
+                textBlocks = emptyList(), images = emptyList(), charts = emptyList()
+            )
+        }
+        return page
+    }
+
+    fun addLayer() {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val newLayer = LayerEntity(name = "Шар ${migrated.layers.size + 1}")
+        _activeLayerId.value = newLayer.id
+        updateCurrentPage(migrated.copy(
+            layers = migrated.layers + newLayer,
+            activeLayerId = newLayer.id
+        ))
+    }
+
+    fun deleteLayer(layerId: String) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        if (migrated.layers.size <= 1) return
+        pushUndoState(migrated)
+        val updated = migrated.layers.filterNot { it.id == layerId }
+        val newActive = if (_activeLayerId.value == layerId) updated.last().id else _activeLayerId.value
+        _activeLayerId.value = newActive
+        updateCurrentPage(migrated.copy(layers = updated, activeLayerId = newActive))
+    }
+
+    fun setActiveLayer(layerId: String) {
+        _activeLayerId.value = layerId
+        currentPage?.let { updateCurrentPage(it.copy(activeLayerId = layerId)) }
+    }
+
+    fun toggleLayerVisibility(layerId: String) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updated = migrated.layers.map {
+            if (it.id == layerId) it.copy(isVisible = !it.isVisible) else it
+        }
+        updateCurrentPage(migrated.copy(layers = updated))
+    }
+
+    fun setLayerOpacity(layerId: String, opacity: Float) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updated = migrated.layers.map {
+            if (it.id == layerId) it.copy(opacity = opacity.coerceIn(0f, 1f)) else it
+        }
+        updateCurrentPage(migrated.copy(layers = updated))
+    }
+
+    fun renameLayer(layerId: String, newName: String) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updated = migrated.layers.map {
+            if (it.id == layerId) it.copy(name = newName) else it
+        }
+        updateCurrentPage(migrated.copy(layers = updated))
+    }
+
+    fun moveLayerUp(layerId: String) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val idx = migrated.layers.indexOfFirst { it.id == layerId }
+        if (idx < 0 || idx >= migrated.layers.size - 1) return
+        val list = migrated.layers.toMutableList()
+        val tmp = list[idx]; list[idx] = list[idx + 1]; list[idx + 1] = tmp
+        updateCurrentPage(migrated.copy(layers = list))
+    }
+
+    fun moveLayerDown(layerId: String) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val idx = migrated.layers.indexOfFirst { it.id == layerId }
+        if (idx <= 0) return
+        val list = migrated.layers.toMutableList()
+        val tmp = list[idx]; list[idx] = list[idx - 1]; list[idx - 1] = tmp
+        updateCurrentPage(migrated.copy(layers = list))
+    }
+
     fun addStrokeToCurrentPage(stroke: StrokeEntity) {
         val page = currentPage ?: return
-        pushUndoState(page)
-        val updatedStrokes = page.strokes + stroke
-        val updatedPage = page.copy(strokes = updatedStrokes)
-        updateCurrentPage(updatedPage)
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) {
+                layer.copy(strokes = layer.strokes + stroke)
+            } else {
+                layer
+            }
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     fun eraseAtPoint(point: Offset, radius: Float) {
@@ -192,9 +308,23 @@ class CanvasEditorViewModel(
         }
     }
 
+    fun executeCommand(command: com.example.data.models.CanvasCommand) {
+        val page = currentPage ?: return
+        val newPage = command.execute(page)
+        commandUndoStack.addLast(command)
+        if (commandUndoStack.size > 100) commandUndoStack.removeFirst()
+        commandRedoStack.clear()
+        updateCurrentPage(newPage)
+    }
+
     fun undo() {
-        if (pageUndoHistory.isNotEmpty()) {
-            val page = currentPage ?: return
+        val page = currentPage ?: return
+        val command = commandUndoStack.removeLastOrNull()
+        if (command != null) {
+            val newPage = command.undo(page)
+            commandRedoStack.addLast(command)
+            updateCurrentPage(newPage)
+        } else if (pageUndoHistory.isNotEmpty()) {
             pageRedoHistory.add(page)
             val previousPage = pageUndoHistory.removeAt(pageUndoHistory.size - 1)
             updateCurrentPage(previousPage)
@@ -202,8 +332,13 @@ class CanvasEditorViewModel(
     }
 
     fun redo() {
-        if (pageRedoHistory.isNotEmpty()) {
-            val page = currentPage ?: return
+        val page = currentPage ?: return
+        val command = commandRedoStack.removeLastOrNull()
+        if (command != null) {
+            val newPage = command.execute(page)
+            commandUndoStack.addLast(command)
+            updateCurrentPage(newPage)
+        } else if (pageRedoHistory.isNotEmpty()) {
             pageUndoHistory.add(page)
             val nextPage = pageRedoHistory.removeAt(pageRedoHistory.size - 1)
             updateCurrentPage(nextPage)
@@ -550,7 +685,7 @@ class CanvasEditorViewModel(
 
     // Audio Recording Controls
     fun startAudioRecording() {
-        audioRecorderManager.startRecording()
+        audioRecorderManager.startRecording(canvasId)
     }
 
     fun stopAudioRecording() {
@@ -560,6 +695,10 @@ class CanvasEditorViewModel(
                 repository.saveAudioRecording(canvasId, path, durationMs)
             }
         }
+    }
+
+    fun renameAudioRecording(recording: AudioRecordingEntity, newName: String) {
+        viewModelScope.launch { repository.renameAudioRecording(recording.id, newName) }
     }
 
     fun playAudioRecording(filePath: String, startPosMs: Long = 0L) {
@@ -608,22 +747,26 @@ class CanvasEditorViewModel(
         }
     }
 
-    // Export PDF/Image
+    // Export PDF/SVG
     fun exportPdf(onSuccess: (File) -> Unit) {
-        val c = _canvas.value ?: return
-        viewModelScope.launch {
-            val file = exportManager.exportCanvasToPdf(c, _pages.value)
-            onSuccess(file)
+        val page = currentPage ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.pdf")
+            ExportManager.exportToPdf(page, file, context)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onSuccess(file)
+            }
         }
     }
 
     fun exportImage(onSuccess: (File) -> Unit) {
-        val c = _canvas.value ?: return
-        val p = currentPage ?: return
-        viewModelScope.launch {
-            val bitmap = exportManager.exportPageToBitmap(c, p, scaleRatio = 2.0f)
-            val file = exportManager.saveBitmapToFile(bitmap, "canvas_export_${System.currentTimeMillis()}.png")
-            onSuccess(file)
+        val page = currentPage ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.svg")
+            ExportManager.exportToSvg(page, file)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onSuccess(file)
+            }
         }
     }
 

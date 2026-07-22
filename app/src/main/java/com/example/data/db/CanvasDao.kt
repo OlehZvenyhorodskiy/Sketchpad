@@ -72,6 +72,12 @@ interface AudioDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecording(recording: AudioRecordingEntity)
 
+    @Update
+    suspend fun updateRecording(recording: AudioRecordingEntity)
+
+    @Query("UPDATE audio_recordings SET name = :newName WHERE id = :id")
+    suspend fun renameRecording(id: String, newName: String)
+
     @Query("DELETE FROM audio_recordings WHERE id = :id")
     suspend fun deleteRecording(id: String)
 

@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.PathMeasure
 import com.example.data.models.EraserMode
 import com.example.data.models.HslaColor
@@ -65,34 +66,16 @@ data class RulerState(
 object DrawingEngine {
 
     fun createSmoothPath(points: List<StrokePoint>): Path {
-        val path = Path()
-        if (points.isEmpty()) return path
-        if (points.size == 1) {
-            val p = points.first()
-            path.addOval(Rect(p.x - 2f, p.y - 2f, p.x + 2f, p.y + 2f))
-            return path
+        if (points.size < 3) {
+            return Path().apply {
+                if (points.isNotEmpty()) {
+                    moveTo(points[0].x, points[0].y)
+                    if (points.size == 2) lineTo(points[1].x, points[1].y)
+                    else lineTo(points[0].x + 0.1f, points[0].y + 0.1f)
+                }
+            }
         }
-        if (points.size == 2) {
-            path.moveTo(points[0].x, points[0].y)
-            path.lineTo(points[1].x, points[1].y)
-            return path
-        }
-
-        path.moveTo(points[0].x, points[0].y)
-        var prevX = points[0].x
-        var prevY = points[0].y
-
-        for (i in 1 until points.size) {
-            val curr = points[i]
-            val midX = (prevX + curr.x) / 2f
-            val midY = (prevY + curr.y) / 2f
-            path.quadraticTo(prevX, prevY, midX, midY)
-            prevX = curr.x
-            prevY = curr.y
-        }
-        val last = points.last()
-        path.lineTo(last.x, last.y)
-        return path
+        return PathSmoothing.createCatmullRomPath(points, tension = 0.5f, segments = 6).asComposePath()
     }
 
     fun isPointInStroke(point: Offset, stroke: StrokeEntity, radius: Float): Boolean {

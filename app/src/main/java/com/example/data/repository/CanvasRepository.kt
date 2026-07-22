@@ -246,30 +246,25 @@ class CanvasRepository(private val context: Context) {
 
     suspend fun saveAudioRecording(
         canvasId: String,
-        tempFilePath: String,
+        filePath: String,
         durationMs: Long
     ): AudioRecordingEntity = withContext(Dispatchers.IO) {
-        val targetFile = File(context.filesDir, "audio_${UUID.randomUUID()}.m4a")
-        File(tempFilePath).copyTo(targetFile, overwrite = true)
         val recording = AudioRecordingEntity(
             canvasId = canvasId,
-            filePath = targetFile.absolutePath,
+            filePath = filePath,
+            name = "",
             durationMs = durationMs
         )
         audioDao.insertRecording(recording)
         return@withContext recording
     }
 
+    suspend fun renameAudioRecording(recordingId: String, newName: String) = withContext(Dispatchers.IO) {
+        audioDao.renameRecording(recordingId, newName)
+    }
+
     suspend fun deleteAudioRecording(recording: AudioRecordingEntity) = withContext(Dispatchers.IO) {
         audioDao.deleteRecording(recording.id)
-        try {
-            val file = File(recording.filePath)
-            if (file.exists()) {
-                file.delete()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     suspend fun saveImportedImage(uri: Uri): String = withContext(Dispatchers.IO) {

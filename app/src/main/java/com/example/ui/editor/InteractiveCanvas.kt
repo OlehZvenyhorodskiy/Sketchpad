@@ -149,6 +149,11 @@ fun InteractiveCanvas(
                 }
             }
             .pointerInteropFilter { motionEvent ->
+                // Palm Rejection Filter
+                if (com.example.core.gesture.PalmRejectionFilter.shouldRejectEvent(motionEvent)) {
+                    return@pointerInteropFilter true
+                }
+
                 if (motionEvent.pointerCount > 1) {
                     activeStrokePoints.clear()
                     eraserTouchPos = null
@@ -203,40 +208,44 @@ fun InteractiveCanvas(
 
                                 pageEntity?.let { page ->
                                     val margin = 30f / currentScale
-                                    page.shapes.reversed().forEach { shape ->
-                                        if (selectedElementId == null && rawPoint.x >= shape.x - margin && rawPoint.x <= shape.x + shape.width + margin &&
-                                            rawPoint.y >= shape.y - margin && rawPoint.y <= shape.y + shape.height + margin) {
-                                            selectedElementId = shape.id
-                                            selectedElementType = "SHAPE"
-                                            elementOriginalPos = Offset(shape.x, shape.y)
-                                            elementOriginalSize = Offset(shape.width, shape.height)
-                                        }
-                                    }
-                                    page.images.reversed().forEach { img ->
-                                        if (selectedElementId == null && rawPoint.x >= img.x - margin && rawPoint.x <= img.x + img.width + margin &&
-                                            rawPoint.y >= img.y - margin && rawPoint.y <= img.y + img.height + margin) {
-                                            selectedElementId = img.id
-                                            selectedElementType = "IMAGE"
-                                            elementOriginalPos = Offset(img.x, img.y)
-                                            elementOriginalSize = Offset(img.width, img.height)
-                                        }
-                                    }
-                                    page.textBlocks.reversed().forEach { text ->
-                                        if (selectedElementId == null && rawPoint.x >= text.x - margin && rawPoint.x <= text.x + text.width + margin &&
-                                            rawPoint.y >= text.y - margin && rawPoint.y <= text.y + text.height + margin) {
-                                            selectedElementId = text.id
-                                            selectedElementType = "TEXT"
-                                            elementOriginalPos = Offset(text.x, text.y)
-                                            elementOriginalSize = Offset(text.width, text.height)
-                                        }
-                                    }
-                                    page.charts.reversed().forEach { chart ->
-                                        if (selectedElementId == null && rawPoint.x >= chart.x - margin && rawPoint.x <= chart.x + chart.width + margin &&
-                                            rawPoint.y >= chart.y - margin && rawPoint.y <= chart.y + chart.height + margin) {
-                                            selectedElementId = chart.id
-                                            selectedElementType = "CHART"
-                                            elementOriginalPos = Offset(chart.x, chart.y)
-                                            elementOriginalSize = Offset(chart.width, chart.height)
+                                    page.getEffectiveLayers().reversed().forEach { layer ->
+                                        if (selectedElementId == null) {
+                                            layer.shapes.reversed().forEach { shape ->
+                                                if (selectedElementId == null && rawPoint.x >= shape.x - margin && rawPoint.x <= shape.x + shape.width + margin &&
+                                                    rawPoint.y >= shape.y - margin && rawPoint.y <= shape.y + shape.height + margin) {
+                                                    selectedElementId = shape.id
+                                                    selectedElementType = "SHAPE"
+                                                    elementOriginalPos = Offset(shape.x, shape.y)
+                                                    elementOriginalSize = Offset(shape.width, shape.height)
+                                                }
+                                            }
+                                            layer.images.reversed().forEach { img ->
+                                                if (selectedElementId == null && rawPoint.x >= img.x - margin && rawPoint.x <= img.x + img.width + margin &&
+                                                    rawPoint.y >= img.y - margin && rawPoint.y <= img.y + img.height + margin) {
+                                                    selectedElementId = img.id
+                                                    selectedElementType = "IMAGE"
+                                                    elementOriginalPos = Offset(img.x, img.y)
+                                                    elementOriginalSize = Offset(img.width, img.height)
+                                                }
+                                            }
+                                            layer.textBlocks.reversed().forEach { text ->
+                                                if (selectedElementId == null && rawPoint.x >= text.x - margin && rawPoint.x <= text.x + text.width + margin &&
+                                                    rawPoint.y >= text.y - margin && rawPoint.y <= text.y + text.height + margin) {
+                                                    selectedElementId = text.id
+                                                    selectedElementType = "TEXT"
+                                                    elementOriginalPos = Offset(text.x, text.y)
+                                                    elementOriginalSize = Offset(text.width, text.height)
+                                                }
+                                            }
+                                            layer.charts.reversed().forEach { chart ->
+                                                if (selectedElementId == null && rawPoint.x >= chart.x - margin && rawPoint.x <= chart.x + chart.width + margin &&
+                                                    rawPoint.y >= chart.y - margin && rawPoint.y <= chart.y + chart.height + margin) {
+                                                    selectedElementId = chart.id
+                                                    selectedElementType = "CHART"
+                                                    elementOriginalPos = Offset(chart.x, chart.y)
+                                                    elementOriginalSize = Offset(chart.width, chart.height)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -392,213 +401,265 @@ fun InteractiveCanvas(
                         y += lineSpacing
                     }
                 }
-                BackgroundPattern.BLANK -> {}
+                BackgroundPattern.GRID_SQUARE -> {
+                    val spacing = 32f * currentScale
+                    var x = panOffset.x % spacing
+                    if (x < 0) x += spacing
+                    while (x < canvasWidth) {
+                        drawLine(gridColor, Offset(x, 0f), Offset(x, canvasHeight), strokeWidth = 0.8f)
+                        x += spacing
+                    }
+                    var y = panOffset.y % spacing
+                    if (y < 0) y += spacing
+                    while (y < canvasHeight) {
+                        drawLine(gridColor, Offset(0f, y), Offset(canvasWidth, y), strokeWidth = 0.8f)
+                        y += spacing
+                    }
+                }
+                BackgroundPattern.GRID_ISOMETRIC -> {
+                    val isoSpacing = 40f * currentScale
+                    var startX = panOffset.x % (isoSpacing * 2) - canvasHeight
+                    while (startX < canvasWidth + canvasHeight) {
+                        drawLine(gridColor, Offset(startX, 0f), Offset(startX + canvasHeight * 0.577f, canvasHeight), strokeWidth = 0.7f)
+                        startX += isoSpacing
+                    }
+                    startX = panOffset.x % (isoSpacing * 2) - canvasHeight
+                    while (startX < canvasWidth + canvasHeight) {
+                        drawLine(gridColor, Offset(startX + canvasHeight * 0.577f, 0f), Offset(startX, canvasHeight), strokeWidth = 0.7f)
+                        startX += isoSpacing
+                    }
+                    var y = panOffset.y % isoSpacing
+                    if (y < 0) y += isoSpacing
+                    while (y < canvasHeight) {
+                        drawLine(gridColor, Offset(0f, y), Offset(canvasWidth, y), strokeWidth = 0.7f)
+                        y += isoSpacing
+                    }
+                }
+                BackgroundPattern.PROTRACTOR -> {
+                    val centerX = canvasWidth / 2 + panOffset.x
+                    val centerY = canvasHeight / 2 + panOffset.y
+                    val maxRadius = minOf(canvasWidth, canvasHeight) * 0.4f
+                    for (r in 1..4) {
+                        drawCircle(gridColor, radius = maxRadius * r / 4, center = Offset(centerX, centerY), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8f))
+                    }
+                    for (deg in 0 until 360 step 15) {
+                        val rad = Math.toRadians(deg.toDouble())
+                        val innerR = maxRadius * 0.1f
+                        val outerR = maxRadius
+                        drawLine(
+                            gridColor,
+                            Offset(centerX + (innerR * Math.cos(rad)).toFloat(), centerY + (innerR * Math.sin(rad)).toFloat()),
+                            Offset(centerX + (outerR * Math.cos(rad)).toFloat(), centerY + (outerR * Math.sin(rad)).toFloat()),
+                            strokeWidth = if (deg % 90 == 0) 1.5f else 0.6f
+                        )
+                    }
+                }
+                BackgroundPattern.MUSIC_STAFF -> {
+                    val staffSpacing = 24f * currentScale
+                    var y = panOffset.y % (staffSpacing * 8)
+                    if (y < 0) y += staffSpacing * 8
+                    while (y < canvasHeight) {
+                        for (i in 0 until 5) {
+                            drawLine(gridColor, Offset(0f, y + i * staffSpacing), Offset(canvasWidth, y + i * staffSpacing), strokeWidth = 1f)
+                        }
+                        y += staffSpacing * 8
+                    }
+                }
+                BackgroundPattern.BLANK, BackgroundPattern.NONE -> {}
             }
 
-            // 2. Render Page Elements
+            // 2. Render Page Elements per Layer (bottom to top)
             pageEntity?.let { page ->
-                // Images
-                page.images.forEach { image ->
-                    val pivotX = image.x * currentScale + panOffset.x + (image.width * currentScale) / 2f
-                    val pivotY = image.y * currentScale + panOffset.y + (image.height * currentScale) / 2f
-                    rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
-                        drawIntoCanvas { canvas ->
-                            try {
-                                val file = File(image.sourceUri)
-                                if (file.exists()) {
-                                    val bitmap = bitmapCache.getOrPut(image.sourceUri) {
-                                        android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                                    }
-                                    if (bitmap != null) {
-                                        val paint = android.graphics.Paint().apply {
-                                            alpha = (image.opacity.coerceIn(0.1f, 1.0f) * 255).toInt()
-                                            isAntiAlias = true
-                                            isFilterBitmap = true
+                page.visibleLayersBottomUp().forEach { layer ->
+                    val layerAlpha = layer.opacity.coerceIn(0f, 1f)
+
+                    // Images
+                    layer.images.forEach { image ->
+                        val pivotX = image.x * currentScale + panOffset.x + (image.width * currentScale) / 2f
+                        val pivotY = image.y * currentScale + panOffset.y + (image.height * currentScale) / 2f
+                        rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
+                            drawIntoCanvas { canvas ->
+                                try {
+                                    val file = File(image.sourceUri)
+                                    if (file.exists()) {
+                                        val bitmap = bitmapCache.getOrPut(image.sourceUri) {
+                                            android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                                         }
-                                        val dstRect = android.graphics.RectF(
-                                            image.x * currentScale + panOffset.x,
-                                            image.y * currentScale + panOffset.y,
-                                            (image.x + image.width) * currentScale + panOffset.x,
-                                            (image.y + image.height) * currentScale + panOffset.y
-                                        )
-                                        canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
+                                        if (bitmap != null) {
+                                            val paint = android.graphics.Paint().apply {
+                                                alpha = (image.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
+                                                isAntiAlias = true
+                                                isFilterBitmap = true
+                                            }
+                                            val dstRect = android.graphics.RectF(
+                                                image.x * currentScale + panOffset.x,
+                                                image.y * currentScale + panOffset.y,
+                                                (image.x + image.width) * currentScale + panOffset.x,
+                                                (image.y + image.height) * currentScale + panOffset.y
+                                            )
+                                            canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
+                                        }
                                     }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
                                 }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
                             }
                         }
                     }
-                }
 
-                // Shapes
-                page.shapes.forEach { shape ->
-                    val pivotX = shape.x * currentScale + panOffset.x + (shape.width * currentScale) / 2f
-                    val pivotY = shape.y * currentScale + panOffset.y + (shape.height * currentScale) / 2f
-                    rotate(degrees = shape.rotation, pivot = Offset(pivotX, pivotY)) {
-                        val path = DrawingEngine.createShapePath(
-                            shape.shapeType,
-                            Rect(
-                                shape.x * currentScale + panOffset.x,
-                                shape.y * currentScale + panOffset.y,
-                                (shape.x + shape.width) * currentScale + panOffset.x,
-                                (shape.y + shape.height) * currentScale + panOffset.y
+                    // Shapes
+                    layer.shapes.forEach { shape ->
+                        val pivotX = shape.x * currentScale + panOffset.x + (shape.width * currentScale) / 2f
+                        val pivotY = shape.y * currentScale + panOffset.y + (shape.height * currentScale) / 2f
+                        rotate(degrees = shape.rotation, pivot = Offset(pivotX, pivotY)) {
+                            val path = DrawingEngine.createShapePath(
+                                shape.shapeType,
+                                Rect(
+                                    shape.x * currentScale + panOffset.x,
+                                    shape.y * currentScale + panOffset.y,
+                                    (shape.x + shape.width) * currentScale + panOffset.x,
+                                    (shape.y + shape.height) * currentScale + panOffset.y
+                                )
                             )
+                            val fillColor = Color(shape.fillColor)
+                            val strokeColor = Color(shape.strokeColor)
+                            drawPath(path, fillColor.copy(alpha = fillColor.alpha * layerAlpha))
+                            drawPath(path, strokeColor.copy(alpha = strokeColor.alpha * layerAlpha), style = Stroke(shape.strokeWidth * currentScale))
+                        }
+                    }
+
+                    // Charts
+                    layer.charts.forEach { chart ->
+                        val cx = chart.x * currentScale + panOffset.x
+                        val cy = chart.y * currentScale + panOffset.y
+                        val cw = chart.width * currentScale
+                        val ch = chart.height * currentScale
+
+                        val chartBgColor = if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                        val chartBorderColor = if (isDarkBackground) Color(0xFF38BDF8) else Color(0xFF0284C7)
+                        val chartGridColor = if (isDarkBackground) Color(0x3394A3B8) else Color(0x22475569)
+
+                        drawRect(
+                            color = chartBgColor.copy(alpha = chartBgColor.alpha * layerAlpha),
+                            topLeft = Offset(cx, cy),
+                            size = androidx.compose.ui.geometry.Size(cw, ch)
                         )
-                        drawPath(path, Color(shape.fillColor))
-                        drawPath(path, Color(shape.strokeColor), style = Stroke(shape.strokeWidth * currentScale))
-                    }
-                }
+                        drawRect(
+                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
+                            topLeft = Offset(cx, cy),
+                            size = androidx.compose.ui.geometry.Size(cw, ch),
+                            style = Stroke(2f * currentScale)
+                        )
 
-                // Coordinate Grid Charts (Dynamic Graph Paper Grid: expands with new squares when resized)
-                page.charts.forEach { chart ->
-                    val cx = chart.x * currentScale + panOffset.x
-                    val cy = chart.y * currentScale + panOffset.y
-                    val cw = chart.width * currentScale
-                    val ch = chart.height * currentScale
+                        val squareSize = 32f * currentScale
+                        val cols = (cw / squareSize).toInt().coerceAtLeast(1)
+                        val rows = (ch / squareSize).toInt().coerceAtLeast(1)
 
-                    // Background Card (Adapts to Light/Dark Canvas with distinct contrast)
-                    val chartBgColor = if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-                    val chartBorderColor = if (isDarkBackground) Color(0xFF38BDF8) else Color(0xFF0284C7)
-                    val chartGridColor = if (isDarkBackground) Color(0x3394A3B8) else Color(0x22475569)
-                    val chartTextColor = if (isDarkBackground) android.graphics.Color.WHITE else android.graphics.Color.BLACK
-
-                    drawRect(
-                        color = chartBgColor,
-                        topLeft = Offset(cx, cy),
-                        size = androidx.compose.ui.geometry.Size(cw, ch)
-                    )
-                    drawRect(
-                        color = chartBorderColor,
-                        topLeft = Offset(cx, cy),
-                        size = androidx.compose.ui.geometry.Size(cw, ch),
-                        style = Stroke(2f * currentScale)
-                    )
-
-                    // Dynamic Square Grid: Keeps grid unit size fixed to maintain strict square aspect ratio
-                    val squareSize = 32f * currentScale
-                    val cols = (cw / squareSize).toInt().coerceAtLeast(1)
-                    val rows = (ch / squareSize).toInt().coerceAtLeast(1)
-
-                    for (i in 1..cols) {
-                        val xPos = cx + i * squareSize
-                        if (xPos < cx + cw) {
-                            drawLine(
-                                color = chartGridColor,
-                                start = Offset(xPos, cy),
-                                end = Offset(xPos, cy + ch),
-                                strokeWidth = 1f
-                            )
+                        for (i in 1..cols) {
+                            val xPos = cx + i * squareSize
+                            if (xPos < cx + cw) {
+                                drawLine(
+                                    color = chartGridColor.copy(alpha = chartGridColor.alpha * layerAlpha),
+                                    start = Offset(xPos, cy),
+                                    end = Offset(xPos, cy + ch),
+                                    strokeWidth = 1f
+                                )
+                            }
                         }
-                    }
-                    for (j in 1..rows) {
-                        val yPos = cy + j * squareSize
-                        if (yPos < cy + ch) {
-                            drawLine(
-                                color = chartGridColor,
-                                start = Offset(cx, yPos),
-                                end = Offset(cx + cw, yPos),
-                                strokeWidth = 1f
-                            )
+                        for (j in 1..rows) {
+                            val yPos = cy + j * squareSize
+                            if (yPos < cy + ch) {
+                                drawLine(
+                                    color = chartGridColor.copy(alpha = chartGridColor.alpha * layerAlpha),
+                                    start = Offset(cx, yPos),
+                                    end = Offset(cx + cw, yPos),
+                                    strokeWidth = 1f
+                                )
+                            }
                         }
-                    }
 
-                    // Main X and Y Axes through Center
-                    val midX = cx + cw / 2f
-                    val midY = cy + ch / 2f
+                        val midX = cx + cw / 2f
+                        val midY = cy + ch / 2f
 
-                    drawLine(
-                        color = chartBorderColor,
-                        start = Offset(cx + 6f, midY),
-                        end = Offset(cx + cw - 6f, midY),
-                        strokeWidth = 2.5f
-                    )
-                    drawLine(
-                        color = chartBorderColor,
-                        start = Offset(midX, cy + ch - 6f),
-                        end = Offset(midX, cy + 6f),
-                        strokeWidth = 2.5f
-                    )
-
-                    // Axis Labels
-                    drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint().apply {
-                            color = chartTextColor
-                            textSize = 12f * currentScale.coerceAtLeast(0.8f)
-                            isAntiAlias = true
-                            isFakeBoldText = true
-                        }
-                        canvas.nativeCanvas.drawText("X", cx + cw - 18f, midY - 6f, paint)
-                        canvas.nativeCanvas.drawText("Y", midX + 8f, cy + 20f, paint)
-                        canvas.nativeCanvas.drawText("0", midX - 12f, midY + 16f, paint)
-                    }
-                }
-
-                // Text Blocks
-                page.textBlocks.forEach { textBlock ->
-                    drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint().apply {
-                            color = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground) android.graphics.Color.WHITE else textBlock.color
-                            textSize = textBlock.fontSize * currentScale * 1.5f
-                            isAntiAlias = true
-                            isFakeBoldText = textBlock.isBold
-                        }
-                        canvas.nativeCanvas.drawText(
-                            textBlock.text,
-                            textBlock.x * currentScale + panOffset.x,
-                            (textBlock.y + textBlock.fontSize) * currentScale + panOffset.y,
-                            paint
+                        drawLine(
+                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
+                            start = Offset(cx + 6f, midY),
+                            end = Offset(cx + cw - 6f, midY),
+                            strokeWidth = 2.5f
+                        )
+                        drawLine(
+                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
+                            start = Offset(midX, cy + ch - 6f),
+                            end = Offset(midX, cy + 6f),
+                            strokeWidth = 2.5f
                         )
                     }
-                }
 
-                // Saved Strokes
-                page.strokes.forEach { stroke ->
-                    val scaledPoints = stroke.points.map { p ->
-                        StrokePoint(
-                            x = p.x * currentScale + panOffset.x,
-                            y = p.y * currentScale + panOffset.y,
-                            pressure = p.pressure,
-                            tilt = p.tilt
-                        )
-                    }
-                    val path = DrawingEngine.createSmoothPath(scaledPoints)
-
-                    val strokeWidth = when (stroke.tool) {
-                        ToolType.PENCIL -> stroke.baseWidth * currentScale * 0.9f
-                        ToolType.FOUNTAIN_PEN -> stroke.baseWidth * currentScale * 1.5f
-                        ToolType.MARKER -> stroke.baseWidth * currentScale * 3.5f
-                        ToolType.INK_PEN -> stroke.baseWidth * currentScale * 1.2f
-                        ToolType.LASER -> stroke.baseWidth * currentScale * 2.0f
-                        else -> stroke.baseWidth * currentScale
+                    // Text Blocks
+                    layer.textBlocks.forEach { textBlock ->
+                        drawIntoCanvas { canvas ->
+                            val paint = android.graphics.Paint().apply {
+                                color = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground) android.graphics.Color.WHITE else textBlock.color
+                                textSize = textBlock.fontSize * currentScale * 1.5f
+                                isAntiAlias = true
+                                isFakeBoldText = textBlock.isBold
+                            }
+                            canvas.nativeCanvas.drawText(
+                                textBlock.text,
+                                textBlock.x * currentScale + panOffset.x,
+                                (textBlock.y + textBlock.fontSize) * currentScale + panOffset.y,
+                                paint
+                            )
+                        }
                     }
 
-                    val strokeAlpha = when (stroke.tool) {
-                        ToolType.MARKER -> 0.38f
-                        ToolType.PENCIL -> stroke.colorHsla.alpha * 0.85f
-                        else -> stroke.colorHsla.alpha
-                    }
+                    // Strokes
+                    layer.strokes.forEach { stroke ->
+                        val scaledPoints = stroke.points.map { p ->
+                            StrokePoint(
+                                x = p.x * currentScale + panOffset.x,
+                                y = p.y * currentScale + panOffset.y,
+                                pressure = p.pressure,
+                                tilt = p.tilt
+                            )
+                        }
+                        val path = DrawingEngine.createSmoothPath(scaledPoints)
 
-                    val drawColor = stroke.colorHsla.copy(alpha = strokeAlpha).toColor()
+                        val strokeWidth = when (stroke.tool) {
+                            ToolType.PENCIL -> stroke.baseWidth * currentScale * 0.9f
+                            ToolType.FOUNTAIN_PEN -> stroke.baseWidth * currentScale * 1.5f
+                            ToolType.MARKER -> stroke.baseWidth * currentScale * 3.5f
+                            ToolType.INK_PEN -> stroke.baseWidth * currentScale * 1.2f
+                            ToolType.LASER -> stroke.baseWidth * currentScale * 2.0f
+                            else -> stroke.baseWidth * currentScale
+                        }
 
-                    if (stroke.tool == ToolType.LASER) {
-                        // Outer Glow for Laser
+                        val strokeAlpha = when (stroke.tool) {
+                            ToolType.MARKER -> 0.38f * layerAlpha
+                            ToolType.PENCIL -> stroke.colorHsla.alpha * 0.85f * layerAlpha
+                            else -> stroke.colorHsla.alpha * layerAlpha
+                        }
+
+                        val drawColor = stroke.colorHsla.copy(alpha = strokeAlpha).toColor()
+
+                        if (stroke.tool == ToolType.LASER) {
+                            drawPath(
+                                path = path,
+                                color = drawColor.copy(alpha = 0.4f * layerAlpha),
+                                style = Stroke(width = strokeWidth * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            )
+                        }
+
                         drawPath(
                             path = path,
-                            color = drawColor.copy(alpha = 0.4f),
-                            style = Stroke(width = strokeWidth * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            color = drawColor,
+                            style = Stroke(
+                                width = strokeWidth,
+                                cap = if (stroke.tool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
                         )
                     }
-
-                    drawPath(
-                        path = path,
-                        color = drawColor,
-                        style = Stroke(
-                            width = strokeWidth,
-                            cap = if (stroke.tool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
-                    )
                 }
             }
 

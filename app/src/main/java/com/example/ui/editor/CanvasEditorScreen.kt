@@ -2,11 +2,21 @@ package com.example.ui.editor
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import com.example.ui.components.PanelType
+import com.example.ui.components.VerticalFloatingSidePanel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,7 +45,11 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.FormatPaint
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mic
+import com.example.ui.components.AudioManagementSheet
+import com.example.ui.components.LayersBottomSheet
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Radio
@@ -113,6 +127,9 @@ fun CanvasEditorScreen(
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isAiLoading by viewModel.isAiLoading.collectAsState()
 
+    val showLayersPanel by viewModel.showLayersPanel.collectAsState()
+    val activeLayerId by viewModel.activeLayerId.collectAsState()
+
     // Bottom sheets state
     var showTopMenuSheet by remember { mutableStateOf(false) }
     var showColorPickerSheet by remember { mutableStateOf(false) }
@@ -121,6 +138,7 @@ fun CanvasEditorScreen(
     var showGeminiSheet by remember { mutableStateOf(false) }
     var showMiniSliders by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showAudioSheet by remember { mutableStateOf(false) }
     var showTextInputDialog by remember { mutableStateOf(false) }
     var textInputVal by remember { mutableStateOf("") }
     var showMathFunctionDialog by remember { mutableStateOf(false) }
@@ -128,7 +146,7 @@ fun CanvasEditorScreen(
     var mathXMinVal by remember { mutableStateOf("-10") }
     var mathXMaxVal by remember { mutableStateOf("10") }
 
-    var isSlidersVertical by remember { mutableStateOf(false) }
+    val isSlidersVertical by viewModel.isSlidersVertical.collectAsState()
 
     // Image Picker Launcher
     val insertImageLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -150,6 +168,16 @@ fun CanvasEditorScreen(
     }
 
     Scaffold(
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed) {
+                when (event.key) {
+                    Key.Z -> { viewModel.undo(); true }
+                    Key.Y -> { viewModel.redo(); true }
+                    Key.S -> { showExportDialog = true; true }
+                    else -> false
+                }
+            } else false
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -207,6 +235,16 @@ fun CanvasEditorScreen(
                             contentDescription = "Запис аудіо",
                             tint = if (isRecording) Color.Red else MaterialTheme.colorScheme.onSurface
                         )
+                    }
+
+                    // Audio Recording List
+                    IconButton(onClick = { showAudioSheet = true }) {
+                        Icon(imageVector = Icons.Default.GraphicEq, contentDescription = "Аудіонотатки")
+                    }
+
+                    // Layers Panel Button
+                    IconButton(onClick = { viewModel.toggleLayersPanel() }) {
+                        Icon(imageVector = Icons.Default.Layers, contentDescription = "Шари")
                     }
 
                     // Undo
@@ -305,9 +343,46 @@ fun CanvasEditorScreen(
                 onStrokeWidthChange = { viewModel.setStrokeWidth(it) },
                 onStrokeOpacityChange = { viewModel.setStrokeOpacity(it) },
                 onColorPickerClick = { showColorPickerSheet = true },
-                onToggleSliderOrientation = { isSlidersVertical = !isSlidersVertical },
+                onToggleSliderOrientation = { viewModel.toggleSliderOrientation() },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+
+            // Вертикальні бічні панелі (Width & Opacity)
+            AnimatedVisibility(
+                visible = isSlidersVertical,
+                enter = fadeIn() + slideInHorizontally(initialOffsetX = { -it }),
+                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { -it }),
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                VerticalFloatingSidePanel(
+                    panelType = PanelType.WIDTH,
+                    value = strokeWidth,
+                    valueRange = 1f..50f,
+                    displayText = "${strokeWidth.toInt()} px",
+                    currentColor = currentColor,
+                    opacity = strokeOpacity,
+                    onValueChange = { viewModel.setStrokeWidth(it) },
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isSlidersVertical,
+                enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
+                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                VerticalFloatingSidePanel(
+                    panelType = PanelType.OPACITY,
+                    value = strokeOpacity,
+                    valueRange = 0.05f..1f,
+                    displayText = "${(strokeOpacity * 100).toInt()}%",
+                    currentColor = currentColor,
+                    opacity = strokeOpacity,
+                    onValueChange = { viewModel.setStrokeOpacity(it) },
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
 
             // Audio Player Bar (Audio Player Pill) shown when recording exists or playing
             val isPlaying = audioStatus is RecordingStatus.Playing && (audioStatus as RecordingStatus.Playing).isPlaying
@@ -622,6 +697,39 @@ fun CanvasEditorScreen(
                     Text("Скасувати")
                 }
             }
+        )
+    }
+
+    if (showLayersPanel) {
+        val currentLayers = viewModel.currentPage?.getEffectiveLayers() ?: emptyList()
+        LayersBottomSheet(
+            layers = currentLayers,
+            activeLayerId = activeLayerId ?: viewModel.currentPage?.activeLayerId,
+            onAddLayer = { viewModel.addLayer() },
+            onSelectLayer = { viewModel.setActiveLayer(it) },
+            onToggleVisibility = { viewModel.toggleLayerVisibility(it) },
+            onOpacityChange = { id, op -> viewModel.setLayerOpacity(id, op) },
+            onMoveUp = { viewModel.moveLayerUp(it) },
+            onMoveDown = { viewModel.moveLayerDown(it) },
+            onRename = { id, name -> viewModel.renameLayer(id, name) },
+            onDeleteLayer = { viewModel.deleteLayer(it) },
+            onDismiss = { viewModel.toggleLayersPanel() }
+        )
+    }
+
+    if (showAudioSheet) {
+        val isPlaying = audioStatus is RecordingStatus.Playing && (audioStatus as RecordingStatus.Playing).isPlaying
+        val currentPlayingPath = if (audioStatus is RecordingStatus.Playing) (audioStatus as RecordingStatus.Playing).filePath else null
+
+        AudioManagementSheet(
+            recordings = audioRecordings,
+            currentlyPlayingPath = currentPlayingPath,
+            isPlaying = isPlaying,
+            onPlayClick = { recording -> viewModel.playAudioRecording(recording.filePath) },
+            onPauseClick = { viewModel.pauseAudioPlayback() },
+            onRenameClick = { recording, name -> viewModel.renameAudioRecording(recording, name) },
+            onDeleteClick = { recording -> viewModel.deleteAudioRecording(recording) },
+            onDismiss = { showAudioSheet = false }
         )
     }
 }

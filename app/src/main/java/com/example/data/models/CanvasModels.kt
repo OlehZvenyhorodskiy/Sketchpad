@@ -18,8 +18,13 @@ enum class PageSizePreset {
 
 enum class BackgroundPattern {
     BLANK,
+    NONE,
     DOTTED,
-    LINED
+    LINED,
+    GRID_SQUARE,
+    GRID_ISOMETRIC,
+    PROTRACTOR,
+    MUSIC_STAFF
 }
 
 enum class ToolType {
@@ -198,10 +203,45 @@ data class AudioRecordingEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val canvasId: String,
     val filePath: String,
+    val name: String = "",
     val durationMs: Long,
     val recordedAt: Long = System.currentTimeMillis(),
     val syncMarkers: List<SyncMarker> = emptyList()
-)
+) {
+    fun formattedDuration(): String {
+        val totalSec = durationMs / 1000
+        return String.format(java.util.Locale.US, "%02d:%02d", totalSec / 60, totalSec % 60)
+    }
+
+    fun formattedDate(): String {
+        val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date(recordedAt))
+    }
+
+    fun displayName(): String = name.ifBlank { "Запис ${formattedDate()}" }
+}
+
+enum class BlendMode {
+    NORMAL, MULTIPLY, SCREEN, OVERLAY
+}
+
+@JsonClass(generateAdapter = true)
+data class LayerEntity(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "Шар",
+    val isVisible: Boolean = true,
+    val opacity: Float = 1.0f,
+    val blendMode: BlendMode = BlendMode.NORMAL,
+    val isLocked: Boolean = false,
+    val strokes: List<StrokeEntity> = emptyList(),
+    val shapes: List<ShapeEntity> = emptyList(),
+    val textBlocks: List<TextBlockEntity> = emptyList(),
+    val images: List<ImageElementEntity> = emptyList(),
+    val charts: List<ChartElementEntity> = emptyList()
+) {
+    val totalElements: Int
+        get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size
+}
 
 @Entity(tableName = "pages")
 @JsonClass(generateAdapter = true)
@@ -213,8 +253,31 @@ data class PageEntity(
     val shapes: List<ShapeEntity> = emptyList(),
     val textBlocks: List<TextBlockEntity> = emptyList(),
     val images: List<ImageElementEntity> = emptyList(),
-    val charts: List<ChartElementEntity> = emptyList()
-)
+    val charts: List<ChartElementEntity> = emptyList(),
+    val layers: List<LayerEntity> = emptyList(),
+    val activeLayerId: String? = null,
+    val backgroundPattern: BackgroundPattern = BackgroundPattern.BLANK,
+    val backgroundSpacing: Float = 30f,
+    val backgroundLineColor: Int = 0xFFE0E0E0.toInt()
+) {
+    fun getEffectiveLayers(): List<LayerEntity> {
+        if (layers.isEmpty()) {
+            return listOf(LayerEntity(
+                id = "default", name = "Фон",
+                strokes = strokes, shapes = shapes,
+                textBlocks = textBlocks, images = images, charts = charts
+            ))
+        }
+        return layers
+    }
+
+    fun visibleLayersBottomUp(): List<LayerEntity> = getEffectiveLayers().filter { it.isVisible }
+
+    fun getActiveLayer(): LayerEntity {
+        val effective = getEffectiveLayers()
+        return effective.find { it.id == activeLayerId } ?: effective.last()
+    }
+}
 
 @Entity(tableName = "canvases")
 data class CanvasEntity(

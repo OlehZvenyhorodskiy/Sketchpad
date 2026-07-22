@@ -3,40 +3,18 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.CropSquare
-import androidx.compose.material.icons.filled.FormatPaint
-import androidx.compose.material.icons.filled.Opacity
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material.icons.filled.WidthNormal
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,107 +46,106 @@ fun TopFloatingToolbar(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. LEFT PILL: Stroke Thickness / Width Slider
-        Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
-            shadowElevation = 6.dp,
-            tonalElevation = 4.dp,
-            modifier = Modifier.weight(1f)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // ═══════════════════════════════════════════════════════════
+        // LEFT PILL: Width Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
+        // ═══════════════════════════════════════════════════════════
+        if (!isSlidersVertical) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+                shadowElevation = 6.dp,
+                tonalElevation = 4.dp,
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = Icons.Default.WidthNormal,
-                    contentDescription = "Товщина",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "${strokeWidth.toInt()} px",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    Icon(
+                        imageVector = Icons.Default.WidthNormal,
+                        contentDescription = "Товщина",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "${strokeWidth.toInt()} px",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Slider(
+                        value = strokeWidth,
+                        onValueChange = onStrokeWidthChange,
+                        valueRange = 1f..50f,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
                     )
                 }
-                Slider(
-                    value = strokeWidth,
-                    onValueChange = onStrokeWidthChange,
-                    valueRange = 1f..50f,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                )
             }
         }
 
-        // 2. CENTER PILL: Drawing Tools & Colors (Strictly Centered)
+        // ═══════════════════════════════════════════════════════════
+        // CENTER PILL: Drawing Tools — ЗАВЖДИ ВИДИМИЙ
+        // ═══════════════════════════════════════════════════════════
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
             shadowElevation = 8.dp,
-            tonalElevation = 6.dp
+            tonalElevation = 6.dp,
+            modifier = if (isSlidersVertical) Modifier.fillMaxWidth() else Modifier
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Pen
                 ToolIconButton(
                     icon = Icons.Default.Create,
                     label = "Ручка",
                     isSelected = currentTool == ToolType.PEN,
                     onClick = { onToolSelect(ToolType.PEN) }
                 )
-
-                // Pencil
                 ToolIconButton(
                     icon = Icons.Default.Brush,
                     label = "Олівець",
                     isSelected = currentTool == ToolType.PENCIL,
                     onClick = { onToolSelect(ToolType.PENCIL) }
                 )
-
-                // Ink Pen / Fountain Pen
                 ToolIconButton(
                     icon = Icons.Default.FormatPaint,
                     label = "Перо",
                     isSelected = currentTool == ToolType.INK_PEN || currentTool == ToolType.FOUNTAIN_PEN,
                     onClick = { onToolSelect(ToolType.INK_PEN) }
                 )
-
-                // Selector / Lasso
+                ToolIconButton(
+                    icon = Icons.Default.Highlight,
+                    label = "Маркер",
+                    isSelected = currentTool == ToolType.MARKER,
+                    onClick = { onToolSelect(ToolType.MARKER) }
+                )
                 ToolIconButton(
                     icon = Icons.Default.CropSquare,
                     label = "Ласо",
                     isSelected = currentTool == ToolType.SELECTOR,
                     onClick = { onToolSelect(ToolType.SELECTOR) }
                 )
-
-                // Eraser
                 ToolIconButton(
                     icon = Icons.Default.Radio,
                     label = if (eraserMode == EraserMode.OBJECT) "Стерка (Об'єкт)" else "Стерка (Піксель)",
                     isSelected = currentTool == ToolType.ERASER,
                     onClick = {
-                        if (currentTool == ToolType.ERASER) {
-                            onEraserModeToggle()
-                        } else {
-                            onToolSelect(ToolType.ERASER)
-                        }
+                        if (currentTool == ToolType.ERASER) onEraserModeToggle()
+                        else onToolSelect(ToolType.ERASER)
                     }
                 )
-
-                // Ruler
                 ToolIconButton(
                     icon = Icons.Default.Straighten,
                     label = "Лінійка",
@@ -186,7 +163,7 @@ fun TopFloatingToolbar(
                         .clickable { onColorPickerClick() }
                 )
 
-                // Layout Orientation Flip Button
+                // Layout Orientation Toggle
                 IconButton(
                     onClick = onToggleSliderOrientation,
                     modifier = Modifier.size(32.dp)
@@ -194,52 +171,59 @@ fun TopFloatingToolbar(
                     Icon(
                         imageVector = Icons.Default.ScreenRotation,
                         contentDescription = "Орієнтація слайдерів",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isSlidersVertical)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
         }
 
-        // 3. RIGHT PILL: Opacity Slider
-        Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
-            shadowElevation = 6.dp,
-            tonalElevation = 4.dp,
-            modifier = Modifier.weight(1f)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // ═══════════════════════════════════════════════════════════
+        // RIGHT PILL: Opacity Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
+        // ═══════════════════════════════════════════════════════════
+        if (!isSlidersVertical) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+                shadowElevation = 6.dp,
+                tonalElevation = 4.dp,
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Opacity,
-                    contentDescription = "Прозорість",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "${(strokeOpacity * 100).toInt()}%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    Icon(
+                        imageVector = Icons.Default.Opacity,
+                        contentDescription = "Прозорість",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "${(strokeOpacity * 100).toInt()}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Slider(
+                        value = strokeOpacity,
+                        onValueChange = onStrokeOpacityChange,
+                        valueRange = 0.05f..1f,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
                     )
                 }
-                Slider(
-                    value = strokeOpacity,
-                    onValueChange = onStrokeOpacityChange,
-                    valueRange = 0.05f..1f,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                )
             }
         }
     }
@@ -247,7 +231,7 @@ fun TopFloatingToolbar(
 
 @Composable
 fun ToolIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit
@@ -262,10 +246,12 @@ fun ToolIconButton(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isSelected)
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
-

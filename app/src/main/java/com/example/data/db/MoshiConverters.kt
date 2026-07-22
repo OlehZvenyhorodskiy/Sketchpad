@@ -3,6 +3,7 @@ package com.example.data.db
 import androidx.room.TypeConverter
 import com.example.data.models.ChartElementEntity
 import com.example.data.models.ImageElementEntity
+import com.example.data.models.LayerEntity
 import com.example.data.models.ShapeEntity
 import com.example.data.models.StrokeEntity
 import com.example.data.models.SyncMarker
@@ -119,6 +120,24 @@ class MoshiConverters {
         if (json.isNullOrEmpty()) return emptyList()
         return try {
             syncMarkerAdapter.fromJson(json) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private val layerListType = Types.newParameterizedType(List::class.java, LayerEntity::class.java)
+    private val layerAdapter = moshi.adapter<List<LayerEntity>>(layerListType)
+
+    @TypeConverter
+    fun layerListToString(list: List<LayerEntity>?): String {
+        return layerAdapter.toJson(list ?: emptyList())
+    }
+
+    @TypeConverter
+    fun stringToLayerList(json: String?): List<LayerEntity> {
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            layerAdapter.fromJson(json) ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }
