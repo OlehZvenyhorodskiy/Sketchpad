@@ -1,26 +1,24 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,57 +27,78 @@ import androidx.compose.ui.unit.sp
 fun AudioWaveformVisualizer(
     isRecording: Boolean,
     recordingTimeText: String,
+    amplitudes: List<Float> = emptyList(),
+    strokeWidth: Float = 4f,
     modifier: Modifier = Modifier
 ) {
     if (!isRecording) return
 
-    val transition = rememberInfiniteTransition(label = "audio_bars")
-    val phase1 by transition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), RepeatMode.Reverse),
-        label = "p1"
-    )
-    val phase2 by transition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(tween(550, easing = LinearEasing), RepeatMode.Reverse),
-        label = "p2"
-    )
-    val phase3 by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(tween(350, easing = LinearEasing), RepeatMode.Reverse),
-        label = "p3"
-    )
+    val waveColor = Color(0xFFEF4444)
 
     Row(
-        modifier = modifier.height(24.dp),
+        modifier = modifier.height(32.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Canvas(modifier = Modifier.width(36.dp).fillMaxHeight()) {
-            val barW = 4f
-            val spacing = 4f
-            val h = size.height
+        // Red recording indicator dot
+        Box(
+            modifier = Modifier
+                .padding(end = 6.dp)
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(waveColor)
+        )
 
-            val heights = listOf(phase1 * h, phase2 * h, phase3 * h, phase1 * 0.7f * h)
-            heights.forEachIndexed { i, barH ->
-                val x = i * (barW + spacing) + 4f
-                val yTop = (h - barH) / 2f
+        // Real-time Audio Waveform Canvas
+        Canvas(
+            modifier = Modifier
+                .width(84.dp)
+                .fillMaxHeight()
+                .padding(vertical = 4.dp)
+        ) {
+            val canvasW = size.width
+            val canvasH = size.height
+            val centerY = canvasH / 2f
+
+            val effStrokeWidth = (strokeWidth * 0.45f).coerceIn(2f, 7f)
+
+            if (amplitudes.isEmpty()) {
                 drawLine(
-                    color = Color(0xFFEF4444),
-                    start = Offset(x, yTop),
-                    end = Offset(x, yTop + barH),
-                    strokeWidth = barW
+                    color = waveColor.copy(alpha = 0.4f),
+                    start = Offset(0f, centerY),
+                    end = Offset(canvasW, centerY),
+                    strokeWidth = effStrokeWidth,
+                    cap = StrokeCap.Round
                 )
+            } else {
+                val count = amplitudes.size
+                val stepX = if (count > 1) canvasW / (count - 1) else canvasW
+
+                amplitudes.forEachIndexed { i, amp ->
+                    val x = i * stepX
+                    val amplitudeH = (amp * (canvasH - 4f)).coerceAtLeast(effStrokeWidth)
+                    val yTop = centerY - amplitudeH / 2f
+                    val yBottom = centerY + amplitudeH / 2f
+
+                    drawLine(
+                        color = waveColor,
+                        start = Offset(x, yTop),
+                        end = Offset(x, yBottom),
+                        strokeWidth = effStrokeWidth,
+                        cap = StrokeCap.Round
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.width(4.dp))
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Dynamic Real-time Recording Timer Text
         Text(
             text = recordingTimeText,
-            color = Color(0xFFEF4444),
-            fontSize = 12.sp,
+            color = waveColor,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
     }
 }
+

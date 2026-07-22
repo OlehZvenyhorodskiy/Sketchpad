@@ -165,9 +165,17 @@ fun CanvasEditorScreen(
                     // Audio Recorder Button & Waveform
                     val isRecording = audioStatus is RecordingStatus.Recording
                     if (isRecording) {
+                        val recStatus = audioStatus as RecordingStatus.Recording
+                        val totalSeconds = recStatus.durationMs / 1000
+                        val mins = totalSeconds / 60
+                        val secs = totalSeconds % 60
+                        val formattedTime = String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
+
                         com.example.ui.components.AudioWaveformVisualizer(
                             isRecording = true,
-                            recordingTimeText = "00:15"
+                            recordingTimeText = formattedTime,
+                            amplitudes = recStatus.amplitudes,
+                            strokeWidth = strokeWidth
                         )
                     }
                     IconButton(
