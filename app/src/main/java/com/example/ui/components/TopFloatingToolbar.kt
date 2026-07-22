@@ -64,180 +64,53 @@ fun TopFloatingToolbar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-        horizontalArrangement = Arrangement.Start,
+            .padding(start = 16.dp, top = 8.dp, end = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. LEFT FLUID BLOCK: Sliders Surface taking ALL available space up to the central pill
+        // 1. LEFT PILL: Stroke Thickness / Width Slider
         Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
             shadowElevation = 6.dp,
             tonalElevation = 4.dp,
             modifier = Modifier.weight(1f)
         ) {
-            if (isSlidersVertical) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WidthNormal,
+                    contentDescription = "Товщина",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                 ) {
-                    // Row 1: Thickness
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WidthNormal,
-                            contentDescription = "Товщина",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                        ) {
-                            Text(
-                                text = "${strokeWidth.toInt()} px",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Slider(
-                            value = strokeWidth,
-                            onValueChange = onStrokeWidthChange,
-                            valueRange = 1f..60f,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                        )
-                    }
-
-                    // Row 2: Opacity
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Opacity,
-                            contentDescription = "Прозорість",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                        ) {
-                            Text(
-                                text = "${(strokeOpacity * 100).toInt()}%",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Slider(
-                            value = strokeOpacity,
-                            onValueChange = onStrokeOpacityChange,
-                            valueRange = 0.05f..1f,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Thickness Section
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WidthNormal,
-                            contentDescription = "Товщина",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                        ) {
-                            Text(
-                                text = "${strokeWidth.toInt()} px",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Slider(
-                            value = strokeWidth,
-                            onValueChange = onStrokeWidthChange,
-                            valueRange = 1f..60f,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                        )
-                    }
-
-                    // Divider between Sliders
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(24.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Text(
+                        text = "${strokeWidth.toInt()} px",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
-
-                    // Opacity Section
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Opacity,
-                            contentDescription = "Прозорість",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                        ) {
-                            Text(
-                                text = "${(strokeOpacity * 100).toInt()}%",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Slider(
-                            value = strokeOpacity,
-                            onValueChange = onStrokeOpacityChange,
-                            valueRange = 0.05f..1f,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                        )
-                    }
                 }
+                Slider(
+                    value = strokeWidth,
+                    onValueChange = onStrokeWidthChange,
+                    valueRange = 1f..50f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                )
             }
         }
 
-        // Stable 16px Gap between Sliders Block and Central Pill Toolbar
-        Spacer(modifier = Modifier.width(16.dp))
-
-        // 2. CENTRAL PILL: Main Drawing Tools & Colors
+        // 2. CENTER PILL: Drawing Tools & Colors (Strictly Centered)
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
@@ -245,7 +118,7 @@ fun TopFloatingToolbar(
             tonalElevation = 6.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -325,6 +198,48 @@ fun TopFloatingToolbar(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
+        }
+
+        // 3. RIGHT PILL: Opacity Slider
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+            shadowElevation = 6.dp,
+            tonalElevation = 4.dp,
+            modifier = Modifier.weight(1f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Opacity,
+                    contentDescription = "Прозорість",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = "${(strokeOpacity * 100).toInt()}%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                Slider(
+                    value = strokeOpacity,
+                    onValueChange = onStrokeOpacityChange,
+                    valueRange = 0.05f..1f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                )
             }
         }
     }

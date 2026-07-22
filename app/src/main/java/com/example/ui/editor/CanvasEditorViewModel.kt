@@ -562,8 +562,31 @@ class CanvasEditorViewModel(
         }
     }
 
-    fun playAudioRecording(recording: AudioRecordingEntity) {
-        audioRecorderManager.startPlayback(recording.filePath)
+    fun playAudioRecording(filePath: String, startPosMs: Long = 0L) {
+        audioRecorderManager.startPlayback(filePath, startPosMs)
+    }
+
+    fun pauseAudioPlayback() {
+        audioRecorderManager.pausePlayback()
+    }
+
+    fun resumeAudioPlayback() {
+        audioRecorderManager.resumePlayback()
+    }
+
+    fun seekAudioPlayback(positionMs: Long) {
+        audioRecorderManager.seekTo(positionMs)
+    }
+
+    fun stopAudioPlayback() {
+        audioRecorderManager.stopPlayback()
+    }
+
+    fun deleteAudioRecording(recording: AudioRecordingEntity) {
+        audioRecorderManager.deleteAudioFile(recording.filePath)
+        viewModelScope.launch {
+            repository.deleteAudioRecording(recording)
+        }
     }
 
     // AI Chat query

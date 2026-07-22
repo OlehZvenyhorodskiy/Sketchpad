@@ -260,6 +260,18 @@ class CanvasRepository(private val context: Context) {
         return@withContext recording
     }
 
+    suspend fun deleteAudioRecording(recording: AudioRecordingEntity) = withContext(Dispatchers.IO) {
+        audioDao.deleteRecording(recording.id)
+        try {
+            val file = File(recording.filePath)
+            if (file.exists()) {
+                file.delete()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     suspend fun saveImportedImage(uri: Uri): String = withContext(Dispatchers.IO) {
         val targetFile = File(context.filesDir, "img_${UUID.randomUUID()}.jpg")
         context.contentResolver.openInputStream(uri)?.use { input ->

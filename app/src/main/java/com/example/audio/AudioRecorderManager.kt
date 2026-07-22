@@ -24,7 +24,12 @@ sealed class RecordingStatus {
         val amplitudes: List<Float> = emptyList(),
         val currentAmplitude: Float = 0f
     ) : RecordingStatus()
-    data class Playing(val currentPositionMs: Long, val totalDurationMs: Long, val filePath: String) : RecordingStatus()
+    data class Playing(
+        val currentPositionMs: Long,
+        val totalDurationMs: Long,
+        val filePath: String,
+        val isPlaying: Boolean = true
+    ) : RecordingStatus()
 }
 
 class AudioRecorderManager(private val context: Context) {
@@ -34,8 +39,9 @@ class AudioRecorderManager(private val context: Context) {
     private var currentOutputFilePath: String? = null
     private var recordingStartTimeMs: Long = 0L
 
-    private val recordingScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val audioScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var recordingJob: Job? = null
+    private var playbackJob: Job? = null
 
     private val _status = MutableStateFlow<RecordingStatus>(RecordingStatus.Idle)
     val status: StateFlow<RecordingStatus> = _status.asStateFlow()
@@ -64,10 +70,12 @@ class AudioRecorderManager(private val context: Context) {
             _status.value = RecordingStatus.Recording(0L, outputFile.absolutePath)
 
             recordingJob?.cancel()
-            recordingJob = recordingScope.launch {
+            recordingJob = audioScope.launch {
                 val amplitudeHistory = mutableListOf<Float>()
+                var smoothedAmp = 0.08f
+
                 while (isActive) {
-                    delay(50L) // 20 FPS background audio sampling
+                    delay(40L) // 25 FPS live sampling on background DSP thread
                     val duration = System.currentTimeMillis() - recordingStartTimeMs
 
                     val rawAmp = try {
@@ -76,14 +84,17 @@ class AudioRecorderManager(private val context: Context) {
                         0
                     }
 
-                    // DSP processing on background thread
-                    val normalized = if (rawAmp > 0) {
+                    // DSP log-scale normalization & exponential smoothing filter
+                    val targetAmp = if (rawAmp > 0) {
                         (Math.log10(1.0 + rawAmp) / Math.log10(32768.0)).toFloat().coerceIn(0.08f, 1.0f)
                     } else {
                         0.08f
                     }
 
-                    amplitudeHistory.add(normalized)
+                    // Low-pass filter for natural movement without jitter
+                    smoothedAmp = smoothedAmp * 0.3f + targetAmp * 0.7f
+
+                    amplitudeHistory.add(smoothedAmp)
                     if (amplitudeHistory.size > 28) {
                         amplitudeHistory.removeAt(0)
                     }
@@ -92,7 +103,7 @@ class AudioRecorderManager(private val context: Context) {
                         durationMs = duration,
                         filePath = currentOutputFilePath ?: "",
                         amplitudes = amplitudeHistory.toList(),
-                        currentAmplitude = normalized
+                        currentAmplitude = smoothedAmp
                     )
                 }
             }
@@ -126,35 +137,111 @@ class AudioRecorderManager(private val context: Context) {
         return Pair(path, duration)
     }
 
-    fun startPlayback(filePath: String, onComplete: () -> Unit = {}) {
+    fun startPlayback(filePath: String, startPositionMs: Long = 0L, onComplete: () -> Unit = {}) {
         try {
             stopPlayback()
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(filePath)
                 prepare()
+                if (startPositionMs > 0) {
+                    seekTo(startPositionMs.toInt())
+                }
                 start()
                 setOnCompletionListener {
-                    _status.value = RecordingStatus.Idle
+                    playbackJob?.cancel()
+                    _status.value = RecordingStatus.Playing(
+                        currentPositionMs = duration.toLong(),
+                        totalDurationMs = duration.toLong(),
+                        filePath = filePath,
+                        isPlaying = false
+                    )
                     onComplete()
                 }
             }
+
             val total = mediaPlayer?.duration?.toLong() ?: 0L
-            _status.value = RecordingStatus.Playing(0L, total, filePath)
+            startPlaybackTicker(filePath, total)
         } catch (e: Exception) {
             e.printStackTrace()
             _status.value = RecordingStatus.Idle
         }
     }
 
+    private fun startPlaybackTicker(filePath: String, totalDurationMs: Long) {
+        playbackJob?.cancel()
+        playbackJob = audioScope.launch {
+            while (isActive) {
+                delay(80L)
+                val mp = mediaPlayer
+                if (mp != null) {
+                    val pos = try { mp.currentPosition.toLong() } catch (e: Exception) { 0L }
+                    val playing = try { mp.isPlaying } catch (e: Exception) { false }
+                    _status.value = RecordingStatus.Playing(
+                        currentPositionMs = pos,
+                        totalDurationMs = totalDurationMs,
+                        filePath = filePath,
+                        isPlaying = playing
+                    )
+                }
+            }
+        }
+    }
+
     fun pausePlayback() {
-        mediaPlayer?.let {
-            if (it.isPlaying) {
-                it.pause()
+        playbackJob?.cancel()
+        mediaPlayer?.let { mp ->
+            try {
+                if (mp.isPlaying) {
+                    mp.pause()
+                }
+                val pos = mp.currentPosition.toLong()
+                val total = mp.duration.toLong()
+                val path = currentOutputFilePath ?: ""
+                _status.value = RecordingStatus.Playing(
+                    currentPositionMs = pos,
+                    totalDurationMs = total,
+                    filePath = path,
+                    isPlaying = false
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun resumePlayback() {
+        val current = _status.value
+        if (current is RecordingStatus.Playing) {
+            mediaPlayer?.let { mp ->
+                try {
+                    mp.start()
+                    startPlaybackTicker(current.filePath, current.totalDurationMs)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } ?: run {
+                startPlayback(current.filePath, current.currentPositionMs)
+            }
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        mediaPlayer?.let { mp ->
+            try {
+                mp.seekTo(positionMs.toInt())
+                val current = _status.value
+                if (current is RecordingStatus.Playing) {
+                    _status.value = current.copy(currentPositionMs = positionMs)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
 
     fun stopPlayback() {
+        playbackJob?.cancel()
+        playbackJob = null
         try {
             mediaPlayer?.apply {
                 if (isPlaying) stop()
@@ -165,6 +252,18 @@ class AudioRecorderManager(private val context: Context) {
         } finally {
             mediaPlayer = null
             _status.value = RecordingStatus.Idle
+        }
+    }
+
+    fun deleteAudioFile(filePath: String) {
+        stopPlayback()
+        try {
+            val file = File(filePath)
+            if (file.exists()) {
+                file.delete()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

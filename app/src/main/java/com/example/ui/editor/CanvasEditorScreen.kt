@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -106,6 +108,8 @@ fun CanvasEditorScreen(
     val zoomScale by viewModel.zoomScale.collectAsState()
     val rulerState by viewModel.rulerState.collectAsState()
     val audioStatus by viewModel.audioStatus.collectAsState()
+    val audioRecordings by viewModel.audioRecordings.collectAsState()
+    val latestRecording = audioRecordings.firstOrNull()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isAiLoading by viewModel.isAiLoading.collectAsState()
 
@@ -304,6 +308,47 @@ fun CanvasEditorScreen(
                 onToggleSliderOrientation = { isSlidersVertical = !isSlidersVertical },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+
+            // Audio Player Bar (Audio Player Pill) shown when recording exists or playing
+            val isPlaying = audioStatus is RecordingStatus.Playing && (audioStatus as RecordingStatus.Playing).isPlaying
+            val currentPosMs = if (audioStatus is RecordingStatus.Playing) (audioStatus as RecordingStatus.Playing).currentPositionMs else 0L
+            val totalDurMs = if (audioStatus is RecordingStatus.Playing) (audioStatus as RecordingStatus.Playing).totalDurationMs else (latestRecording?.durationMs ?: 0L)
+
+            AnimatedVisibility(
+                visible = (latestRecording != null || audioStatus is RecordingStatus.Playing) && audioStatus !is RecordingStatus.Recording,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp)
+                    .fillMaxWidth(0.92f)
+            ) {
+                com.example.ui.components.AudioPlayerPill(
+                    isPlaying = isPlaying,
+                    currentPositionMs = currentPosMs,
+                    totalDurationMs = totalDurMs,
+                    onPlayPauseClick = {
+                        if (audioStatus is RecordingStatus.Playing) {
+                            if (isPlaying) {
+                                viewModel.pauseAudioPlayback()
+                            } else {
+                                viewModel.resumeAudioPlayback()
+                            }
+                        } else if (latestRecording != null) {
+                            viewModel.playAudioRecording(latestRecording.filePath)
+                        }
+                    },
+                    onSeek = { newPos ->
+                        viewModel.seekAudioPlayback(newPos.toLong())
+                    },
+                    onDeleteClick = {
+                        if (latestRecording != null) {
+                            viewModel.deleteAudioRecording(latestRecording)
+                            Toast.makeText(context, "Аудіозапис видалено", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
 
             // Right side panel removed per user request for clean canvas space
 
