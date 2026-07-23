@@ -159,6 +159,14 @@ fun CanvasEditorScreen(
         }
     }
 
+    val academicStatusMessage by viewModel.academicStatusMessage.collectAsState()
+    LaunchedEffect(academicStatusMessage) {
+        academicStatusMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.clearAcademicStatus()
+        }
+    }
+
     val isSlidersVertical by viewModel.isSlidersVertical.collectAsState()
 
     // Image Picker Launcher
@@ -600,6 +608,14 @@ fun CanvasEditorScreen(
             onInsertShapeClick = { shapeType -> viewModel.insertShape(shapeType) },
             onInsertChartClick = { showMathFunctionDialog = true },
             onPasteContentClick = { viewModel.insertText("Вставлено з буфера") },
+            onRecognizeShapeClick = { viewModel.recognizeAndVectorizeLastStroke() },
+            onPlotFunctionClick = { viewModel.plotFunctionFromStrokes() },
+            onLatexConvertClick = { viewModel.convertHandwritingToLatex() },
+            onGraphAnalyzeClick = { viewModel.analyzeGraphSchema() },
+            onPhysicsToggleClick = { viewModel.togglePhysicsSimulation() },
+            onShaderToggleClick = { viewModel.toggleOilPaintShader() },
+            onArOverlayClick = { viewModel.toggleArOverlay() },
+            onPagedCanvasClick = { viewModel.togglePagedCanvas() },
             onDismiss = { showInsertSheet = false }
         )
     }

@@ -45,6 +45,14 @@ fun InsertMenuBottomSheet(
     onInsertShapeClick: (ShapeType) -> Unit,
     onInsertChartClick: () -> Unit,
     onPasteContentClick: () -> Unit,
+    onRecognizeShapeClick: () -> Unit = {},
+    onPlotFunctionClick: () -> Unit = {},
+    onLatexConvertClick: () -> Unit = {},
+    onGraphAnalyzeClick: () -> Unit = {},
+    onPhysicsToggleClick: () -> Unit = {},
+    onShaderToggleClick: () -> Unit = {},
+    onArOverlayClick: () -> Unit = {},
+    onPagedCanvasClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -231,6 +239,148 @@ fun InsertMenuBottomSheet(
                 )
             }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+            Text(
+                text = "⚡ Академічні Чіт-Коди (10 функцій)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    onClick = { onRecognizeShapeClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "📐 Vectorize",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onPlotFunctionClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "📈 Plot f(x)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onLatexConvertClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "∑ LaTeX",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onGraphAnalyzeClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "🕸 Graph BFS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    onClick = { onPhysicsToggleClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "⚛ Physics",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onShaderToggleClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "🎨 Oil AGSL",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onArOverlayClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "📷 Camera AR",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+
+                Surface(
+                    onClick = { onPagedCanvasClick(); onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "♾ Infinite",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Gesture hint
@@ -240,7 +390,7 @@ fun InsertMenuBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "💡 Порада: Використовуйте кнопкиUndo/Redo у верхньому барі для скасування дій.",
+                    text = "💡 Порада: Використовуйте кнопки Undo/Redo у верхньому барі для скасування дій.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)
