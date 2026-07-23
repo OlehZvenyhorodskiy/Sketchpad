@@ -3,52 +3,48 @@ package com.example.core.gesture
 import android.view.MotionEvent
 
 /**
- * Фільтр для відхилення дотиків долонею.
- * Логіка: якщо активний stylus — ігнорувати всі finger touches.
- * Якщо stylus не активний — приймати finger touches.
- * Додатково: фільтр за площею дотику (palm > 800px²).
+ * Розумний фільтр відхилення долоні (Smart Palm Rejection Filter).
+ * Підтримує як офіційні активні стилуси, так і неофіційні/пасивні стилуси (Xiaomi, Baseus тощо).
+ * Неофіційні стилуси передаються системою як TOOL_TYPE_FINGER, але мають малу площу дотику.
+ * Долоня має великий радіус/площу дотику (touchMajor > 55px або area > 900px²).
  */
 object PalmRejectionFilter {
 
-    private const val PALM_AREA_THRESHOLD = 800f  // px²
-    private const val STYLUS_TIMEOUT_MS = 300L    // після stylus — ігнорувати finger 300ms
-
-    private var lastStylusEventTime = 0L
-    private var isStylusActive = false
+    private const val PALM_AREA_THRESHOLD = 900f   // px²
+    private const val PALM_MAJOR_THRESHOLD = 55f    // px
+    private const val TOOL_TYPE_PALM = 4            // MotionEvent.TOOL_TYPE_PALM (API 34+)
 
     fun shouldRejectEvent(event: MotionEvent): Boolean {
         val toolType = event.getToolType(0)
 
-        return when (toolType) {
-            MotionEvent.TOOL_TYPE_STYLUS, MotionEvent.TOOL_TYPE_ERASER -> {
-                isStylusActive = true
-                lastStylusEventTime = System.currentTimeMillis()
-                false  // НЕ відхиляти — це стилус
-            }
-            MotionEvent.TOOL_TYPE_FINGER -> {
-                // Якщо стилус активний або був активний нещодавно — відхилити
-                if (isStylusActive) return true
-                if (System.currentTimeMillis() - lastStylusEventTime < STYLUS_TIMEOUT_MS) return true
-
-                // Перевірка площі дотику (долоня має велику площу)
-                val touchMajor = event.getTouchMajor(0)
-                val touchMinor = event.getTouchMinor(0)
-                val area = Math.PI * (touchMajor / 2f) * (touchMinor / 2f)
-                if (area > PALM_AREA_THRESHOLD) return true
-
-                false  // Прийняти — це нормальний finger touch
-            }
-            else -> false
+        // 1. Активний стилус або стирачка — завжди дозволяти
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            return false
         }
+
+        // 2. Якщо система вказує на долоню (TOOL_TYPE_PALM = 4)
+        if (toolType == TOOL_TYPE_PALM) {
+            return true
+        }
+
+        // 3. Для неофіційних стилусів (які відображаються як TOOL_TYPE_FINGER):
+        // Оцінюємо геометричні параметри плями дотику
+        val touchMajor = event.getTouchMajor(0)
+        val touchMinor = event.getTouchMinor(0)
+
+        if (touchMajor > PALM_MAJOR_THRESHOLD) {
+            return true // Велика пляма = долоня
+        }
+
+        val area = Math.PI * (touchMajor / 2f) * (touchMinor / 2f)
+        if (area > PALM_AREA_THRESHOLD) {
+            return true // Велика площа = долоня
+        }
+
+        // Мала площа (неофіційний стилус або пальчик) = ДОЗВОЛИТИ
+        return false
     }
 
-    fun onStylusLifted() {
-        isStylusActive = false
-        lastStylusEventTime = System.currentTimeMillis()
-    }
-
-    fun reset() {
-        isStylusActive = false
-        lastStylusEventTime = 0L
-    }
+    fun onStylusLifted() {}
+    fun reset() {}
 }

@@ -149,15 +149,24 @@ fun InteractiveCanvas(
                 }
             }
             .pointerInteropFilter { motionEvent ->
-                // Palm Rejection Filter
-                if (com.example.core.gesture.PalmRejectionFilter.shouldRejectEvent(motionEvent)) {
-                    return@pointerInteropFilter true
-                }
-
+                // ═══════════════════════════════════════════════════════
+                // 1. Мультитач (2+ пальці) — скасовуємо штрих, даємо зуму працювати
+                // ═══════════════════════════════════════════════════════
                 if (motionEvent.pointerCount > 1) {
                     activeStrokePoints.clear()
                     eraserTouchPos = null
                     return@pointerInteropFilter false
+                }
+
+                // ═══════════════════════════════════════════════════════
+                // 2. SMART PALM REJECTION (для неофіційних/пасивних стилусів Xiaomi та пальця)
+                // ═══════════════════════════════════════════════════════
+                if (com.example.core.gesture.PalmRejectionFilter.shouldRejectEvent(motionEvent)) {
+                    if (motionEvent.action == MotionEvent.ACTION_DOWN) {
+                        activeStrokePoints.clear()
+                        eraserTouchPos = null
+                    }
+                    return@pointerInteropFilter true  // Відхиляємо тільки велику долоню (area > 900px² або major > 55px)
                 }
 
                 val x = (motionEvent.x - panOffset.x) / currentScale
@@ -472,15 +481,18 @@ fun InteractiveCanvas(
                 BackgroundPattern.BLANK, BackgroundPattern.NONE -> {}
             }
 
+            // ═══════════════════════════════════════════════════════
             // 2. Render Page Elements per Layer (bottom to top)
+            // ═══════════════════════════════════════════════════════
             pageEntity?.let { page ->
                 page.visibleLayersBottomUp().forEach { layer ->
                     val layerAlpha = layer.opacity.coerceIn(0f, 1f)
 
-                    // Images
+                    // ─── 2a. IMAGES (зображення) ───
                     layer.images.forEach { image ->
                         val pivotX = image.x * currentScale + panOffset.x + (image.width * currentScale) / 2f
                         val pivotY = image.y * currentScale + panOffset.y + (image.height * currentScale) / 2f
+
                         rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
                             drawIntoCanvas { canvas ->
                                 try {
@@ -509,12 +521,29 @@ fun InteractiveCanvas(
                                 }
                             }
                         }
+
+                        // Selection border for images
+                        if (selectedElementId == image.id && selectedElementType == "IMAGE") {
+                            drawRect(
+                                color = Color(0xFF2196F3),
+                                topLeft = Offset(
+                                    image.x * currentScale + panOffset.x,
+                                    image.y * currentScale + panOffset.y
+                                ),
+                                size = androidx.compose.ui.geometry.Size(
+                                    image.width * currentScale,
+                                    image.height * currentScale
+                                ),
+                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
+                            )
+                        }
                     }
 
-                    // Shapes
+                    // ─── 2b. SHAPES (фігури) ───
                     layer.shapes.forEach { shape ->
                         val pivotX = shape.x * currentScale + panOffset.x + (shape.width * currentScale) / 2f
                         val pivotY = shape.y * currentScale + panOffset.y + (shape.height * currentScale) / 2f
+
                         rotate(degrees = shape.rotation, pivot = Offset(pivotX, pivotY)) {
                             val path = DrawingEngine.createShapePath(
                                 shape.shapeType,
@@ -530,80 +559,95 @@ fun InteractiveCanvas(
                             drawPath(path, fillColor.copy(alpha = fillColor.alpha * layerAlpha))
                             drawPath(path, strokeColor.copy(alpha = strokeColor.alpha * layerAlpha), style = Stroke(shape.strokeWidth * currentScale))
                         }
+
+                        // Selection border for shapes
+                        if (selectedElementId == shape.id && selectedElementType == "SHAPE") {
+                            drawRect(
+                                color = Color(0xFF2196F3),
+                                topLeft = Offset(
+                                    shape.x * currentScale + panOffset.x - 4f,
+                                    shape.y * currentScale + panOffset.y - 4f
+                                ),
+                                size = androidx.compose.ui.geometry.Size(
+                                    shape.width * currentScale + 8f,
+                                    shape.height * currentScale + 8f
+                                ),
+                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
+                            )
+                        }
                     }
 
-                    // Charts
+                    // ─── 2c. CHARTS (графіки / координатна сітка) ───
                     layer.charts.forEach { chart ->
                         val cx = chart.x * currentScale + panOffset.x
                         val cy = chart.y * currentScale + panOffset.y
                         val cw = chart.width * currentScale
                         val ch = chart.height * currentScale
 
-                        val chartBgColor = if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-                        val chartBorderColor = if (isDarkBackground) Color(0xFF38BDF8) else Color(0xFF0284C7)
-                        val chartGridColor = if (isDarkBackground) Color(0x3394A3B8) else Color(0x22475569)
-
+                        // Background
+                        val chartBgColor = if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF8FAFC)
                         drawRect(
                             color = chartBgColor.copy(alpha = chartBgColor.alpha * layerAlpha),
                             topLeft = Offset(cx, cy),
                             size = androidx.compose.ui.geometry.Size(cw, ch)
                         )
+
+                        // Border
                         drawRect(
-                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
+                            color = (if (isDarkBackground) Color(0xFF475569) else Color(0xFFCBD5E1)).copy(alpha = layerAlpha),
                             topLeft = Offset(cx, cy),
                             size = androidx.compose.ui.geometry.Size(cw, ch),
-                            style = Stroke(2f * currentScale)
+                            style = Stroke(width = 1.5f)
                         )
 
-                        val squareSize = 32f * currentScale
-                        val cols = (cw / squareSize).toInt().coerceAtLeast(1)
-                        val rows = (ch / squareSize).toInt().coerceAtLeast(1)
-
-                        for (i in 1..cols) {
-                            val xPos = cx + i * squareSize
-                            if (xPos < cx + cw) {
-                                drawLine(
-                                    color = chartGridColor.copy(alpha = chartGridColor.alpha * layerAlpha),
-                                    start = Offset(xPos, cy),
-                                    end = Offset(xPos, cy + ch),
-                                    strokeWidth = 1f
-                                )
-                            }
-                        }
-                        for (j in 1..rows) {
-                            val yPos = cy + j * squareSize
-                            if (yPos < cy + ch) {
-                                drawLine(
-                                    color = chartGridColor.copy(alpha = chartGridColor.alpha * layerAlpha),
-                                    start = Offset(cx, yPos),
-                                    end = Offset(cx + cw, yPos),
-                                    strokeWidth = 1f
-                                )
-                            }
+                        // Grid lines (vertical)
+                        val gridStepX = cw / 8f
+                        for (i in 1 until 8) {
+                            drawLine(
+                                color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                start = Offset(cx + i * gridStepX, cy),
+                                end = Offset(cx + i * gridStepX, cy + ch),
+                                strokeWidth = 0.8f
+                            )
                         }
 
-                        val midX = cx + cw / 2f
-                        val midY = cy + ch / 2f
+                        // Grid lines (horizontal)
+                        val gridStepY = ch / 6f
+                        for (i in 1 until 6) {
+                            drawLine(
+                                color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                start = Offset(cx, cy + i * gridStepY),
+                                end = Offset(cx + cw, cy + i * gridStepY),
+                                strokeWidth = 0.8f
+                            )
+                        }
 
-                        drawLine(
-                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
-                            start = Offset(cx + 6f, midY),
-                            end = Offset(cx + cw - 6f, midY),
-                            strokeWidth = 2.5f
-                        )
-                        drawLine(
-                            color = chartBorderColor.copy(alpha = chartBorderColor.alpha * layerAlpha),
-                            start = Offset(midX, cy + ch - 6f),
-                            end = Offset(midX, cy + 6f),
-                            strokeWidth = 2.5f
-                        )
+                        // Axes (X and Y through center)
+                        val axisColor = (if (isDarkBackground) Color(0xFF94A3B8) else Color(0xFF64748B)).copy(alpha = layerAlpha)
+                        drawLine(axisColor, Offset(cx, cy + ch / 2f), Offset(cx + cw, cy + ch / 2f), strokeWidth = 1.5f)
+                        drawLine(axisColor, Offset(cx + cw / 2f, cy), Offset(cx + cw / 2f, cy + ch), strokeWidth = 1.5f)
+
+                        // Selection border
+                        if (selectedElementId == chart.id && selectedElementType == "CHART") {
+                            drawRect(
+                                color = Color(0xFF2196F3),
+                                topLeft = Offset(cx - 4f, cy - 4f),
+                                size = androidx.compose.ui.geometry.Size(cw + 8f, ch + 8f),
+                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
+                            )
+                        }
                     }
 
-                    // Text Blocks
+                    // ─── 2d. TEXT BLOCKS (текстові блоки) ───
                     layer.textBlocks.forEach { textBlock ->
                         drawIntoCanvas { canvas ->
                             val paint = android.graphics.Paint().apply {
-                                color = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground) android.graphics.Color.WHITE else textBlock.color
+                                val baseColor = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground)
+                                    android.graphics.Color.WHITE
+                                else
+                                    textBlock.color
+                                color = baseColor
+                                alpha = (android.graphics.Color.alpha(baseColor) * layerAlpha).toInt()
                                 textSize = textBlock.fontSize * currentScale * 1.5f
                                 isAntiAlias = true
                                 isFakeBoldText = textBlock.isBold
@@ -615,9 +659,25 @@ fun InteractiveCanvas(
                                 paint
                             )
                         }
+
+                        // Selection border
+                        if (selectedElementId == textBlock.id && selectedElementType == "TEXT") {
+                            drawRect(
+                                color = Color(0xFF2196F3),
+                                topLeft = Offset(
+                                    textBlock.x * currentScale + panOffset.x - 4f,
+                                    textBlock.y * currentScale + panOffset.y - 4f
+                                ),
+                                size = androidx.compose.ui.geometry.Size(
+                                    textBlock.width * currentScale + 8f,
+                                    textBlock.height * currentScale + 8f
+                                ),
+                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
+                            )
+                        }
                     }
 
-                    // Strokes
+                    // ─── 2e. STROKES (штрихи / малюнки) ───
                     layer.strokes.forEach { stroke ->
                         val scaledPoints = stroke.points.map { p ->
                             StrokePoint(
@@ -629,7 +689,7 @@ fun InteractiveCanvas(
                         }
                         val path = DrawingEngine.createSmoothPath(scaledPoints)
 
-                        val strokeWidth = when (stroke.tool) {
+                        val sw = when (stroke.tool) {
                             ToolType.PENCIL -> stroke.baseWidth * currentScale * 0.9f
                             ToolType.FOUNTAIN_PEN -> stroke.baseWidth * currentScale * 1.5f
                             ToolType.MARKER -> stroke.baseWidth * currentScale * 3.5f
@@ -646,11 +706,12 @@ fun InteractiveCanvas(
 
                         val drawColor = stroke.colorHsla.copy(alpha = strokeAlpha).toColor()
 
+                        // Glow for laser
                         if (stroke.tool == ToolType.LASER) {
                             drawPath(
                                 path = path,
                                 color = drawColor.copy(alpha = 0.4f * layerAlpha),
-                                style = Stroke(width = strokeWidth * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                                style = Stroke(width = sw * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                             )
                         }
 
@@ -658,7 +719,7 @@ fun InteractiveCanvas(
                             path = path,
                             color = drawColor,
                             style = Stroke(
-                                width = strokeWidth,
+                                width = sw,
                                 cap = if (stroke.tool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
                                 join = StrokeJoin.Round
                             )

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -130,6 +131,7 @@ fun AudioPlayerPill(
     onPlayPauseClick: () -> Unit,
     onSeek: (Float) -> Unit,
     onDeleteClick: () -> Unit,
+    onDismissClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -201,6 +203,19 @@ fun AudioPlayerPill(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Видалити аудіо",
                     tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Hide / Dismiss Pill Button
+            IconButton(
+                onClick = onDismissClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Сховати",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }

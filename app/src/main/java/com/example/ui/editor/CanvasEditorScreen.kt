@@ -9,8 +9,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -60,8 +63,10 @@ import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,6 +80,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -139,12 +145,19 @@ fun CanvasEditorScreen(
     var showMiniSliders by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showAudioSheet by remember { mutableStateOf(false) }
+    var showAudioPill by remember { mutableStateOf(false) }
     var showTextInputDialog by remember { mutableStateOf(false) }
     var textInputVal by remember { mutableStateOf("") }
     var showMathFunctionDialog by remember { mutableStateOf(false) }
     var mathFormulaVal by remember { mutableStateOf("sin(x)") }
     var mathXMinVal by remember { mutableStateOf("-10") }
     var mathXMaxVal by remember { mutableStateOf("10") }
+
+    LaunchedEffect(audioRecordings) {
+        if (audioRecordings.isNotEmpty()) {
+            showAudioPill = true
+        }
+    }
 
     val isSlidersVertical by viewModel.isSlidersVertical.collectAsState()
 
@@ -384,13 +397,81 @@ fun CanvasEditorScreen(
                 )
             }
 
+            // ─── Audio Recording Indicator (під час запису) ───
+            val isRecordingAudio = audioStatus is RecordingStatus.Recording
+            val recordingData = audioStatus as? RecordingStatus.Recording
+
+            AnimatedVisibility(
+                visible = isRecordingAudio,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Пульсуюча червона точка
+                        val infiniteTransition = rememberInfiniteTransition(label = "rec_pulse")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = 0.3f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(600, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Color.Red.copy(alpha = pulseAlpha))
+                        )
+
+                        // Waveform Visualizer з реальними амплітудами
+                        com.example.ui.components.AudioWaveformVisualizer(
+                            isRecording = true,
+                            recordingTimeText = recordingData?.let {
+                                val sec = it.durationMs / 1000
+                                String.format(java.util.Locale.US, "%02d:%02d", sec / 60, sec % 60)
+                            } ?: "00:00",
+                            amplitudes = recordingData?.amplitudes ?: emptyList(),
+                            strokeWidth = 4f
+                        )
+
+                        // Кнопка STOP
+                        FilledTonalButton(
+                            onClick = { viewModel.stopAudioRecording() },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, "Зупинити", modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Стоп", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
             // Audio Player Bar (Audio Player Pill) shown when recording exists or playing
             val isPlaying = audioStatus is RecordingStatus.Playing && (audioStatus as RecordingStatus.Playing).isPlaying
             val currentPosMs = if (audioStatus is RecordingStatus.Playing) (audioStatus as RecordingStatus.Playing).currentPositionMs else 0L
             val totalDurMs = if (audioStatus is RecordingStatus.Playing) (audioStatus as RecordingStatus.Playing).totalDurationMs else (latestRecording?.durationMs ?: 0L)
 
             AnimatedVisibility(
-                visible = (latestRecording != null || audioStatus is RecordingStatus.Playing) && audioStatus !is RecordingStatus.Recording,
+                visible = showAudioPill
+                          && (latestRecording != null || audioStatus is RecordingStatus.Playing)
+                          && audioStatus !is RecordingStatus.Recording,
                 enter = fadeIn() + slideInVertically(),
                 exit = fadeOut() + slideOutVertically(),
                 modifier = Modifier
@@ -419,8 +500,13 @@ fun CanvasEditorScreen(
                     onDeleteClick = {
                         if (latestRecording != null) {
                             viewModel.deleteAudioRecording(latestRecording)
+                            showAudioPill = false
                             Toast.makeText(context, "Аудіозапис видалено", Toast.LENGTH_SHORT).show()
                         }
+                    },
+                    onDismissClick = {
+                        showAudioPill = false
+                        viewModel.stopAudioPlayback()
                     }
                 )
             }

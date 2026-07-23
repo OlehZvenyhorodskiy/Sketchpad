@@ -292,20 +292,26 @@ class CanvasEditorViewModel(
 
     fun eraseAtPoint(point: Offset, radius: Float) {
         val page = currentPage ?: return
-        pushUndoState(page)
-        if (_eraserMode.value == EraserMode.OBJECT) {
-            val updatedStrokes = page.strokes.filterNot { stroke ->
-                DrawingEngine.isPointInStroke(point, stroke, radius)
-            }
-            updateCurrentPage(page.copy(strokes = updatedStrokes))
-        } else {
-            val updatedStrokes = mutableListOf<StrokeEntity>()
-            page.strokes.forEach { stroke ->
-                val erased = DrawingEngine.erasePixelMode(stroke, point, radius)
-                updatedStrokes.addAll(erased)
-            }
-            updateCurrentPage(page.copy(strokes = updatedStrokes))
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.isVisible && !layer.isLocked) {
+                if (_eraserMode.value == EraserMode.OBJECT) {
+                    val updatedStrokes = layer.strokes.filterNot { stroke ->
+                        DrawingEngine.isPointInStroke(point, stroke, radius)
+                    }
+                    layer.copy(strokes = updatedStrokes)
+                } else {
+                    val updatedStrokes = mutableListOf<StrokeEntity>()
+                    layer.strokes.forEach { stroke ->
+                        val erased = DrawingEngine.erasePixelMode(stroke, point, radius)
+                        updatedStrokes.addAll(erased)
+                    }
+                    layer.copy(strokes = updatedStrokes)
+                }
+            } else layer
         }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun executeCommand(command: com.example.data.models.CanvasCommand) {
