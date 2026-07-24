@@ -150,6 +150,13 @@ fun InteractiveCanvas(
             }
             .pointerInteropFilter { motionEvent ->
                 // ═══════════════════════════════════════════════════════
+                // 0. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
+                // ═══════════════════════════════════════════════════════
+                if (rulerState.isVisible && isTouchInsideRuler(motionEvent, rulerState)) {
+                    return@pointerInteropFilter false
+                }
+
+                // ═══════════════════════════════════════════════════════
                 // 1. Мультитач (2+ пальці) — скасовуємо штрих, даємо зуму працювати
                 // ═══════════════════════════════════════════════════════
                 if (motionEvent.pointerCount > 1) {
@@ -498,8 +505,13 @@ fun InteractiveCanvas(
                                 try {
                                     val file = File(image.sourceUri)
                                     if (file.exists()) {
-                                        val bitmap = bitmapCache.getOrPut(image.sourceUri) {
-                                            android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                                        var bitmap = bitmapCache[image.sourceUri]?.takeIf { !it.isRecycled }
+                                        if (bitmap == null) {
+                                            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                                            bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+                                            if (bitmap != null) {
+                                                bitmapCache[image.sourceUri] = bitmap
+                                            }
                                         }
                                         if (bitmap != null) {
                                             val paint = android.graphics.Paint().apply {
@@ -641,7 +653,7 @@ fun InteractiveCanvas(
                     // ─── 2d. TEXT BLOCKS (текстові блоки) ───
                     layer.textBlocks.forEach { textBlock ->
                         drawIntoCanvas { canvas ->
-                            val paint = android.graphics.Paint().apply {
+                            val textPaint = android.text.TextPaint().apply {
                                 val baseColor = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground)
                                     android.graphics.Color.WHITE
                                 else
@@ -652,12 +664,20 @@ fun InteractiveCanvas(
                                 isAntiAlias = true
                                 isFakeBoldText = textBlock.isBold
                             }
-                            canvas.nativeCanvas.drawText(
-                                textBlock.text,
+                            val maxWidth = (textBlock.width * currentScale).toInt().coerceAtLeast(100)
+                            val staticLayout = android.text.StaticLayout.Builder
+                                .obtain(textBlock.text, 0, textBlock.text.length, textPaint, maxWidth)
+                                .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                                .setLineSpacing(2f, 1f)
+                                .build()
+
+                            canvas.nativeCanvas.save()
+                            canvas.nativeCanvas.translate(
                                 textBlock.x * currentScale + panOffset.x,
-                                (textBlock.y + textBlock.fontSize) * currentScale + panOffset.y,
-                                paint
+                                textBlock.y * currentScale + panOffset.y
                             )
+                            staticLayout.draw(canvas.nativeCanvas)
+                            canvas.nativeCanvas.restore()
                         }
 
                         // Selection border
@@ -679,15 +699,7 @@ fun InteractiveCanvas(
 
                     // ─── 2e. STROKES (штрихи / малюнки) ───
                     layer.strokes.forEach { stroke ->
-                        val scaledPoints = stroke.points.map { p ->
-                            StrokePoint(
-                                x = p.x * currentScale + panOffset.x,
-                                y = p.y * currentScale + panOffset.y,
-                                pressure = p.pressure,
-                                tilt = p.tilt
-                            )
-                        }
-                        val path = DrawingEngine.createSmoothPath(scaledPoints)
+                        val path = DrawingEngine.createSmoothPath(stroke.points, scale = currentScale, panX = panOffset.x, panY = panOffset.y)
 
                         val sw = when (stroke.tool) {
                             ToolType.PENCIL -> stroke.baseWidth * currentScale * 0.9f
@@ -730,15 +742,7 @@ fun InteractiveCanvas(
 
             // 3. Render Active Drawing Stroke
             if (activeStrokePoints.isNotEmpty()) {
-                val scaledPoints = activeStrokePoints.map { p ->
-                    StrokePoint(
-                        x = p.x * currentScale + panOffset.x,
-                        y = p.y * currentScale + panOffset.y,
-                        pressure = p.pressure,
-                        tilt = p.tilt
-                    )
-                }
-                val activePath = DrawingEngine.createSmoothPath(scaledPoints)
+                val activePath = DrawingEngine.createSmoothPath(activeStrokePoints, scale = currentScale, panX = panOffset.x, panY = panOffset.y)
 
                 val activeWidth = when (currentTool) {
                     ToolType.PENCIL -> strokeWidth * currentScale * 0.9f
@@ -936,4 +940,41 @@ fun InteractiveCanvas(
             }
         }
     }
+}
+
+private fun isTouchInsideRuler(event: MotionEvent, ruler: RulerState): Boolean {
+    val touchX = event.x
+    val touchY = event.y
+
+    val centerDist = Math.hypot(
+        (touchX - ruler.center.x).toDouble(),
+        (touchY - ruler.center.y).toDouble()
+    )
+    if (centerDist < 150.0) return true
+
+    val dx = kotlin.math.cos(ruler.angleRad) * (ruler.length / 2f)
+    val dy = kotlin.math.sin(ruler.angleRad) * (ruler.length / 2f)
+    val rightX = ruler.center.x + dx
+    val rightY = ruler.center.y + dy
+    val rightDist = Math.hypot(
+        (touchX - rightX).toDouble(),
+        (touchY - rightY).toDouble()
+    )
+    if (rightDist < 120.0) return true
+
+    val panelLeft = ruler.center.x - 140f
+    val panelRight = ruler.center.x + 140f
+    val panelTop = ruler.center.y - 100f
+    val panelBottom = ruler.center.y - 30f
+    if (touchX in panelLeft..panelRight && touchY in panelTop..panelBottom) {
+        return true
+    }
+
+    val cosA = kotlin.math.cos(ruler.angleRad)
+    val sinA = kotlin.math.sin(ruler.angleRad)
+    val relX = touchX - ruler.center.x
+    val relY = touchY - ruler.center.y
+    val localX = relX * cosA + relY * sinA
+    val localY = -relX * sinA + relY * cosA
+    return kotlin.math.abs(localX) <= ruler.length / 2 + 40f && kotlin.math.abs(localY) <= ruler.width / 2 + 30f
 }

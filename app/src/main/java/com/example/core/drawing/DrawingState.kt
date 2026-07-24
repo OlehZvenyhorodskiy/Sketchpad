@@ -65,17 +65,24 @@ data class RulerState(
 
 object DrawingEngine {
 
-    fun createSmoothPath(points: List<StrokePoint>): Path {
+    fun createSmoothPath(points: List<StrokePoint>, scale: Float = 1f, panX: Float = 0f, panY: Float = 0f): Path {
         if (points.size < 3) {
             return Path().apply {
                 if (points.isNotEmpty()) {
-                    moveTo(points[0].x, points[0].y)
-                    if (points.size == 2) lineTo(points[1].x, points[1].y)
-                    else lineTo(points[0].x + 0.1f, points[0].y + 0.1f)
+                    val x0 = points[0].x * scale + panX
+                    val y0 = points[0].y * scale + panY
+                    moveTo(x0, y0)
+                    if (points.size == 2) {
+                        val x1 = points[1].x * scale + panX
+                        val y1 = points[1].y * scale + panY
+                        lineTo(x1, y1)
+                    } else {
+                        lineTo(x0 + 0.1f, y0 + 0.1f)
+                    }
                 }
             }
         }
-        return PathSmoothing.createCatmullRomPath(points, tension = 0.5f, segments = 6).asComposePath()
+        return PathSmoothing.createCatmullRomPath(points, tension = 0.5f, segments = 6, scale = scale, panX = panX, panY = panY).asComposePath()
     }
 
     fun isPointInStroke(point: Offset, stroke: StrokeEntity, radius: Float): Boolean {

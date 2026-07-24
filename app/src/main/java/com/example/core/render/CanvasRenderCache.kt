@@ -70,15 +70,7 @@ class CanvasRenderCache {
         val layerAlpha = (layer.opacity.coerceIn(0f, 1f) * 255).toInt()
 
         layer.strokes.forEach { stroke ->
-            val scaledPoints = stroke.points.map { p ->
-                StrokePoint(
-                    x = p.x * scale + panX,
-                    y = p.y * scale + panY,
-                    pressure = p.pressure,
-                    tilt = p.tilt
-                )
-            }
-            renderStroke(canvas, scaledPoints, scale, stroke.tool, layerAlpha)
+            renderStroke(canvas, stroke.points, scale, stroke.tool, layerAlpha)
         }
 
         lruCache.put(layer.id, bitmap)

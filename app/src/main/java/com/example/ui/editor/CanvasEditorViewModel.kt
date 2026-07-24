@@ -130,10 +130,44 @@ class CanvasEditorViewModel(
     }
 
     // Command Pattern Undo / Redo history
+    private val undoRedoMutex = kotlinx.coroutines.sync.Mutex()
     private val commandUndoStack = ArrayDeque<com.example.data.models.CanvasCommand>(100)
     private val commandRedoStack = ArrayDeque<com.example.data.models.CanvasCommand>(100)
     private val pageUndoHistory = mutableListOf<PageEntity>()
     private val pageRedoHistory = mutableListOf<PageEntity>()
+
+    private val bitmapCache = android.util.LruCache<String, android.graphics.Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()
+    )
+
+    fun preloadImageBitmap(sourceUri: String) {
+        if (sourceUri.isBlank() || bitmapCache.get(sourceUri) != null) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val file = File(sourceUri)
+                if (file.exists()) {
+                    val opts = android.graphics.BitmapFactory.Options().apply {
+                        inSampleSize = 2
+                    }
+                    val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+                    if (bitmap != null) {
+                        bitmapCache.put(sourceUri, bitmap)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("CanvasVM", "Failed to preload bitmap", e)
+            }
+        }
+    }
+
+    fun getCachedBitmap(sourceUri: String): android.graphics.Bitmap? {
+        return bitmapCache.get(sourceUri)?.takeIf { !it.isRecycled }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        bitmapCache.evictAll()
+    }
 
     // Gemini Messages
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -211,16 +245,33 @@ class CanvasEditorViewModel(
     }
 
     private fun ensureLayersExist(page: PageEntity): PageEntity {
-        if (page.layers.isEmpty()) {
-            val defaultLayer = LayerEntity(
-                id = UUID.randomUUID().toString(), name = "Фон",
-                strokes = page.strokes, shapes = page.shapes,
-                textBlocks = page.textBlocks, images = page.images, charts = page.charts
-            )
+        val hasTopLevelElements = page.strokes.isNotEmpty() || page.shapes.isNotEmpty() ||
+                page.textBlocks.isNotEmpty() || page.images.isNotEmpty() || page.charts.isNotEmpty()
+
+        if (page.layers.isEmpty() || hasTopLevelElements) {
+            val targetLayerId = _activeLayerId.value ?: page.activeLayerId ?: page.layers.firstOrNull()?.id ?: "default"
+            val baseLayers = if (page.layers.isEmpty()) listOf(LayerEntity(id = "default", name = "Шар 1")) else page.layers
+
+            val updatedLayers = baseLayers.map { layer ->
+                if (layer.id == targetLayerId) {
+                    layer.copy(
+                        strokes = layer.strokes + page.strokes,
+                        shapes = layer.shapes + page.shapes,
+                        textBlocks = layer.textBlocks + page.textBlocks,
+                        images = layer.images + page.images,
+                        charts = layer.charts + page.charts
+                    )
+                } else layer
+            }
+
             return page.copy(
-                layers = listOf(defaultLayer), activeLayerId = defaultLayer.id,
-                strokes = emptyList(), shapes = emptyList(),
-                textBlocks = emptyList(), images = emptyList(), charts = emptyList()
+                layers = updatedLayers,
+                activeLayerId = targetLayerId,
+                strokes = emptyList(),
+                shapes = emptyList(),
+                textBlocks = emptyList(),
+                images = emptyList(),
+                charts = emptyList()
             )
         }
         return page
@@ -350,30 +401,44 @@ class CanvasEditorViewModel(
     }
 
     fun undo() {
-        val page = currentPage ?: return
-        val command = commandUndoStack.removeLastOrNull()
-        if (command != null) {
-            val newPage = command.undo(page)
-            commandRedoStack.addLast(command)
-            updateCurrentPage(newPage)
-        } else if (pageUndoHistory.isNotEmpty()) {
-            pageRedoHistory.add(page)
-            val previousPage = pageUndoHistory.removeAt(pageUndoHistory.size - 1)
-            updateCurrentPage(previousPage)
+        viewModelScope.launch {
+            if (!undoRedoMutex.tryLock()) return@launch
+            try {
+                val page = currentPage ?: return@launch
+                val command = commandUndoStack.removeLastOrNull()
+                if (command != null) {
+                    val newPage = command.undo(page)
+                    commandRedoStack.addLast(command)
+                    updateCurrentPage(newPage)
+                } else if (pageUndoHistory.isNotEmpty()) {
+                    pageRedoHistory.add(page)
+                    val previousPage = pageUndoHistory.removeAt(pageUndoHistory.size - 1)
+                    updateCurrentPage(previousPage)
+                }
+            } finally {
+                undoRedoMutex.unlock()
+            }
         }
     }
 
     fun redo() {
-        val page = currentPage ?: return
-        val command = commandRedoStack.removeLastOrNull()
-        if (command != null) {
-            val newPage = command.execute(page)
-            commandUndoStack.addLast(command)
-            updateCurrentPage(newPage)
-        } else if (pageRedoHistory.isNotEmpty()) {
-            pageUndoHistory.add(page)
-            val nextPage = pageRedoHistory.removeAt(pageRedoHistory.size - 1)
-            updateCurrentPage(nextPage)
+        viewModelScope.launch {
+            if (!undoRedoMutex.tryLock()) return@launch
+            try {
+                val page = currentPage ?: return@launch
+                val command = commandRedoStack.removeLastOrNull()
+                if (command != null) {
+                    val newPage = command.execute(page)
+                    commandUndoStack.addLast(command)
+                    updateCurrentPage(newPage)
+                } else if (pageRedoHistory.isNotEmpty()) {
+                    pageUndoHistory.add(page)
+                    val nextPage = pageRedoHistory.removeAt(pageRedoHistory.size - 1)
+                    updateCurrentPage(nextPage)
+                }
+            } finally {
+                undoRedoMutex.unlock()
+            }
         }
     }
 
@@ -412,7 +477,9 @@ class CanvasEditorViewModel(
 
     fun insertShape(shapeType: ShapeType, targetX: Float = 160f, targetY: Float = 160f) {
         val page = currentPage ?: return
-        pushUndoState(page)
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
         val newShape = ShapeEntity(
             shapeType = shapeType,
             x = targetX,
@@ -422,24 +489,37 @@ class CanvasEditorViewModel(
             fillColor = _currentColor.value.copy(alpha = 0.2f).toArgbInt(),
             strokeColor = _currentColor.value.toArgbInt()
         )
-        updateCurrentPage(page.copy(shapes = page.shapes + newShape))
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(shapes = layer.shapes + newShape)
+            else layer
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     fun insertText(text: String, targetX: Float = 160f, targetY: Float = 160f) {
         val page = currentPage ?: return
-        pushUndoState(page)
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
         val newText = TextBlockEntity(
             text = text,
             x = targetX,
             y = targetY,
             color = _currentColor.value.toArgbInt()
         )
-        updateCurrentPage(page.copy(textBlocks = page.textBlocks + newText))
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(textBlocks = layer.textBlocks + newText)
+            else layer
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     fun insertMathFunctionChart(formula: String = "sin(x)", xMin: Float = -10f, xMax: Float = 10f, targetX: Float = 160f, targetY: Float = 160f) {
         val page = currentPage ?: return
-        pushUndoState(page)
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+
         val graphW = 380f
         val graphH = 260f
 
@@ -498,13 +578,17 @@ class CanvasEditorViewModel(
             height = graphH
         )
 
-        updateCurrentPage(
-            page.copy(
-                charts = page.charts + gridChart,
-                strokes = page.strokes + chartStroke,
-                textBlocks = page.textBlocks + textLabel
-            )
-        )
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) {
+                layer.copy(
+                    charts = layer.charts + gridChart,
+                    strokes = layer.strokes + chartStroke,
+                    textBlocks = layer.textBlocks + textLabel
+                )
+            } else layer
+        }
+
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     private fun evaluateMathFormula(formula: String, x: Double): Double {
@@ -544,14 +628,20 @@ class CanvasEditorViewModel(
 
     fun insertChart(targetX: Float = 160f, targetY: Float = 160f) {
         val page = currentPage ?: return
-        pushUndoState(page)
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
         val newChart = ChartElementEntity(
             x = targetX,
             y = targetY,
             width = 380f,
             height = 260f
         )
-        updateCurrentPage(page.copy(charts = page.charts + newChart))
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(charts = layer.charts + newChart)
+            else layer
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     fun insertImage(uri: android.net.Uri, targetX: Float = 160f, targetY: Float = 160f) {
@@ -561,6 +651,8 @@ class CanvasEditorViewModel(
             val file = File(imagePath)
             var w = 340f
             var h = 240f
+            var initialRotation = 0f
+
             if (file.exists()) {
                 val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
@@ -574,7 +666,27 @@ class CanvasEditorViewModel(
                         w = (360f * aspect).coerceAtLeast(100f)
                     }
                 }
+
+                val exif = runCatching { android.media.ExifInterface(file.absolutePath) }.getOrNull()
+                if (exif != null) {
+                    val orientation = exif.getAttributeInt(
+                        android.media.ExifInterface.TAG_ORIENTATION,
+                        android.media.ExifInterface.ORIENTATION_NORMAL
+                    )
+                    initialRotation = when (orientation) {
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                        else -> 0f
+                    }
+                }
+
+                preloadImageBitmap(imagePath)
             }
+
+            val migrated = ensureLayersExist(page)
+            pushUndoState(migrated)
+            val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
 
             val newImg = ImageElementEntity(
                 id = UUID.randomUUID().toString(),
@@ -583,117 +695,137 @@ class CanvasEditorViewModel(
                 y = targetY,
                 width = w,
                 height = h,
+                rotation = initialRotation,
                 opacity = 1.0f
             )
-            pushUndoState(page)
-            updateCurrentPage(page.copy(images = page.images + newImg))
+
+            val updatedLayers = migrated.layers.map { layer ->
+                if (layer.id == targetLayerId) layer.copy(images = layer.images + newImg)
+                else layer
+            }
+
+            updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
         }
     }
 
     fun deleteElement(id: String, type: String) {
         val page = currentPage ?: return
-        pushUndoState(page)
-        when (type) {
-            "SHAPE" -> updateCurrentPage(page.copy(shapes = page.shapes.filterNot { it.id == id }))
-            "IMAGE" -> updateCurrentPage(page.copy(images = page.images.filterNot { it.id == id }))
-            "TEXT" -> updateCurrentPage(page.copy(textBlocks = page.textBlocks.filterNot { it.id == id }))
-            "CHART" -> updateCurrentPage(page.copy(charts = page.charts.filterNot { it.id == id }))
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            when (type) {
+                "SHAPE" -> layer.copy(shapes = layer.shapes.filterNot { it.id == id })
+                "IMAGE" -> layer.copy(images = layer.images.filterNot { it.id == id })
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.filterNot { it.id == id })
+                "CHART" -> layer.copy(charts = layer.charts.filterNot { it.id == id })
+                else -> layer
+            }
         }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun rotateElement(id: String, type: String) {
         val page = currentPage ?: return
-        pushUndoState(page)
-        when (type) {
-            "IMAGE" -> {
-                val updated = page.images.map {
-                    if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it
-                }
-                updateCurrentPage(page.copy(images = updated))
-            }
-            "SHAPE" -> {
-                val updated = page.shapes.map {
-                    if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it
-                }
-                updateCurrentPage(page.copy(shapes = updated))
-            }
-            "CHART" -> {
-                val updated = page.charts.map {
-                    if (it.id == id) it.copy(width = it.height, height = it.width) else it
-                }
-                updateCurrentPage(page.copy(charts = updated))
-            }
-            "TEXT" -> {
-                val updated = page.textBlocks.map {
-                    if (it.id == id) it.copy(width = it.height, height = it.width) else it
-                }
-                updateCurrentPage(page.copy(textBlocks = updated))
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            when (type) {
+                "IMAGE" -> layer.copy(images = layer.images.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
+                "SHAPE" -> layer.copy(shapes = layer.shapes.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
+                "CHART" -> layer.copy(charts = layer.charts.map { if (it.id == id) it.copy(width = it.height, height = it.width) else it })
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map { if (it.id == id) it.copy(width = it.height, height = it.width) else it })
+                else -> layer
             }
         }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateImageOpacity(imageId: String, opacity: Float) {
         val page = currentPage ?: return
-        val updatedImages = page.images.map {
-            if (it.id == imageId) it.copy(opacity = opacity.coerceIn(0.1f, 1.0f)) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(images = layer.images.map {
+                if (it.id == imageId) it.copy(opacity = opacity.coerceIn(0.1f, 1.0f)) else it
+            })
         }
-        updateCurrentPage(page.copy(images = updatedImages))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateImageSize(imageId: String, width: Float, height: Float) {
         val page = currentPage ?: return
-        val updatedImages = page.images.map {
-            if (it.id == imageId) it.copy(width = width.coerceAtLeast(50f), height = height.coerceAtLeast(50f)) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(images = layer.images.map {
+                if (it.id == imageId) it.copy(width = width.coerceAtLeast(50f), height = height.coerceAtLeast(50f)) else it
+            })
         }
-        updateCurrentPage(page.copy(images = updatedImages))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateShapeSize(shapeId: String, width: Float, height: Float) {
         val page = currentPage ?: return
-        val updatedShapes = page.shapes.map {
-            if (it.id == shapeId) it.copy(width = width.coerceAtLeast(30f), height = height.coerceAtLeast(30f)) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(shapes = layer.shapes.map {
+                if (it.id == shapeId) it.copy(width = width.coerceAtLeast(30f), height = height.coerceAtLeast(30f)) else it
+            })
         }
-        updateCurrentPage(page.copy(shapes = updatedShapes))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateChartSize(chartId: String, width: Float, height: Float) {
         val page = currentPage ?: return
-        val updatedCharts = page.charts.map {
-            if (it.id == chartId) it.copy(width = width.coerceAtLeast(100f), height = height.coerceAtLeast(100f)) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(charts = layer.charts.map {
+                if (it.id == chartId) it.copy(width = width.coerceAtLeast(100f), height = height.coerceAtLeast(100f)) else it
+            })
         }
-        updateCurrentPage(page.copy(charts = updatedCharts))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateShapePosition(shapeId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
-        val updatedShapes = page.shapes.map {
-            if (it.id == shapeId) it.copy(x = newX, y = newY) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(shapes = layer.shapes.map {
+                if (it.id == shapeId) it.copy(x = newX, y = newY) else it
+            })
         }
-        updateCurrentPage(page.copy(shapes = updatedShapes))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateTextPosition(textId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
-        val updatedTexts = page.textBlocks.map {
-            if (it.id == textId) it.copy(x = newX, y = newY) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(textBlocks = layer.textBlocks.map {
+                if (it.id == textId) it.copy(x = newX, y = newY) else it
+            })
         }
-        updateCurrentPage(page.copy(textBlocks = updatedTexts))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateImagePosition(imageId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
-        val updatedImages = page.images.map {
-            if (it.id == imageId) it.copy(x = newX, y = newY) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(images = layer.images.map {
+                if (it.id == imageId) it.copy(x = newX, y = newY) else it
+            })
         }
-        updateCurrentPage(page.copy(images = updatedImages))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun updateChartPosition(chartId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
-        val updatedCharts = page.charts.map {
-            if (it.id == chartId) it.copy(x = newX, y = newY) else it
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(charts = layer.charts.map {
+                if (it.id == chartId) it.copy(x = newX, y = newY) else it
+            })
         }
-        updateCurrentPage(page.copy(charts = updatedCharts))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun setCurrentPage(index: Int) {
@@ -815,7 +947,8 @@ class CanvasEditorViewModel(
     // Feature 1: Smart Shape Recognizer & Vectorizer
     fun recognizeAndVectorizeLastStroke() {
         val page = currentPage ?: return
-        val lastStroke = page.getEffectiveLayers().flatMap { it.strokes }.lastOrNull() ?: return
+        val migrated = ensureLayersExist(page)
+        val lastStroke = migrated.getEffectiveLayers().flatMap { it.strokes }.lastOrNull() ?: return
         val recognized = com.example.academic.ShapeRecognizerEngine.recognizeShape(lastStroke.points)
         if (recognized != null) {
             val newShape = ShapeEntity(
@@ -829,20 +962,26 @@ class CanvasEditorViewModel(
                 fillColor = 0x336366F1,
                 strokeWidth = lastStroke.baseWidth
             )
-            // Remove raw stroke, add vectorized shape
-            val updatedStrokes = page.strokes.filter { it.id != lastStroke.id }
-            val updatedShapes = page.shapes + newShape
-            updateCurrentPage(page.copy(strokes = updatedStrokes, shapes = updatedShapes))
+            val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+            val updatedLayers = migrated.layers.map { layer ->
+                val strokeFiltered = layer.strokes.filterNot { it.id == lastStroke.id }
+                if (layer.id == targetLayerId) {
+                    layer.copy(strokes = strokeFiltered, shapes = layer.shapes + newShape)
+                } else {
+                    layer.copy(strokes = strokeFiltered)
+                }
+            }
+            updateCurrentPage(migrated.copy(layers = updatedLayers))
             _academicStatusMessage.value = "Розпізнано фігуру: ${recognized.type.name} (Точність ${(recognized.confidence * 100).toInt()}%)"
         } else {
             _academicStatusMessage.value = "Фігуру не розпізнано. Спробуйте намалювати чіткіше коло чи прямокутник."
         }
     }
 
-    // Feature 2: Function Plotter from Hand-drawn Graphs
     fun plotFunctionFromStrokes() {
         val page = currentPage ?: return
-        val strokes = page.getEffectiveLayers().flatMap { it.strokes }
+        val migrated = ensureLayersExist(page)
+        val strokes = migrated.getEffectiveLayers().flatMap { it.strokes }
         if (strokes.isEmpty()) {
             _academicStatusMessage.value = "Немає штрихів для аналізу математичної функції."
             return
@@ -857,7 +996,13 @@ class CanvasEditorViewModel(
                 baseWidth = 5f,
                 points = result.curvePoints
             )
-            updateCurrentPage(page.copy(strokes = page.strokes + plottedStroke))
+            val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+            val updatedLayers = migrated.layers.map { layer ->
+                if (layer.id == targetLayerId) {
+                    layer.copy(strokes = layer.strokes + plottedStroke)
+                } else layer
+            }
+            updateCurrentPage(migrated.copy(layers = updatedLayers))
             _latexOutput.value = result.latexFormula
             _academicStatusMessage.value = "Побудовано графік: ${result.latexFormula} (R² = ${String.format("%.2f", result.rSquared)})"
         } else {

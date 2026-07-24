@@ -9,6 +9,13 @@ import kotlinx.coroutines.withContext
 
 class AtomicCanvasStorage(private val targetFile: File) {
 
+    init {
+        val parentDir = targetFile.parentFile
+        if (parentDir != null && !targetFile.canonicalPath.startsWith(parentDir.canonicalPath)) {
+            throw SecurityException("Path traversal attempt detected: ${targetFile.name}")
+        }
+    }
+
     private val atomicFile = AtomicFile(targetFile)
     private val backupFile = File(targetFile.parentFile, "${targetFile.name}.bak")
 

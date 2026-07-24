@@ -111,13 +111,23 @@ object ExportManager {
                 }
 
                 layer.textBlocks.forEach { text ->
-                    val textPaint = Paint().apply {
+                    val textPaint = android.text.TextPaint().apply {
                         color = text.color
                         textSize = text.fontSize * 1.5f
                         isAntiAlias = true
                         alpha = layerAlpha
                     }
-                    canvas.drawText(text.text, text.x, text.y + text.fontSize, textPaint)
+                    val maxWidth = text.width.toInt().coerceAtLeast(100)
+                    val staticLayout = android.text.StaticLayout.Builder
+                        .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
+                        .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                        .setLineSpacing(2f, 1f)
+                        .build()
+
+                    canvas.save()
+                    canvas.translate(text.x, text.y)
+                    staticLayout.draw(canvas)
+                    canvas.restore()
                 }
             }
 
