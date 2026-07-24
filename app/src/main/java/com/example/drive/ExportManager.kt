@@ -66,54 +66,68 @@ object ExportManager {
     }
 
     /**
-     * Експорт сторінки у PDF (векторний).
+     * Експорт однієї сторінки у PDF (векторний).
      */
     fun exportToPdf(page: PageEntity, outputFile: File, context: Context, pageWidth: Int = 1920, pageHeight: Int = 1080) {
+        exportPagesToPdf(listOf(page), outputFile, context, pageWidth, pageHeight)
+    }
+
+    /**
+     * Посторінковий експорт списку сторінок у PDF із захистом від OOM (BUG-012).
+     */
+    fun exportPagesToPdf(pages: List<PageEntity>, outputFile: File, context: Context, pageWidth: Int = 1920, pageHeight: Int = 1080) {
         val pdfDocument = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-        val pdfPage = pdfDocument.startPage(pageInfo)
-        val canvas = pdfPage.canvas
 
-        // Білий фон
-        canvas.drawColor(android.graphics.Color.WHITE)
+        pages.forEachIndexed { index, page ->
+            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
+            val pdfPage = pdfDocument.startPage(pageInfo)
+            val canvas = pdfPage.canvas
 
-        val paint = Paint().apply {
-            isAntiAlias = true
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
+            canvas.drawColor(android.graphics.Color.WHITE)
 
-        page.visibleLayersBottomUp().forEach { layer ->
-            val layerAlpha = (layer.opacity * 255).toInt()
-
-            layer.strokes.forEach { stroke ->
-                val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                paint.strokeWidth = stroke.baseWidth
-                paint.color = stroke.colorHsla.toAndroidColor()
-                paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                canvas.drawPath(path, paint)
+            val paint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
             }
 
-            layer.shapes.forEach { shape ->
-                paint.strokeWidth = shape.strokeWidth
-                paint.color = shape.strokeColor
-                paint.alpha = layerAlpha
-                canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
-            }
+            page.visibleLayersBottomUp().forEach { layer ->
+                val layerAlpha = (layer.opacity * 255).toInt()
 
-            layer.textBlocks.forEach { text ->
-                val textPaint = Paint().apply {
-                    color = text.color
-                    textSize = text.fontSize * 1.5f
-                    isAntiAlias = true
-                    alpha = layerAlpha
+                layer.strokes.forEach { stroke ->
+                    val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                    paint.strokeWidth = stroke.baseWidth
+                    paint.color = stroke.colorHsla.toAndroidColor()
+                    paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                    canvas.drawPath(path, paint)
                 }
-                canvas.drawText(text.text, text.x, text.y + text.fontSize, textPaint)
+
+                layer.shapes.forEach { shape ->
+                    paint.strokeWidth = shape.strokeWidth
+                    paint.color = shape.strokeColor
+                    paint.alpha = layerAlpha
+                    canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
+                }
+
+                layer.textBlocks.forEach { text ->
+                    val textPaint = Paint().apply {
+                        color = text.color
+                        textSize = text.fontSize * 1.5f
+                        isAntiAlias = true
+                        alpha = layerAlpha
+                    }
+                    canvas.drawText(text.text, text.x, text.y + text.fontSize, textPaint)
+                }
+            }
+
+            pdfDocument.finishPage(pdfPage)
+
+            if ((index + 1) % 10 == 0) {
+                System.gc()
             }
         }
 
-        pdfDocument.finishPage(pdfPage)
         FileOutputStream(outputFile).use { pdfDocument.writeTo(it) }
         pdfDocument.close()
     }
