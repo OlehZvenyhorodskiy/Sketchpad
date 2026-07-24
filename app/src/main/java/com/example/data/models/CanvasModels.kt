@@ -254,8 +254,8 @@ data class PageEntity(
     val textBlocks: List<TextBlockEntity> = emptyList(),
     val images: List<ImageElementEntity> = emptyList(),
     val charts: List<ChartElementEntity> = emptyList(),
-    val layers: List<LayerEntity> = emptyList(),
-    val activeLayerId: String? = null,
+    val layers: List<LayerEntity> = listOf(LayerEntity(id = "default", name = "Шар 1")),
+    val activeLayerId: String? = "default",
     val backgroundPattern: BackgroundPattern = BackgroundPattern.BLANK,
     val backgroundSpacing: Float = 30f,
     val backgroundLineColor: Int = 0xFFE0E0E0.toInt()
@@ -263,7 +263,7 @@ data class PageEntity(
     fun getEffectiveLayers(): List<LayerEntity> {
         if (layers.isEmpty()) {
             return listOf(LayerEntity(
-                id = "default", name = "Фон",
+                id = "default", name = "Шар 1",
                 strokes = strokes, shapes = shapes,
                 textBlocks = textBlocks, images = images, charts = charts
             ))
@@ -275,7 +275,43 @@ data class PageEntity(
 
     fun getActiveLayer(): LayerEntity {
         val effective = getEffectiveLayers()
-        return effective.find { it.id == activeLayerId } ?: effective.last()
+        return effective.find { it.id == activeLayerId } ?: effective.first()
+    }
+
+    fun withUpdatedLayer(layerId: String, transform: (LayerEntity) -> LayerEntity): PageEntity {
+        val currentLayers = getEffectiveLayers()
+        val updatedLayers = currentLayers.map { layer ->
+            if (layer.id == layerId) transform(layer) else layer
+        }
+        return copy(layers = updatedLayers, activeLayerId = activeLayerId ?: layerId)
+    }
+
+    fun withAddedStroke(stroke: StrokeEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(strokes = layer.strokes + stroke)
+        }
+    }
+
+    fun withAddedShape(shape: ShapeEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(shapes = layer.shapes + shape)
+        }
+    }
+
+    fun withAddedImage(image: ImageElementEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(images = layer.images + image)
+        }
+    }
+
+    fun withAddedChart(chart: ChartElementEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(charts = layer.charts + chart)
+        }
     }
 }
 

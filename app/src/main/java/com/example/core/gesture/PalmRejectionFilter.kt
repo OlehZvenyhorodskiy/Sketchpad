@@ -1,47 +1,56 @@
 package com.example.core.gesture
 
+import android.os.Build
 import android.view.MotionEvent
 
 /**
  * Розумний фільтр відхилення долоні (Smart Palm Rejection Filter).
- * Підтримує як офіційні активні стилуси, так і неофіційні/пасивні стилуси (Xiaomi, Baseus тощо).
- * Неофіційні стилуси передаються системою як TOOL_TYPE_FINGER, але мають малу площу дотику.
- * Долоня має великий радіус/площу дотику (touchMajor > 55px або area > 900px²).
+ * Підтримує активні та пасивні стилуси з адаптивним порогом в зависимости от плотности экрана.
  */
 object PalmRejectionFilter {
 
-    private const val PALM_AREA_THRESHOLD = 900f   // px²
-    private const val PALM_MAJOR_THRESHOLD = 55f    // px
-    private const val TOOL_TYPE_PALM = 4            // MotionEvent.TOOL_TYPE_PALM (API 34+)
+    private const val PALM_TOUCH_MAJOR_DP = 42f
+    private const val PALM_TOOL_MAJOR_DP = 38f
+    private const val PALM_AREA_DP2 = 800f
+    private const val TOOL_TYPE_PALM_VALUE = 4
 
-    fun shouldRejectEvent(event: MotionEvent): Boolean {
-        val toolType = event.getToolType(0)
-
-        // 1. Активний стилус або стирачка — завжди дозволяти
-        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
-            return false
+    fun shouldRejectEvent(
+        event: MotionEvent,
+        pointerIndex: Int = 0,
+        displayDensity: Float = 1.0f
+    ): Boolean {
+        if (Build.VERSION.SDK_INT >= 34) {
+            try {
+                val toolType = event.getToolType(pointerIndex)
+                if (toolType == TOOL_TYPE_PALM_VALUE) {
+                    return true
+                }
+                if (toolType == MotionEvent.TOOL_TYPE_STYLUS ||
+                    toolType == MotionEvent.TOOL_TYPE_ERASER) {
+                    return false
+                }
+            } catch (e: Exception) {
+                // Safe fallback
+            }
         }
 
-        // 2. Якщо система вказує на долоню (TOOL_TYPE_PALM = 4)
-        if (toolType == TOOL_TYPE_PALM) {
-            return true
+        val density = displayDensity.coerceAtLeast(0.5f)
+        val touchMajorDp = event.getTouchMajor(pointerIndex) / density
+        val touchMinorDp = event.getTouchMinor(pointerIndex) / density
+        val areaDp2 = (Math.PI * (touchMajorDp / 2f) * (touchMinorDp / 2f)).toFloat()
+
+        return touchMajorDp > PALM_TOUCH_MAJOR_DP || areaDp2 > PALM_AREA_DP2
+    }
+
+    fun shouldRejectMultiTouch(
+        event: MotionEvent,
+        displayDensity: Float = 1.0f
+    ): Boolean {
+        for (i in 0 until event.pointerCount) {
+            if (shouldRejectEvent(event, i, displayDensity)) {
+                return true
+            }
         }
-
-        // 3. Для неофіційних стилусів (які відображаються як TOOL_TYPE_FINGER):
-        // Оцінюємо геометричні параметри плями дотику
-        val touchMajor = event.getTouchMajor(0)
-        val touchMinor = event.getTouchMinor(0)
-
-        if (touchMajor > PALM_MAJOR_THRESHOLD) {
-            return true // Велика пляма = долоня
-        }
-
-        val area = Math.PI * (touchMajor / 2f) * (touchMinor / 2f)
-        if (area > PALM_AREA_THRESHOLD) {
-            return true // Велика площа = долоня
-        }
-
-        // Мала площа (неофіційний стилус або пальчик) = ДОЗВОЛИТИ
         return false
     }
 

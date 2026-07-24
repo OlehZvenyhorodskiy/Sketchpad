@@ -2,19 +2,35 @@ package com.example.core.render
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Paint
+import android.util.LruCache
 import com.example.data.models.LayerEntity
 import com.example.data.models.StrokePoint
 import com.example.data.models.ToolType
 
 /**
- * Кешує відрендерені шари у Bitmap.
- * Перемальовує лише при зміні вмісту шару.
- * Active stroke рендериться поверх кешу без кешування.
+ * Кешує відрендерені шари у Bitmap з обмежуванням пам'яті LRU і безпечною очисткою.
  */
 class CanvasRenderCache {
 
-    private val layerBitmaps = mutableMapOf<String, Bitmap>()
+    private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024 / 6).toInt()
+
+    private val lruCache = object : LruCache<String, Bitmap>(maxMemoryKb) {
+        override fun sizeOf(key: String, bitmap: Bitmap): Int {
+            return bitmap.byteCount / 1024
+        }
+
+        override fun entryRemoved(
+            evicted: Boolean,
+            key: String,
+            oldValue: Bitmap,
+            newValue: Bitmap?
+        ) {
+            if (evicted && !oldValue.isRecycled) {
+                oldValue.recycle()
+            }
+        }
+    }
+
     private val layerDirtyFlags = mutableMapOf<String, Boolean>()
 
     fun invalidateLayer(layerId: String) {
@@ -34,25 +50,25 @@ class CanvasRenderCache {
         panY: Float,
         renderStroke: (Canvas, List<StrokePoint>, Float, ToolType, Int) -> Unit
     ): Bitmap {
-        val isDirty = layerDirtyFlags[layer.id] ?: true
-        val existing = layerBitmaps[layer.id]
+        val safeWidth = width.coerceAtLeast(1)
+        val safeHeight = height.coerceAtLeast(1)
 
-        if (!isDirty && existing != null && existing.width == width && existing.height == height) {
+        val isDirty = layerDirtyFlags[layer.id] ?: true
+        val existing = lruCache.get(layer.id)?.takeIf { !it.isRecycled }
+
+        if (!isDirty && existing != null && existing.width == safeWidth && existing.height == safeHeight) {
             return existing
         }
 
-        // Створюємо або перестворюємо bitmap
-        val bitmap = if (existing != null && existing.width == width && existing.height == height) {
+        val bitmap = if (existing != null && existing.width == safeWidth && existing.height == safeHeight) {
             existing.apply { eraseColor(0) }
         } else {
-            existing?.recycle()
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            Bitmap.createBitmap(safeWidth, safeHeight, Bitmap.Config.ARGB_8888)
         }
 
         val canvas = Canvas(bitmap)
         val layerAlpha = (layer.opacity.coerceIn(0f, 1f) * 255).toInt()
 
-        // Рендеримо всі strokes шару
         layer.strokes.forEach { stroke ->
             val scaledPoints = stroke.points.map { p ->
                 StrokePoint(
@@ -65,19 +81,20 @@ class CanvasRenderCache {
             renderStroke(canvas, scaledPoints, scale, stroke.tool, layerAlpha)
         }
 
-        layerBitmaps[layer.id] = bitmap
+        lruCache.put(layer.id, bitmap)
         layerDirtyFlags[layer.id] = false
         return bitmap
     }
 
     fun removeLayer(layerId: String) {
-        layerBitmaps.remove(layerId)?.recycle()
+        lruCache.remove(layerId)?.let {
+            if (!it.isRecycled) it.recycle()
+        }
         layerDirtyFlags.remove(layerId)
     }
 
     fun clear() {
-        layerBitmaps.values.forEach { it.recycle() }
-        layerBitmaps.clear()
+        lruCache.evictAll()
         layerDirtyFlags.clear()
     }
 }
