@@ -592,38 +592,7 @@ class CanvasEditorViewModel(
     }
 
     private fun evaluateMathFormula(formula: String, x: Double): Double {
-        val clean = formula.lowercase().replace(" ", "")
-        return try {
-            when {
-                clean.contains("sin") -> {
-                    val factor = clean.replace("sin(x)", "").replace("sin", "").replace("*", "").toDoubleOrNull() ?: 1.0
-                    Math.sin(x) * factor
-                }
-                clean.contains("cos") -> {
-                    val factor = clean.replace("cos(x)", "").replace("cos", "").replace("*", "").toDoubleOrNull() ?: 1.0
-                    Math.cos(x) * factor
-                }
-                clean.contains("tan") -> Math.tan(x)
-                clean.contains("x*x") || clean.contains("x^2") -> x * x
-                clean.contains("x*x*x") || clean.contains("x^3") -> x * x * x
-                clean.contains("sqrt") -> Math.sqrt(x)
-                clean.contains("1/x") -> if (x != 0.0) 1.0 / x else 0.0
-                else -> {
-                    if (clean.contains("*x")) {
-                        val m = clean.substringBefore("*x").toDoubleOrNull() ?: 1.0
-                        val b = clean.substringAfter("+", "0").toDoubleOrNull() ?: 0.0
-                        m * x + b
-                    } else if (clean.contains("x")) {
-                        val b = clean.substringAfter("+", "0").toDoubleOrNull() ?: 0.0
-                        x + b
-                    } else {
-                        clean.toDoubleOrNull() ?: 0.0
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            0.0
-        }
+        return com.example.academic.MathExpressionEvaluator.eval(formula, x)
     }
 
     fun insertChart(targetX: Float = 160f, targetY: Float = 160f) {
@@ -836,8 +805,9 @@ class CanvasEditorViewModel(
 
     fun addNewPage() {
         viewModelScope.launch {
-            val page = repository.addPage(canvasId)
-            _currentPageIndex.value = _pages.value.size
+            val newIndex = _pages.value.size
+            repository.addPage(canvasId)
+            _currentPageIndex.value = newIndex
         }
     }
 

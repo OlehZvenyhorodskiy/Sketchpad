@@ -96,7 +96,7 @@ class AudioRecorderManager(private val context: Context) {
             }
             return outputFile.absolutePath
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w("AudioRecorderManager", "Error starting recording", e)
             stopRecording()
             return null
         }
@@ -109,7 +109,9 @@ class AudioRecorderManager(private val context: Context) {
         val duration = if (recordingStartTimeMs > 0) System.currentTimeMillis() - recordingStartTimeMs else 0L
         try {
             mediaRecorder?.apply { stop(); release() }
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            android.util.Log.w("AudioRecorderManager", "Error stopping recorder", e)
+        }
         finally {
             mediaRecorder = null
             recordingStartTimeMs = 0L
@@ -140,7 +142,7 @@ class AudioRecorderManager(private val context: Context) {
             val total = mediaPlayer?.duration?.toLong() ?: 0L
             startPlaybackTicker(filePath, total)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w("AudioRecorderManager", "Error starting playback", e)
             _status.value = RecordingStatus.Idle
         }
     }
@@ -167,7 +169,9 @@ class AudioRecorderManager(private val context: Context) {
                     mp.currentPosition.toLong(), mp.duration.toLong(),
                     currentOutputFilePath ?: "", false
                 )
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                android.util.Log.w("AudioRecorderManager", "Error pausing playback", e)
+            }
         }
     }
 
@@ -176,7 +180,9 @@ class AudioRecorderManager(private val context: Context) {
         if (current is RecordingStatus.Playing) {
             mediaPlayer?.let { mp ->
                 try { mp.start(); startPlaybackTicker(current.filePath, current.totalDurationMs) }
-                catch (e: Exception) { e.printStackTrace() }
+                catch (e: Exception) {
+                    android.util.Log.w("AudioRecorderManager", "Error resuming playback", e)
+                }
             } ?: startPlayback(current.filePath, current.currentPositionMs)
         }
     }
@@ -189,7 +195,9 @@ class AudioRecorderManager(private val context: Context) {
                 if (current is RecordingStatus.Playing) {
                     _status.value = current.copy(currentPositionMs = positionMs)
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                android.util.Log.w("AudioRecorderManager", "Error seeking playback", e)
+            }
         }
     }
 
@@ -197,14 +205,18 @@ class AudioRecorderManager(private val context: Context) {
         playbackJob?.cancel()
         playbackJob = null
         try { mediaPlayer?.apply { if (isPlaying) stop(); release() } }
-        catch (e: Exception) { e.printStackTrace() }
+        catch (e: Exception) {
+            android.util.Log.w("AudioRecorderManager", "Error stopping playback", e)
+        }
         finally { mediaPlayer = null; _status.value = RecordingStatus.Idle }
     }
 
     fun deleteAudioFile(filePath: String) {
         stopPlayback()
         try { File(filePath).takeIf { it.exists() }?.delete() }
-        catch (e: Exception) { e.printStackTrace() }
+        catch (e: Exception) {
+            android.util.Log.w("AudioRecorderManager", "Error deleting audio file", e)
+        }
     }
 
     fun destroy() {

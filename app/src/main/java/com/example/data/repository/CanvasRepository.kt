@@ -240,7 +240,7 @@ class CanvasRepository(private val context: Context) {
                 canvasDao.updateCanvas(canvas.copy(thumbnailPath = file.absolutePath))
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w("CanvasRepository", "Failed to save thumbnail", e)
         }
     }
 

@@ -178,7 +178,7 @@ class HomeViewModel(
                         pfd.close()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.w("HomeViewModel", "Failed to import PDF page", e)
                 }
 
                 if (pages.isNotEmpty()) {

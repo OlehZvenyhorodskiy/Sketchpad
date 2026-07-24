@@ -94,6 +94,8 @@ fun InteractiveCanvas(
     onRotateElement: (String, String) -> Unit = { _, _ -> },
     onUpdateImageOpacity: (String, Float) -> Unit = { _, _ -> },
     onResizeElement: (String, String, Float, Float) -> Unit = { _, _, _, _ -> },
+    getCachedBitmap: (String) -> android.graphics.Bitmap? = { null },
+    onPreloadImage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var panOffset by remember { mutableStateOf(Offset.Zero) }
@@ -115,29 +117,14 @@ fun InteractiveCanvas(
     var elementOriginalSize by remember { mutableStateOf(Offset.Zero) }
     var isResizingCorner by remember { mutableStateOf(false) }
 
-    val bitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
-
-    // Preload image bitmaps off the UI thread
+    // Preload image bitmaps off the UI thread via ViewModel LruCache
     val imageUris = remember(pageEntity) {
         pageEntity?.getEffectiveLayers()?.flatMap { it.images }?.map { it.sourceUri }?.distinct() ?: emptyList()
     }
     imageUris.forEach { uri ->
-        if (bitmapCache[uri]?.isRecycled != false) {
+        if (getCachedBitmap(uri) == null) {
             LaunchedEffect(uri) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val file = File(uri)
-                        if (file.exists()) {
-                            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
-                            val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
-                            if (decoded != null) {
-                                bitmapCache[uri] = decoded
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+                onPreloadImage(uri)
             }
         }
     }
@@ -532,7 +519,7 @@ fun InteractiveCanvas(
                         rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
                             drawIntoCanvas { canvas ->
                                 try {
-                                    val bitmap = bitmapCache[image.sourceUri]?.takeIf { !it.isRecycled }
+                                    val bitmap = getCachedBitmap(image.sourceUri)
                                     if (bitmap != null) {
                                         val paint = android.graphics.Paint().apply {
                                             alpha = (image.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
@@ -548,8 +535,22 @@ fun InteractiveCanvas(
                                         canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
                                     }
                                 } catch (e: Exception) {
-                                    e.printStackTrace()
+                                    android.util.Log.w("InteractiveCanvas", "Error rendering image bitmap", e)
                                 }
+                            }
+                            if (getCachedBitmap(image.sourceUri) == null) {
+                                drawRect(
+                                    color = Color(0x4438BDF8),
+                                    topLeft = Offset(
+                                        image.x * currentScale + panOffset.x,
+                                        image.y * currentScale + panOffset.y
+                                    ),
+                                    size = androidx.compose.ui.geometry.Size(
+                                        image.width * currentScale,
+                                        image.height * currentScale
+                                    ),
+                                    style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
+                                )
                             }
                         }
 

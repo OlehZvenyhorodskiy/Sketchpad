@@ -337,7 +337,9 @@ fun CanvasEditorScreen(
                         "IMAGE" -> viewModel.updateImageSize(id, w, h)
                         "CHART" -> viewModel.updateChartSize(id, w, h)
                     }
-                }
+                },
+                getCachedBitmap = { viewModel.getCachedBitmap(it) },
+                onPreloadImage = { viewModel.preloadImageBitmap(it) }
             )
 
             // 2. Ruler Overlay

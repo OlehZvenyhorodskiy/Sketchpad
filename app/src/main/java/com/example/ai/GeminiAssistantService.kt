@@ -122,8 +122,8 @@ class GeminiAssistantService {
 
             return@withContext answer ?: "Не вдалося отримати відповідь від AI."
         } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext "Помилка зв'язку з AI-сервісом: ${e.localizedMessage}"
+            android.util.Log.w("GeminiService", "Failed to query Gemini AI assistant", e)
+            return@withContext "Помилка при запиті до AI: ${e.localizedMessage ?: "невідома помилка"}"
         }
     }
 }
