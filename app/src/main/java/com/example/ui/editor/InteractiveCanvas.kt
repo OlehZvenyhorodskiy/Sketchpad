@@ -55,12 +55,16 @@ import com.example.core.drawing.DrawingEngine
 import com.example.core.drawing.RulerState
 import com.example.data.models.BackgroundPattern
 import com.example.data.models.CanvasEntity
+import com.example.data.models.ChartElementEntity
 import com.example.data.models.EraserMode
 import com.example.data.models.HslaColor
+import com.example.data.models.ImageElementEntity
 import com.example.data.models.PageEntity
 import com.example.data.models.PageSizePreset
+import com.example.data.models.ShapeEntity
 import com.example.data.models.StrokeEntity
 import com.example.data.models.StrokePoint
+import com.example.data.models.TextBlockEntity
 import com.example.data.models.ToolType
 import java.io.File
 import kotlin.math.roundToInt
@@ -112,6 +116,31 @@ fun InteractiveCanvas(
     var isResizingCorner by remember { mutableStateOf(false) }
 
     val bitmapCache = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
+
+    // Preload image bitmaps off the UI thread
+    val imageUris = remember(pageEntity) {
+        pageEntity?.getEffectiveLayers()?.flatMap { it.images }?.map { it.sourceUri }?.distinct() ?: emptyList()
+    }
+    imageUris.forEach { uri ->
+        if (bitmapCache[uri]?.isRecycled != false) {
+            LaunchedEffect(uri) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val file = File(uri)
+                        if (file.exists()) {
+                            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                            val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+                            if (decoded != null) {
+                                bitmapCache[uri] = decoded
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
 
     // Default to dark background (#121212) if not specified or white
     val bgColor = canvasEntity?.backgroundColor?.let {
@@ -203,10 +232,10 @@ fun InteractiveCanvas(
                             if (selId != null && selType != null && pageEntity != null) {
                                 var cornerRect: Rect? = null
                                 when (selType) {
-                                    "SHAPE" -> pageEntity.shapes.find { it.id == selId }?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
-                                    "IMAGE" -> pageEntity.images.find { it.id == selId }?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
-                                    "TEXT" -> pageEntity.textBlocks.find { it.id == selId }?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
-                                    "CHART" -> pageEntity.charts.find { it.id == selId }?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "SHAPE" -> pageEntity.findShape(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "IMAGE" -> pageEntity.findImage(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "TEXT" -> pageEntity.findText(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "CHART" -> pageEntity.findChart(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
                                 }
                                 cornerRect?.let { r ->
                                     val distToCorner = Math.hypot((rawPoint.x - r.right).toDouble(), (rawPoint.y - r.bottom).toDouble())
@@ -503,30 +532,20 @@ fun InteractiveCanvas(
                         rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
                             drawIntoCanvas { canvas ->
                                 try {
-                                    val file = File(image.sourceUri)
-                                    if (file.exists()) {
-                                        var bitmap = bitmapCache[image.sourceUri]?.takeIf { !it.isRecycled }
-                                        if (bitmap == null) {
-                                            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
-                                            bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
-                                            if (bitmap != null) {
-                                                bitmapCache[image.sourceUri] = bitmap
-                                            }
+                                    val bitmap = bitmapCache[image.sourceUri]?.takeIf { !it.isRecycled }
+                                    if (bitmap != null) {
+                                        val paint = android.graphics.Paint().apply {
+                                            alpha = (image.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
+                                            isAntiAlias = true
+                                            isFilterBitmap = true
                                         }
-                                        if (bitmap != null) {
-                                            val paint = android.graphics.Paint().apply {
-                                                alpha = (image.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
-                                                isAntiAlias = true
-                                                isFilterBitmap = true
-                                            }
-                                            val dstRect = android.graphics.RectF(
-                                                image.x * currentScale + panOffset.x,
-                                                image.y * currentScale + panOffset.y,
-                                                (image.x + image.width) * currentScale + panOffset.x,
-                                                (image.y + image.height) * currentScale + panOffset.y
-                                            )
-                                            canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
-                                        }
+                                        val dstRect = android.graphics.RectF(
+                                            image.x * currentScale + panOffset.x,
+                                            image.y * currentScale + panOffset.y,
+                                            (image.x + image.width) * currentScale + panOffset.x,
+                                            (image.y + image.height) * currentScale + panOffset.y
+                                        )
+                                        canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
                                     }
                                 } catch (e: Exception) {
                                     e.printStackTrace()
@@ -796,16 +815,16 @@ fun InteractiveCanvas(
                 var elemRect: Rect? = null
 
                 when (selType) {
-                    "SHAPE" -> pageEntity.shapes.find { it.id == selId }?.let {
+                    "SHAPE" -> pageEntity.findShape(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
-                    "IMAGE" -> pageEntity.images.find { it.id == selId }?.let {
+                    "IMAGE" -> pageEntity.findImage(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
-                    "TEXT" -> pageEntity.textBlocks.find { it.id == selId }?.let {
+                    "TEXT" -> pageEntity.findText(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
-                    "CHART" -> pageEntity.charts.find { it.id == selId }?.let {
+                    "CHART" -> pageEntity.findChart(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
                 }
@@ -845,20 +864,20 @@ fun InteractiveCanvas(
             var currentImgOpacity = 1.0f
 
             when (selType) {
-                "SHAPE" -> pageEntity.shapes.find { it.id == selId }?.let {
+                "SHAPE" -> pageEntity.findShape(selId)?.let {
                     elemPos = Offset(it.x, it.y)
                     elemSize = Offset(it.width, it.height)
                 }
-                "IMAGE" -> pageEntity.images.find { it.id == selId }?.let {
+                "IMAGE" -> pageEntity.findImage(selId)?.let {
                     elemPos = Offset(it.x, it.y)
                     elemSize = Offset(it.width, it.height)
                     currentImgOpacity = it.opacity
                 }
-                "TEXT" -> pageEntity.textBlocks.find { it.id == selId }?.let {
+                "TEXT" -> pageEntity.findText(selId)?.let {
                     elemPos = Offset(it.x, it.y)
                     elemSize = Offset(it.width, it.height)
                 }
-                "CHART" -> pageEntity.charts.find { it.id == selId }?.let {
+                "CHART" -> pageEntity.findChart(selId)?.let {
                     elemPos = Offset(it.x, it.y)
                     elemSize = Offset(it.width, it.height)
                 }
@@ -978,3 +997,15 @@ private fun isTouchInsideRuler(event: MotionEvent, ruler: RulerState): Boolean {
     val localY = -relX * sinA + relY * cosA
     return kotlin.math.abs(localX) <= ruler.length / 2 + 40f && kotlin.math.abs(localY) <= ruler.width / 2 + 30f
 }
+
+private fun PageEntity.findShape(id: String): ShapeEntity? =
+    getEffectiveLayers().flatMap { it.shapes }.find { it.id == id }
+
+private fun PageEntity.findImage(id: String): ImageElementEntity? =
+    getEffectiveLayers().flatMap { it.images }.find { it.id == id }
+
+private fun PageEntity.findText(id: String): TextBlockEntity? =
+    getEffectiveLayers().flatMap { it.textBlocks }.find { it.id == id }
+
+private fun PageEntity.findChart(id: String): ChartElementEntity? =
+    getEffectiveLayers().flatMap { it.charts }.find { it.id == id }

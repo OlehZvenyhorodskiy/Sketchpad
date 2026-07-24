@@ -44,20 +44,26 @@ class GeminiAssistantService {
 
         pages.forEachIndexed { index, page ->
             contextBuilder.append("--- Сторінка ${index + 1} ---\n")
-            if (page.textBlocks.isNotEmpty()) {
+            val layers = page.getEffectiveLayers()
+            val textBlocks = layers.flatMap { it.textBlocks }
+            val shapes = layers.flatMap { it.shapes }
+            val charts = layers.flatMap { it.charts }
+            val strokes = layers.flatMap { it.strokes }
+
+            if (textBlocks.isNotEmpty()) {
                 contextBuilder.append("Текстові блоки:\n")
-                page.textBlocks.forEach { tb ->
+                textBlocks.forEach { tb ->
                     contextBuilder.append("- ${tb.text}\n")
                 }
             }
-            if (page.shapes.isNotEmpty()) {
-                contextBuilder.append("Фігури на сторінці: ${page.shapes.joinToString { it.shapeType.name }}\n")
+            if (shapes.isNotEmpty()) {
+                contextBuilder.append("Фігури на сторінці: ${shapes.joinToString { it.shapeType.name }}\n")
             }
-            if (page.charts.isNotEmpty()) {
-                contextBuilder.append("Графіки: ${page.charts.joinToString { it.title }}\n")
+            if (charts.isNotEmpty()) {
+                contextBuilder.append("Графіки: ${charts.joinToString { it.title }}\n")
             }
-            if (page.strokes.isNotEmpty()) {
-                contextBuilder.append("Рукописних штрихів/ліній на сторінці: ${page.strokes.size}\n")
+            if (strokes.isNotEmpty()) {
+                contextBuilder.append("Рукописних штрихів/ліній на сторінці: ${strokes.size}\n")
             }
         }
 

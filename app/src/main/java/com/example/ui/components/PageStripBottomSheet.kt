@@ -100,8 +100,9 @@ fun PageStripBottomSheet(
                                 modifier = Modifier.padding(8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
+                                val totalStrokes = page.getEffectiveLayers().sumOf { it.strokes.size }
                                 Text(
-                                    text = "Сторінка ${index + 1}\n(${page.strokes.size} штрихів)",
+                                    text = "Сторінка ${index + 1}\n($totalStrokes штрихів)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
