@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,8 +46,233 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ai.ChatMessage
+
+@Composable
+fun AiChatContent(
+    messages: List<ChatMessage>,
+    isLoading: Boolean,
+    onSendMessage: (String) -> Unit,
+    onSaveApiKey: ((String) -> Unit)? = null,
+    initialApiKey: String = "",
+    modifier: Modifier = Modifier
+) {
+    var inputText by remember { mutableStateOf("") }
+    var showKeyDialog by remember { mutableStateOf(false) }
+    var apiKeyText by remember { mutableStateOf(initialApiKey) }
+    var isKeyVisible by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(showKeyDialog) {
+        if (showKeyDialog) {
+            apiKeyText = initialApiKey
+        }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .imePadding()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(vertical = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "AI-асистент конспекту",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Відповідає по вмісту вашої поточної канви",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (onSaveApiKey != null) {
+                IconButton(onClick = { showKeyDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Налаштування API"
+                    )
+                }
+            }
+        }
+
+        if (showKeyDialog && onSaveApiKey != null) {
+            AlertDialog(
+                onDismissRequest = { showKeyDialog = false },
+                title = { Text("Налаштування API Key") },
+                text = {
+                    OutlinedTextField(
+                        value = apiKeyText,
+                        onValueChange = { apiKeyText = it },
+                        label = { Text("Введіть API Key") },
+                        singleLine = true,
+                        visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
+                                Icon(
+                                    imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isKeyVisible) "Сховати" else "Показати"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (apiKeyText.isNotBlank()) {
+                            onSaveApiKey(apiKeyText.trim())
+                        }
+                        showKeyDialog = false
+                    }) {
+                        Text("Зберегти")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showKeyDialog = false }) {
+                        Text("Скасувати")
+                    }
+                }
+            )
+        }
+
+        // Message List
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (messages.isEmpty()) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "💡 Приклади запитань:",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("• Поясни записані формули простішими словами", style = MaterialTheme.typography.bodySmall)
+                            Text("• Зроби короткий підсумок цієї лекції", style = MaterialTheme.typography.bodySmall)
+                            Text("• Склади 3 тест-питання за цим конспектом", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            items(messages) { msg ->
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = if (msg.isUser) Alignment.CenterEnd else Alignment.CenterStart
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(
+                            topStart = 16.dp,
+                            topEnd = 16.dp,
+                            bottomStart = if (msg.isUser) 16.dp else 4.dp,
+                            bottomEnd = if (msg.isUser) 4.dp else 16.dp
+                        ),
+                        color = if (msg.isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth(0.85f)
+                    ) {
+                        Text(
+                            text = msg.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(12.dp),
+                            color = if (msg.isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            if (isLoading) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("AI аналізує ваш конспект...", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
+        // Input Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                placeholder = { Text("Запитайте по конспекту...") },
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+                onClick = {
+                    if (inputText.isNotBlank() && !isLoading) {
+                        onSendMessage(inputText.trim())
+                        inputText = ""
+                    }
+                },
+                enabled = inputText.isNotBlank() && !isLoading,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = "Надіслати",
+                    tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,205 +281,20 @@ fun GeminiChatBottomSheet(
     isLoading: Boolean,
     onSendMessage: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSaveApiKey: ((String) -> Unit)? = null
+    onSaveApiKey: ((String) -> Unit)? = null,
+    initialApiKey: String = ""
 ) {
-    var inputText by remember { mutableStateOf("") }
-    var showKeyDialog by remember { mutableStateOf(false) }
-    var apiKeyText by remember { mutableStateOf("") }
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.75f)
-                .padding(horizontal = 20.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "AI-асистент конспекту (Gemini)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Відповідає по вмісту вашої поточної канви",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (onSaveApiKey != null) {
-                    IconButton(onClick = { showKeyDialog = true }) {
-                        Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.Settings,
-                            contentDescription = "Налаштування API"
-                        )
-                    }
-                }
-            }
-
-            if (showKeyDialog && onSaveApiKey != null) {
-                AlertDialog(
-                    onDismissRequest = { showKeyDialog = false },
-                    title = { Text("Налаштування Gemini API Key") },
-                    text = {
-                        OutlinedTextField(
-                            value = apiKeyText,
-                            onValueChange = { apiKeyText = it },
-                            label = { Text("Введіть Ваш Gemini API Key") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            if (apiKeyText.isNotBlank()) {
-                                onSaveApiKey(apiKeyText.trim())
-                            }
-                            showKeyDialog = false
-                        }) {
-                            Text("Зберегти")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showKeyDialog = false }) {
-                            Text("Скасувати")
-                        }
-                    }
-                )
-            }
-
-            // Message List
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (messages.isEmpty()) {
-                    item {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "💡 Приклади запитань:",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text("• Поясни записані формули простішими словами", style = MaterialTheme.typography.bodySmall)
-                                Text("• Зроби короткий підсумок цієї лекції", style = MaterialTheme.typography.bodySmall)
-                                Text("• Склади 3 тест-питання за цим конспектом", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-
-                items(messages) { msg ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = if (msg.isUser) Alignment.CenterEnd else Alignment.CenterStart
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(
-                                topStart = 16.dp,
-                                topEnd = 16.dp,
-                                bottomStart = if (msg.isUser) 16.dp else 4.dp,
-                                bottomEnd = if (msg.isUser) 4.dp else 16.dp
-                            ),
-                            color = if (msg.isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.fillMaxWidth(0.85f)
-                        ) {
-                            Text(
-                                text = msg.text,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(12.dp),
-                                color = if (msg.isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-
-                if (isLoading) {
-                    item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Gemini аналізує ваш конспект...", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-
-            // Input Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("Запитайте по конспекту...") },
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = {
-                        if (inputText.isNotBlank() && !isLoading) {
-                            onSendMessage(inputText.trim())
-                            inputText = ""
-                        }
-                    },
-                    enabled = inputText.isNotBlank() && !isLoading,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Надіслати",
-                        tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
+        AiChatContent(
+            messages = messages,
+            isLoading = isLoading,
+            onSendMessage = onSendMessage,
+            onSaveApiKey = onSaveApiKey,
+            initialApiKey = initialApiKey,
+            modifier = Modifier.fillMaxHeight(0.75f)
+        )
     }
 }

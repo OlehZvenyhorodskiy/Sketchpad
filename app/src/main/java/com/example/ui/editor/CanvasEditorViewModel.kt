@@ -1011,6 +1011,25 @@ class CanvasEditorViewModel(
         }
     }
 
+    private val _isAiWindowVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isAiWindowVisible: kotlinx.coroutines.flow.StateFlow<Boolean> = _isAiWindowVisible.asStateFlow()
+
+    fun toggleAiWindow() {
+        _isAiWindowVisible.value = !_isAiWindowVisible.value
+    }
+
+    fun hideAiWindow() {
+        _isAiWindowVisible.value = false
+    }
+
+    fun getStoredApiKey(): String {
+        return GeminiAssistantService.getApiKey(context)
+    }
+
+    fun saveApiKey(key: String) {
+        GeminiAssistantService.saveApiKey(context, key)
+    }
+
     private var lastScreenshotVersion = -1
     private var cachedBase64Image: String? = null
 
@@ -1028,7 +1047,9 @@ class CanvasEditorViewModel(
             val base64Image = if (page != null) {
                 if (currentVer != lastScreenshotVersion || cachedBase64Image == null) {
                     try {
-                        val bitmap = ExportManager.captureCanvasHighRes(page, scale = 2.0f)
+                        val canvasBgInt = _canvas.value?.backgroundColor ?: 0xFF121212.toInt()
+                        val effectiveBgColor = if (canvasBgInt == 0xFFFFFFFF.toInt()) 0xFF121212.toInt() else canvasBgInt
+                        val bitmap = ExportManager.captureCanvasHighRes(page, scale = 2.0f, backgroundColor = effectiveBgColor)
                         val baos = java.io.ByteArrayOutputStream()
                         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, baos)
                         bitmap.recycle()

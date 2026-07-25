@@ -286,7 +286,8 @@ object ExportManager {
         page: PageEntity,
         scale: Float = 3.0f,
         pageWidth: Int = 1920,
-        pageHeight: Int = 1080
+        pageHeight: Int = 1080,
+        backgroundColor: Int = android.graphics.Color.WHITE
     ): android.graphics.Bitmap {
         val maxDimensionPx = 4096f
         val rawW = pageWidth * scale
@@ -303,7 +304,7 @@ object ExportManager {
 
         val bitmap = android.graphics.Bitmap.createBitmap(bmpW, bmpH, android.graphics.Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.drawColor(backgroundColor)
         canvas.scale(safeScale, safeScale)
 
         val paint = Paint().apply {
@@ -351,6 +352,27 @@ object ExportManager {
                 canvas.translate(text.x, text.y)
                 staticLayout.draw(canvas)
                 canvas.restore()
+            }
+
+            layer.charts.forEach { chart ->
+                paint.style = Paint.Style.FILL
+                paint.color = if (chart.backgroundColor != 0) chart.backgroundColor else android.graphics.Color.parseColor("#1E293B")
+                paint.alpha = layerAlpha
+                canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 1.5f
+                paint.color = android.graphics.Color.parseColor("#475569")
+                canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+
+                val cx = chart.x
+                val cy = chart.y
+                val cw = chart.width
+                val ch = chart.height
+                paint.strokeWidth = 2.5f
+                paint.color = android.graphics.Color.parseColor("#CBD5E1")
+                canvas.drawLine(cx, cy + ch / 2f, cx + cw, cy + ch / 2f, paint)
+                canvas.drawLine(cx + cw / 2f, cy, cx + cw / 2f, cy + ch, paint)
             }
         }
         return bitmap

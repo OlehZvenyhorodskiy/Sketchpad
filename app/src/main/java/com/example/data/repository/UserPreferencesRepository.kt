@@ -33,9 +33,26 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun setSelectedProvider(provider: String) {
+        setSelectedProviderSync(provider)
         context.dataStore.edit { prefs ->
             prefs[KEY_SELECTED_PROVIDER] = provider
         }
+    }
+
+    fun getSelectedProviderIdSync(): String {
+        return try {
+            val prefs = context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            prefs.getString("selected_provider", "GEMINI") ?: "GEMINI"
+        } catch (_: Exception) {
+            "GEMINI"
+        }
+    }
+
+    fun setSelectedProviderSync(providerId: String) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putString("selected_provider", providerId).apply()
+        } catch (_: Exception) {}
     }
 
     fun saveEncryptedApiKey(apiKey: String) {

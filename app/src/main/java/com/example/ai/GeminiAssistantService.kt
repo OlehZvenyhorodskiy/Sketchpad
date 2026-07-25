@@ -108,8 +108,14 @@ class GeminiAssistantService {
             try { com.example.BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
         }
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "Будь ласка, вкажіть дійсний GEMINI_API_KEY в налаштуваннях / Secrets панелі AI Studio для використання AI-асистента."
+            return@withContext "Будь ласка, вкажіть дійсний API Key у налаштуваннях AI-асистента."
         }
+
+        val providerId = if (context != null) {
+            com.example.data.repository.UserPreferencesRepository(context).getSelectedProviderIdSync()
+        } else "GEMINI"
+
+        val provider = AiProviderRegistry.getProvider(providerId)
 
         val contextBuilder = StringBuilder()
         contextBuilder.append("Контекст поточного конспекту/канви: \"$canvasTitle\"\n\n")
@@ -146,70 +152,15 @@ class GeminiAssistantService {
             }
         }
 
-        val systemInstruction = "Ти — інтелектуальний помічник конспекту MeCanvas. Твоє завдання — допомагати користувачеві вивчати матеріали, відповідати на запитання, пояснювати формули та робити короткі підсумки ЛИШЕ на основі наданого контексту конспекту. Відповідай українською мовою, чітко, структуровано та приязно."
+        val systemInstruction = "Ти — інтелектуальний помічник конспекту. Твоє завдання — допомагати користувачеві вивчати матеріали, відповідати на запитання, пояснювати формули та робити короткі підсумки ЛИШЕ на основі наданого контексту конспекту. Відповідай українською мовою, чітко, структуровано та приязно."
 
-        val jsonBody = JSONObject().apply {
-            val contentsArray = JSONArray().apply {
-                val contentObj = JSONObject().apply {
-                    val partsArray = JSONArray().apply {
-                        put(JSONObject().put("text", "$contextBuilder\n\nЗапитання користувача: $userPrompt"))
-                        if (!pageBase64Image.isNullOrBlank()) {
-                            val imagePart = JSONObject().apply {
-                                val inlineData = JSONObject().apply {
-                                    put("mime_type", "image/png")
-                                    put("data", pageBase64Image)
-                                }
-                                put("inline_data", inlineData)
-                            }
-                            put(imagePart)
-                        }
-                    }
-                    put("parts", partsArray)
-                }
-                put(contentObj)
-            }
-            put("contents", contentsArray)
+        val fullPrompt = "$systemInstruction\n\n$contextBuilder\n\nЗапитання користувача: $userPrompt"
+        val imagePass = if (provider.supportsVision) pageBase64Image else null
 
-            val systemInstructionObj = JSONObject().apply {
-                val partsArray = JSONArray().apply {
-                    put(JSONObject().put("text", systemInstruction))
-                }
-                put("parts", partsArray)
-            }
-            put("systemInstruction", systemInstructionObj)
-        }
-
-        val model = "gemini-3.5-flash"
-        val mediaType = "application/json; charset=utf-8".toMediaType()
-        val requestBody = jsonBody.toString().toRequestBody(mediaType)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
-
-        val request = Request.Builder()
-            .url(url)
-            .post(requestBody)
-            .build()
-
-        try {
-            val response = client.newCall(request).execute()
-            val responseStr = response.body?.string() ?: ""
-            if (response.code == 404) {
-                return@withContext "Помилка: модель AI недоступна. Оновіть додаток або перевірте API ключ у налаштуваннях."
-            }
-            if (!response.isSuccessful) {
-                return@withContext "Помилка запиту до Gemini API (${response.code}). Перевірте з'єднання або ключі."
-            }
-
-            val jsonResponse = JSONObject(responseStr)
-            val candidates = jsonResponse.optJSONArray("candidates")
-            val firstCandidate = candidates?.optJSONObject(0)
-            val content = firstCandidate?.optJSONObject("content")
-            val parts = content?.optJSONArray("parts")
-            val answer = parts?.optJSONObject(0)?.optString("text")
-
-            return@withContext answer ?: "Не вдалося отримати відповідь від AI."
-        } catch (e: Exception) {
-            Log.w("GeminiService", "Failed to query Gemini AI assistant", e)
-            return@withContext "Помилка при запиті до AI: ${e.localizedMessage ?: "невідома помилка"}"
-        }
+        provider.query(
+            text = fullPrompt,
+            imageBase64 = imagePass,
+            apiKey = apiKey
+        )
     }
 }

@@ -235,24 +235,48 @@ fun HsvColorPicker(
     var saturation by remember(initialColor) { mutableFloatStateOf(initialHsv[1]) }
     var value by remember(initialColor) { mutableFloatStateOf(initialHsv[2]) }
 
+    val ringThickness = 26.dp
+    val pickerSize = 240.dp
+    val squareSize = 124.dp
+
     Box(
-        modifier = modifier.size(220.dp),
+        modifier = modifier.size(pickerSize),
         contentAlignment = Alignment.Center
     ) {
-        // Outer Hue Ring
+        // Outer Hue Ring Canvas
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
+                    fun updateHue(pos: Offset) {
                         val center = Offset(size.width / 2f, size.height / 2f)
-                        val angle = atan2(change.position.y - center.y, change.position.x - center.x)
-                        hue = ((angle * 180f / Math.PI.toFloat()) + 360f) % 360f
-                        onColorSelected(Color.hsv(hue, saturation, value))
+                        val outerR = size.width / 2f
+                        val ringWidthPx = ringThickness.toPx()
+                        val innerR = outerR - ringWidthPx
+                        val dx = pos.x - center.x
+                        val dy = pos.y - center.y
+                        val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                        if (dist >= innerR - 15f && dist <= outerR + 15f) {
+                            val angle = atan2(pos.y - center.y, pos.x - center.x)
+                            hue = ((angle * 180f / Math.PI.toFloat()) + 360f) % 360f
+                            onColorSelected(Color.hsv(hue, saturation, value))
+                        }
                     }
+
+                    detectDragGestures(
+                        onDragStart = { pos -> updateHue(pos) },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            updateHue(change.position)
+                        }
+                    )
                 }
         ) {
+            val ringWidthPx = ringThickness.toPx()
+            val outerRadius = size.width / 2f
+            val arcInset = ringWidthPx / 2f
+            val arcSize = Size(size.width - ringWidthPx, size.height - ringWidthPx)
+
             drawArc(
                 brush = Brush.sweepGradient(
                     colors = listOf(
@@ -262,30 +286,64 @@ fun HsvColorPicker(
                 ),
                 startAngle = 0f,
                 sweepAngle = 360f,
-                useCenter = true
+                useCenter = false,
+                topLeft = Offset(arcInset, arcInset),
+                size = arcSize,
+                style = Stroke(width = ringWidthPx)
+            )
+
+            // Hue Ring handle indicator circle
+            val midRadius = outerRadius - ringWidthPx / 2f
+            val rad = Math.toRadians(hue.toDouble())
+            val handleCenter = Offset(
+                size.width / 2f + (midRadius * cos(rad)).toFloat(),
+                size.height / 2f + (midRadius * sin(rad)).toFloat()
+            )
+
+            drawCircle(
+                color = Color.White,
+                radius = (ringWidthPx / 2f).coerceAtMost(14.dp.toPx()),
+                center = handleCenter,
+                style = Stroke(width = 3.dp.toPx())
+            )
+            drawCircle(
+                color = Color.hsv(hue, 1f, 1f),
+                radius = (ringWidthPx / 2f - 3.dp.toPx()).coerceAtLeast(4.dp.toPx()),
+                center = handleCenter
             )
         }
 
-        // Inner Saturation/Value Square
+        // Inner Saturation / Value Square Canvas
         Canvas(
             modifier = Modifier
-                .size(140.dp)
+                .size(squareSize)
                 .align(Alignment.Center)
                 .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        saturation = (change.position.x / size.width).coerceIn(0f, 1f)
-                        value = (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                    fun updateSV(pos: Offset) {
+                        saturation = (pos.x / size.width).coerceIn(0f, 1f)
+                        value = (1f - pos.y / size.height).coerceIn(0f, 1f)
                         onColorSelected(Color.hsv(hue, saturation, value))
                     }
+
+                    detectDragGestures(
+                        onDragStart = { pos -> updateSV(pos) },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            updateSV(change.position)
+                        }
+                    )
                 }
         ) {
             val hueColor = Color.hsv(hue, 1f, 1f)
-            drawRect(brush = Brush.verticalGradient(listOf(Color.White, Color.Transparent)))
-            drawRect(brush = Brush.horizontalGradient(listOf(Color.Transparent, hueColor)))
+            drawRect(color = Color.Black)
+            drawRect(brush = Brush.horizontalGradient(listOf(Color.White, hueColor)))
+            drawRect(brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
 
             // Selection indicator circle
-            val handlePos = Offset(saturation * size.width, (1f - value) * size.height)
+            val handlePos = Offset(
+                (saturation * size.width).coerceIn(0f, size.width),
+                ((1f - value) * size.height).coerceIn(0f, size.height)
+            )
             drawCircle(
                 color = Color.White,
                 radius = 8.dp.toPx(),

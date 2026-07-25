@@ -668,22 +668,6 @@ fun InteractiveCanvas(
                                 )
                             }
                         }
-
-                        // Selection border for images
-                        if (selectedElementId == image.id && selectedElementType == "IMAGE") {
-                            drawRect(
-                                color = Color(0xFF2196F3),
-                                topLeft = Offset(
-                                    image.x * currentScale + panOffset.x,
-                                    image.y * currentScale + panOffset.y
-                                ),
-                                size = androidx.compose.ui.geometry.Size(
-                                    image.width * currentScale,
-                                    image.height * currentScale
-                                ),
-                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
-                            )
-                        }
                     }
 
                     // ─── 2b. SHAPES (фігури) ───
@@ -706,22 +690,6 @@ fun InteractiveCanvas(
                             drawPath(path, fillColor.copy(alpha = fillColor.alpha * layerAlpha))
                             drawPath(path, strokeColor.copy(alpha = strokeColor.alpha * layerAlpha), style = Stroke(shape.strokeWidth * currentScale))
                         }
-
-                        // Selection border for shapes
-                        if (selectedElementId == shape.id && selectedElementType == "SHAPE") {
-                            drawRect(
-                                color = Color(0xFF2196F3),
-                                topLeft = Offset(
-                                    shape.x * currentScale + panOffset.x - 4f,
-                                    shape.y * currentScale + panOffset.y - 4f
-                                ),
-                                size = androidx.compose.ui.geometry.Size(
-                                    shape.width * currentScale + 8f,
-                                    shape.height * currentScale + 8f
-                                ),
-                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
-                            )
-                        }
                     }
 
                     // ─── 2c. CHARTS (графіки / координатна сітка) ───
@@ -732,7 +700,7 @@ fun InteractiveCanvas(
                         val ch = chart.height * currentScale
 
                         // Background
-                        val chartBgColor = if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF8FAFC)
+                        val chartBgColor = if (chart.backgroundColor != 0) Color(chart.backgroundColor) else if (isDarkBackground) Color(0xFF1E293B) else Color(0xFFF8FAFC)
                         drawRect(
                             color = chartBgColor.copy(alpha = chartBgColor.alpha * layerAlpha),
                             topLeft = Offset(cx, cy),
@@ -747,42 +715,87 @@ fun InteractiveCanvas(
                             style = Stroke(width = 1.5f)
                         )
 
-                        // Grid lines (vertical)
-                        val gridStepX = cw / 8f
-                        for (i in 1 until 8) {
-                            drawLine(
-                                color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
-                                start = Offset(cx + i * gridStepX, cy),
-                                end = Offset(cx + i * gridStepX, cy + ch),
-                                strokeWidth = 0.8f
-                            )
+                        val xSpan = (chart.xMax - chart.xMin).let { if (it <= 0f) 20f else it }
+                        val ySpan = (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }
+                        val stepX = if (chart.xStep > 0f) chart.xStep else 1f
+                        val stepY = if (chart.yStep > 0f) chart.yStep else 1f
+
+                        // Grid lines (vertical) based on xStep
+                        var currWorldX = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
+                        while (currWorldX <= chart.xMax) {
+                            val relX = (currWorldX - chart.xMin) / xSpan
+                            val lineScreenX = cx + relX * cw
+                            if (lineScreenX in cx..cx + cw) {
+                                drawLine(
+                                    color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                    start = Offset(lineScreenX, cy),
+                                    end = Offset(lineScreenX, cy + ch),
+                                    strokeWidth = 0.8f
+                                )
+                            }
+                            currWorldX += stepX
                         }
 
-                        // Grid lines (horizontal)
-                        val gridStepY = ch / 6f
-                        for (i in 1 until 6) {
-                            drawLine(
-                                color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
-                                start = Offset(cx, cy + i * gridStepY),
-                                end = Offset(cx + cw, cy + i * gridStepY),
-                                strokeWidth = 0.8f
-                            )
+                        // Grid lines (horizontal) based on yStep
+                        var currWorldY = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
+                        while (currWorldY <= chart.yMax) {
+                            val relY = 1f - (currWorldY - chart.yMin) / ySpan
+                            val lineScreenY = cy + relY * ch
+                            if (lineScreenY in cy..cy + ch) {
+                                drawLine(
+                                    color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                    start = Offset(cx, lineScreenY),
+                                    end = Offset(cx + cw, lineScreenY),
+                                    strokeWidth = 0.8f
+                                )
+                            }
+                            currWorldY += stepY
                         }
 
-                        // Axes (X and Y through center)
+                        // Axes (X and Y through origin 0,0)
+                        val relZeroX = ((0f - chart.xMin) / xSpan).coerceIn(0f, 1f)
+                        val relZeroY = (1f - (0f - chart.yMin) / ySpan).coerceIn(0f, 1f)
+                        val axisXScreenY = cy + relZeroY * ch
+                        val axisYScreenX = cx + relZeroX * cw
+
                         val axisStrokeWidth = 2.5f * currentScale
                         val axisColor = if (isDarkBackground) Color(0xFFCBD5E1) else Color(0xFF475569)
-                        drawLine(axisColor, Offset(cx, cy + ch / 2f), Offset(cx + cw, cy + ch / 2f), strokeWidth = axisStrokeWidth)
-                        drawLine(axisColor, Offset(cx + cw / 2f, cy), Offset(cx + cw / 2f, cy + ch), strokeWidth = axisStrokeWidth)
+                        drawLine(axisColor, Offset(cx, axisXScreenY), Offset(cx + cw, axisXScreenY), strokeWidth = axisStrokeWidth)
+                        drawLine(axisColor, Offset(axisYScreenX, cy), Offset(axisYScreenX, cy + ch), strokeWidth = axisStrokeWidth)
 
-                        // Selection border
-                        if (selectedElementId == chart.id && selectedElementType == "CHART") {
-                            drawRect(
-                                color = Color(0xFF2196F3),
-                                topLeft = Offset(cx - 4f, cy - 4f),
-                                size = androidx.compose.ui.geometry.Size(cw + 8f, ch + 8f),
-                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
-                            )
+                        // Axis labels
+                        if (chart.axisLabelsVisible) {
+                            drawIntoCanvas { canvas ->
+                                val textPaint = android.text.TextPaint().apply {
+                                    color = if (isDarkBackground) android.graphics.Color.LTGRAY else android.graphics.Color.DKGRAY
+                                    textSize = (10f * currentScale).coerceIn(8f, 16f)
+                                    isAntiAlias = true
+                                }
+                                // X-axis labels
+                                var wx = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
+                                while (wx <= chart.xMax) {
+                                    val relX = (wx - chart.xMin) / xSpan
+                                    val screenX = cx + relX * cw
+                                    if (screenX in cx..cx + cw) {
+                                        val labelText = if (wx == wx.toInt().toFloat()) wx.toInt().toString() else String.format(java.util.Locale.US, "%.1f", wx)
+                                        canvas.nativeCanvas.drawText(labelText, screenX - 6f * currentScale, (axisXScreenY + 14f * currentScale).coerceAtMost(cy + ch - 4f), textPaint)
+                                    }
+                                    wx += stepX
+                                }
+                                // Y-axis labels
+                                var wy = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
+                                while (wy <= chart.yMax) {
+                                    if (wy != 0f) {
+                                        val relY = 1f - (wy - chart.yMin) / ySpan
+                                        val screenY = cy + relY * ch
+                                        if (screenY in cy..cy + ch) {
+                                            val labelText = if (wy == wy.toInt().toFloat()) wy.toInt().toString() else String.format(java.util.Locale.US, "%.1f", wy)
+                                            canvas.nativeCanvas.drawText(labelText, (axisYScreenX + 4f * currentScale).coerceAtMost(cx + cw - 12f), screenY + 4f * currentScale, textPaint)
+                                        }
+                                    }
+                                    wy += stepY
+                                }
+                            }
                         }
                     }
 
@@ -814,22 +827,6 @@ fun InteractiveCanvas(
                             )
                             staticLayout.draw(canvas.nativeCanvas)
                             canvas.nativeCanvas.restore()
-                        }
-
-                        // Selection border
-                        if (selectedElementId == textBlock.id && selectedElementType == "TEXT") {
-                            drawRect(
-                                color = Color(0xFF2196F3),
-                                topLeft = Offset(
-                                    textBlock.x * currentScale + panOffset.x - 4f,
-                                    textBlock.y * currentScale + panOffset.y - 4f
-                                ),
-                                size = androidx.compose.ui.geometry.Size(
-                                    textBlock.width * currentScale + 8f,
-                                    textBlock.height * currentScale + 8f
-                                ),
-                                style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
-                            )
                         }
                     }
 

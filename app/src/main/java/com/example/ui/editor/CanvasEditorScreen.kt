@@ -102,6 +102,7 @@ import com.example.data.models.ToolType
 import com.example.ui.components.BottomLeftOverlay
 import com.example.ui.components.CanvasTopMenuBottomSheet
 import com.example.ui.components.ColorPickerBottomSheet
+import com.example.ui.components.FloatingAiWindow
 import com.example.ui.components.GeminiChatBottomSheet
 import com.example.ui.components.InsertMenuBottomSheet
 import com.example.ui.components.MiniSlidersOverlay
@@ -137,6 +138,7 @@ fun CanvasEditorScreen(
     val latestRecording = audioRecordings.firstOrNull()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isAiLoading by viewModel.isAiLoading.collectAsState()
+    val isAiWindowVisible by viewModel.isAiWindowVisible.collectAsState()
 
     val showLayersPanel by viewModel.showLayersPanel.collectAsState()
     val activeLayerId by viewModel.activeLayerId.collectAsState()
@@ -685,7 +687,19 @@ fun CanvasEditorScreen(
             isLoading = isAiLoading,
             onSendMessage = { viewModel.sendAiPrompt(it) },
             onDismiss = { showGeminiSheet = false },
-            onSaveApiKey = { key -> com.example.ai.GeminiAssistantService.saveApiKey(context, key) }
+            onSaveApiKey = { key -> viewModel.saveApiKey(key) },
+            initialApiKey = viewModel.getStoredApiKey()
+        )
+    }
+
+    if (isAiWindowVisible) {
+        FloatingAiWindow(
+            messages = chatMessages,
+            isLoading = isAiLoading,
+            onSendMessage = { viewModel.sendAiPrompt(it) },
+            onClose = { viewModel.hideAiWindow() },
+            onSaveApiKey = { key -> viewModel.saveApiKey(key) },
+            initialApiKey = viewModel.getStoredApiKey()
         )
     }
 

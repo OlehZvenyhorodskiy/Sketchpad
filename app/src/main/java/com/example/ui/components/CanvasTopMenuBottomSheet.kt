@@ -88,40 +88,10 @@ fun CanvasTopMenuBottomSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // 1. Background Color Section
-            Text(
-                text = "Колір фону",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+            BackgroundColorPicker(
+                selectedColor = currentBgColor,
+                onSelectColor = onBgColorChange
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                bgPresets.forEach { (label, colorInt) ->
-                    val isSelected = currentBgColor == colorInt
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(colorInt))
-                            .border(
-                                width = if (isSelected) 3.dp else 1.dp,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                shape = CircleShape
-                            )
-                            .clickable { onBgColorChange(colorInt) }
-                    )
-                }
-
-                IconButton(onClick = onOpenCustomColorPicker) {
-                    Icon(
-                        imageVector = Icons.Default.ColorLens,
-                        contentDescription = "Більше кольорів",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
 
             Spacer(modifier = Modifier.height(20.dp))
 

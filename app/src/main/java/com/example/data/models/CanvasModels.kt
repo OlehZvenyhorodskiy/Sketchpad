@@ -190,7 +190,10 @@ data class ChartElementEntity(
     val xMin: Float = -10f,
     val xMax: Float = 10f,
     val yMin: Float = -10f,
-    val yMax: Float = 10f
+    val yMax: Float = 10f,
+    val xStep: Float = 1f,
+    val yStep: Float = 1f,
+    val backgroundColor: Int = 0
 )
 
 @JsonClass(generateAdapter = true)

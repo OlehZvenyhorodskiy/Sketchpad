@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import com.example.ui.components.BackgroundColorPicker
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -404,27 +405,10 @@ fun HomeScreen(
                         }
                     }
 
-                    Text("Колір фону канви:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val colorOpts = listOf(
-                            Pair("Темний (#121212)", 0xFF121212.toInt()),
-                            Pair("Темно-синій", 0xFF0F172A.toInt()),
-                            Pair("Світлий", 0xFFFFFFFF.toInt())
-                        )
-                        colorOpts.forEach { (lbl, cInt) ->
-                            val isSel = selectedColorInt == cInt
-                            OutlinedButton(
-                                onClick = { selectedColorInt = cInt },
-                                modifier = Modifier.weight(1f),
-                                colors = if (isSel) androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
-                            ) {
-                                Text(lbl, fontSize = 10.sp, maxLines = 1)
-                            }
-                        }
-                    }
+                    BackgroundColorPicker(
+                        selectedColor = selectedColorInt,
+                        onSelectColor = { selectedColorInt = it }
+                    )
 
                     Text("Візерунок сітки:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Row(
