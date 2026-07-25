@@ -178,6 +178,13 @@ fun InteractiveCanvas(
                     return@pointerInteropFilter false
                 }
 
+                // Захищаємо плаваючий тулбар виділення
+                // Він з'являється лише коли selectedElementId != null
+                val floatingToolbarBottomPx = topToolbarHeightPx + with(density) { 70.dp.toPx() }
+                if (selectedElementId != null && motionEvent.y <= floatingToolbarBottomPx) {
+                    return@pointerInteropFilter false
+                }
+
                 // ═══════════════════════════════════════════════════════
                 // 0b. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
                 // ═══════════════════════════════════════════════════════
