@@ -278,6 +278,19 @@ object ExportManager {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace("\"", "&quot;").replace("'", "&apos;")
     }
+
+    /**
+     * Видалення тимчасових файлів експорту з папки кешу.
+     */
+    fun cleanupTempExports(context: Context) {
+        try {
+            context.cacheDir.listFiles { file ->
+                file.name.startsWith("export_") && (file.name.endsWith(".png") || file.name.endsWith(".pdf") || file.name.endsWith(".svg"))
+            }?.forEach { it.delete() }
+        } catch (e: Exception) {
+            android.util.Log.e("ExportManager", "Failed to cleanup temp export files", e)
+        }
+    }
 }
 
 fun HslaColor.toHexColor(): String {

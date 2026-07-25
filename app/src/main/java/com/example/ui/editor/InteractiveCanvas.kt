@@ -193,8 +193,9 @@ fun InteractiveCanvas(
                     return@pointerInteropFilter true  // Відхиляємо тільки велику долоню (area > 900px² або major > 55px)
                 }
 
-                val x = (motionEvent.x - panOffset.x) / currentScale
-                val y = (motionEvent.y - panOffset.y) / currentScale
+                val safeScale = currentScale.coerceIn(0.1f, 10.0f)
+                val x = (motionEvent.x - panOffset.x) / safeScale
+                val y = (motionEvent.y - panOffset.y) / safeScale
                 var rawPoint = Offset(x, y)
 
                 if (currentTool != ToolType.SELECTOR) {

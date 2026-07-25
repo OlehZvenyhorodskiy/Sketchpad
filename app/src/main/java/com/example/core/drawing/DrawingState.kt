@@ -66,20 +66,24 @@ data class RulerState(
 object DrawingEngine {
 
     fun createSmoothPath(points: List<StrokePoint>, scale: Float = 1f, panX: Float = 0f, panY: Float = 0f): Path {
-        if (points.size < 3) {
+        if (points.isEmpty()) return Path()
+        if (points.size == 1) {
+            val p = points[0]
+            val x0 = p.x * scale + panX
+            val y0 = p.y * scale + panY
+            val radius = (p.pressure * 2.5f * scale).coerceAtLeast(1.5f * scale)
             return Path().apply {
-                if (points.isNotEmpty()) {
-                    val x0 = points[0].x * scale + panX
-                    val y0 = points[0].y * scale + panY
-                    moveTo(x0, y0)
-                    if (points.size == 2) {
-                        val x1 = points[1].x * scale + panX
-                        val y1 = points[1].y * scale + panY
-                        lineTo(x1, y1)
-                    } else {
-                        lineTo(x0 + 0.1f, y0 + 0.1f)
-                    }
-                }
+                addOval(Rect(x0 - radius, y0 - radius, x0 + radius, y0 + radius))
+            }
+        }
+        if (points.size == 2) {
+            return Path().apply {
+                val x0 = points[0].x * scale + panX
+                val y0 = points[0].y * scale + panY
+                val x1 = points[1].x * scale + panX
+                val y1 = points[1].y * scale + panY
+                moveTo(x0, y0)
+                lineTo(x1, y1)
             }
         }
         return PathSmoothing.createCatmullRomPath(points, tension = 0.5f, segments = 6, scale = scale, panX = panX, panY = panY).asComposePath()
