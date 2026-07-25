@@ -219,14 +219,31 @@ fun InteractiveCanvas(
                             var cornerHit = false
                             if (selId != null && selType != null && pageEntity != null) {
                                 var cornerRect: Rect? = null
+                                var elemRotation = 0f
                                 when (selType) {
-                                    "SHAPE" -> pageEntity.findShape(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
-                                    "IMAGE" -> pageEntity.findImage(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "SHAPE" -> pageEntity.findShape(selId)?.let {
+                                        cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                                        elemRotation = it.rotation
+                                    }
+                                    "IMAGE" -> pageEntity.findImage(selId)?.let {
+                                        cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                                        elemRotation = it.rotation
+                                    }
                                     "TEXT" -> pageEntity.findText(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
                                     "CHART" -> pageEntity.findChart(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
                                 }
                                 cornerRect?.let { r ->
-                                    val distToCorner = Math.hypot((rawPoint.x - r.right).toDouble(), (rawPoint.y - r.bottom).toDouble())
+                                    val center = Offset((r.left + r.right) / 2f, (r.top + r.bottom) / 2f)
+                                    val testPoint = if (elemRotation != 0f) {
+                                        val angleRad = Math.toRadians(-elemRotation.toDouble())
+                                        val cosA = Math.cos(angleRad).toFloat()
+                                        val sinA = Math.sin(angleRad).toFloat()
+                                        val dx = rawPoint.x - center.x
+                                        val dy = rawPoint.y - center.y
+                                        Offset(center.x + (dx * cosA - dy * sinA), center.y + (dx * sinA + dy * cosA))
+                                    } else rawPoint
+
+                                    val distToCorner = Math.hypot((testPoint.x - r.right).toDouble(), (testPoint.y - r.bottom).toDouble())
                                     if (distToCorner <= 48.0 / currentScale) {
                                         cornerHit = true
                                         isResizingCorner = true
@@ -244,8 +261,18 @@ fun InteractiveCanvas(
                                     page.getEffectiveLayers().reversed().forEach { layer ->
                                         if (selectedElementId == null) {
                                             layer.shapes.reversed().forEach { shape ->
-                                                if (selectedElementId == null && rawPoint.x >= shape.x - margin && rawPoint.x <= shape.x + shape.width + margin &&
-                                                    rawPoint.y >= shape.y - margin && rawPoint.y <= shape.y + shape.height + margin) {
+                                                val center = Offset(shape.x + shape.width / 2f, shape.y + shape.height / 2f)
+                                                val p = if (shape.rotation != 0f) {
+                                                    val rad = Math.toRadians(-shape.rotation.toDouble())
+                                                    val cA = Math.cos(rad).toFloat()
+                                                    val sA = Math.sin(rad).toFloat()
+                                                    val dx = rawPoint.x - center.x
+                                                    val dy = rawPoint.y - center.y
+                                                    Offset(center.x + (dx * cA - dy * sA), center.y + (dx * sA + dy * cA))
+                                                } else rawPoint
+
+                                                if (selectedElementId == null && p.x >= shape.x - margin && p.x <= shape.x + shape.width + margin &&
+                                                    p.y >= shape.y - margin && p.y <= shape.y + shape.height + margin) {
                                                     selectedElementId = shape.id
                                                     selectedElementType = "SHAPE"
                                                     elementOriginalPos = Offset(shape.x, shape.y)
@@ -253,8 +280,18 @@ fun InteractiveCanvas(
                                                 }
                                             }
                                             layer.images.reversed().forEach { img ->
-                                                if (selectedElementId == null && rawPoint.x >= img.x - margin && rawPoint.x <= img.x + img.width + margin &&
-                                                    rawPoint.y >= img.y - margin && rawPoint.y <= img.y + img.height + margin) {
+                                                val center = Offset(img.x + img.width / 2f, img.y + img.height / 2f)
+                                                val p = if (img.rotation != 0f) {
+                                                    val rad = Math.toRadians(-img.rotation.toDouble())
+                                                    val cA = Math.cos(rad).toFloat()
+                                                    val sA = Math.sin(rad).toFloat()
+                                                    val dx = rawPoint.x - center.x
+                                                    val dy = rawPoint.y - center.y
+                                                    Offset(center.x + (dx * cA - dy * sA), center.y + (dx * sA + dy * cA))
+                                                } else rawPoint
+
+                                                if (selectedElementId == null && p.x >= img.x - margin && p.x <= img.x + img.width + margin &&
+                                                    p.y >= img.y - margin && p.y <= img.y + img.height + margin) {
                                                     selectedElementId = img.id
                                                     selectedElementType = "IMAGE"
                                                     elementOriginalPos = Offset(img.x, img.y)

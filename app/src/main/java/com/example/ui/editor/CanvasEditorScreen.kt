@@ -835,7 +835,9 @@ fun CanvasEditorScreen(
     }
 
     if (showLayersPanel) {
-        val currentLayers = pages.getOrNull(currentPageIndex)?.getEffectiveLayers() ?: emptyList()
+        val currentLayers = remember(pages, currentPageIndex) {
+            pages.getOrNull(currentPageIndex)?.getEffectiveLayers() ?: emptyList()
+        }
         LayersBottomSheet(
             layers = currentLayers,
             activeLayerId = activeLayerId ?: viewModel.currentPage?.activeLayerId,

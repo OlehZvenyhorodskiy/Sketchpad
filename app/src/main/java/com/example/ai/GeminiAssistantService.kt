@@ -50,7 +50,7 @@ class GeminiAssistantService {
                     androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                 )
                 prefs.edit().putString(KEY_GEMINI, key).apply()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 // Fallback to regular SharedPreferences if crypto is unavailable
                 Log.w("GeminiService", "EncryptedSharedPreferences unavailable, falling back", e)
                 context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -75,7 +75,7 @@ class GeminiAssistantService {
                 )
                 val key = prefs.getString(KEY_GEMINI, null)
                 if (!key.isNullOrBlank()) return key
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
 
             // Then regular prefs
             val fallback = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

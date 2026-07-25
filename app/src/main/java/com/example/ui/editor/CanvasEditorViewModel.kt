@@ -498,14 +498,19 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
-        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 90f else targetX
-        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 90f else targetY
+        val safeScale = if (scale <= 0.001f) 1.0f else scale
+        val safeVpW = if (viewportWidth <= 0f) 1080f else viewportWidth
+        val safeVpH = if (viewportHeight <= 0f) 1920f else viewportHeight
+        val elemW = 180f
+        val elemH = 180f
+        val finalX = (-panOffsetX + safeVpW / 2f) / safeScale - elemW / 2f
+        val finalY = (-panOffsetY + safeVpH / 2f) / safeScale - elemH / 2f
         val newShape = ShapeEntity(
             shapeType = shapeType,
             x = finalX,
             y = finalY,
-            width = 180f,
-            height = 180f,
+            width = elemW,
+            height = elemH,
             fillColor = _currentColor.value.copy(alpha = 0.2f).toArgbInt(),
             strokeColor = _currentColor.value.toArgbInt()
         )
@@ -531,8 +536,13 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
-        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 120f else targetX
-        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 50f else targetY
+        val safeScale = if (scale <= 0.001f) 1.0f else scale
+        val safeVpW = if (viewportWidth <= 0f) 1080f else viewportWidth
+        val safeVpH = if (viewportHeight <= 0f) 1920f else viewportHeight
+        val elemW = 240f
+        val elemH = 100f
+        val finalX = (-panOffsetX + safeVpW / 2f) / safeScale - elemW / 2f
+        val finalY = (-panOffsetY + safeVpH / 2f) / safeScale - elemH / 2f
         val newText = TextBlockEntity(
             text = text,
             x = finalX,
@@ -658,13 +668,18 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
-        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 190f else targetX
-        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 130f else targetY
+        val safeScale = if (scale <= 0.001f) 1.0f else scale
+        val safeVpW = if (viewportWidth <= 0f) 1080f else viewportWidth
+        val safeVpH = if (viewportHeight <= 0f) 1920f else viewportHeight
+        val elemW = 380f
+        val elemH = 260f
+        val finalX = (-panOffsetX + safeVpW / 2f) / safeScale - elemW / 2f
+        val finalY = (-panOffsetY + safeVpH / 2f) / safeScale - elemH / 2f
         val newChart = ChartElementEntity(
             x = finalX,
             y = finalY,
-            width = 380f,
-            height = 260f
+            width = elemW,
+            height = elemH
         )
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) layer.copy(charts = layer.charts + newChart)

@@ -143,86 +143,112 @@ object ExportManager {
     }
 
     /**
-     * Експорт сторінки у PNG (растровий формат) з масштабуванням та обрізкою.
+     * Експорт сторінки у PNG (растровий формат) з OOM-захистом, масштабуванням та обрізкою.
      */
     fun exportToPng(
         page: PageEntity,
         outputFile: File,
-        scale: Float = 3.0f,
+        requestedScale: Float = 3.0f,
         cropRect: android.graphics.RectF? = null,
         pageWidth: Int = 1920,
         pageHeight: Int = 1080
     ) {
-        val bmpW = (pageWidth * scale).toInt()
-        val bmpH = (pageHeight * scale).toInt()
+        val maxDimensionPx = 4096f
+        val rawW = pageWidth * requestedScale
+        val rawH = pageHeight * requestedScale
+        val safeScale = if (rawW > maxDimensionPx || rawH > maxDimensionPx) {
+            val maxTarget = maxOf(rawW, rawH)
+            requestedScale * (maxDimensionPx / maxTarget)
+        } else {
+            requestedScale.coerceAtLeast(0.1f)
+        }
+
+        val bmpW = (pageWidth * safeScale).toInt().coerceAtLeast(1)
+        val bmpH = (pageHeight * safeScale).toInt().coerceAtLeast(1)
+
         val bitmap = android.graphics.Bitmap.createBitmap(bmpW, bmpH, android.graphics.Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(android.graphics.Color.WHITE)
-        canvas.scale(scale, scale)
+        var outputBitmap: android.graphics.Bitmap? = null
 
-        val paint = Paint().apply {
-            isAntiAlias = true
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
+        try {
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            canvas.scale(safeScale, safeScale)
 
-        page.visibleLayersBottomUp().forEach { layer ->
-            val layerAlpha = (layer.opacity * 255).toInt()
-
-            layer.strokes.forEach { stroke ->
-                val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                paint.strokeWidth = stroke.baseWidth
-                paint.color = stroke.colorHsla.toAndroidColor()
-                paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                paint.style = Paint.Style.STROKE
-                canvas.drawPath(path, paint)
+            val paint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
             }
 
-            layer.shapes.forEach { shape ->
-                paint.strokeWidth = shape.strokeWidth
-                paint.color = shape.strokeColor
-                paint.alpha = layerAlpha
-                paint.style = Paint.Style.STROKE
-                canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
-            }
+            page.visibleLayersBottomUp().forEach { layer ->
+                val layerAlpha = (layer.opacity * 255).toInt()
 
-            layer.textBlocks.forEach { text ->
-                val textPaint = android.text.TextPaint().apply {
-                    color = text.color
-                    textSize = text.fontSize * 1.5f
-                    isAntiAlias = true
-                    alpha = layerAlpha
+                layer.strokes.forEach { stroke ->
+                    val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                    paint.strokeWidth = stroke.baseWidth
+                    paint.color = stroke.colorHsla.toAndroidColor()
+                    paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                    paint.style = Paint.Style.STROKE
+                    canvas.drawPath(path, paint)
                 }
-                val maxWidth = text.width.toInt().coerceAtLeast(100)
-                val staticLayout = android.text.StaticLayout.Builder
-                    .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
-                    .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
-                    .setLineSpacing(2f, 1f)
-                    .build()
 
-                canvas.save()
-                canvas.translate(text.x, text.y)
-                staticLayout.draw(canvas)
-                canvas.restore()
+                layer.shapes.forEach { shape ->
+                    paint.strokeWidth = shape.strokeWidth
+                    paint.color = shape.strokeColor
+                    paint.alpha = layerAlpha
+                    paint.style = Paint.Style.STROKE
+                    canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
+                }
+
+                layer.textBlocks.forEach { text ->
+                    val textPaint = android.text.TextPaint().apply {
+                        color = text.color
+                        textSize = text.fontSize * 1.5f
+                        isAntiAlias = true
+                        alpha = layerAlpha
+                    }
+                    val maxWidth = text.width.toInt().coerceAtLeast(100)
+                    val staticLayout = android.text.StaticLayout.Builder
+                        .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
+                        .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                        .setLineSpacing(2f, 1f)
+                        .build()
+
+                    canvas.save()
+                    canvas.translate(text.x, text.y)
+                    staticLayout.draw(canvas)
+                    canvas.restore()
+                }
+
+                layer.charts.forEach { chart ->
+                    paint.strokeWidth = 2f
+                    paint.color = android.graphics.Color.GRAY
+                    paint.alpha = layerAlpha
+                    paint.style = Paint.Style.STROKE
+                    canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+                }
             }
-        }
 
-        val outputBitmap = if (cropRect != null) {
-            val cx = (cropRect.left * scale).toInt().coerceIn(0, bmpW)
-            val cy = (cropRect.top * scale).toInt().coerceIn(0, bmpH)
-            val cw = (cropRect.width() * scale).toInt().coerceAtMost(bmpW - cx)
-            val ch = (cropRect.height() * scale).toInt().coerceAtMost(bmpH - cy)
-            if (cw > 0 && ch > 0) {
-                android.graphics.Bitmap.createBitmap(bitmap, cx, cy, cw, ch)
+            outputBitmap = if (cropRect != null) {
+                val cx = (cropRect.left * safeScale).toInt().coerceIn(0, bmpW)
+                val cy = (cropRect.top * safeScale).toInt().coerceIn(0, bmpH)
+                val cw = (cropRect.width() * safeScale).toInt().coerceAtMost(bmpW - cx)
+                val ch = (cropRect.height() * safeScale).toInt().coerceAtMost(bmpH - cy)
+                if (cw > 0 && ch > 0) {
+                    android.graphics.Bitmap.createBitmap(bitmap, cx, cy, cw, ch)
+                } else bitmap
             } else bitmap
-        } else bitmap
 
-        FileOutputStream(outputFile).use { fos ->
-            outputBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos)
+            FileOutputStream(outputFile).use { fos ->
+                outputBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos)
+            }
+        } finally {
+            if (outputBitmap != null && outputBitmap !== bitmap) {
+                outputBitmap.recycle()
+            }
+            bitmap.recycle()
         }
-        if (outputBitmap !== bitmap) outputBitmap.recycle()
-        bitmap.recycle()
     }
 
     private fun buildSvgPathData(points: List<StrokePoint>): String {
