@@ -40,7 +40,7 @@ class GeminiProvider : AiProvider {
         endpoint: String?,
         model: String?
     ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val modelName = model?.ifBlank { null } ?: "gemini-1.5-flash"
+        val modelName = model?.ifBlank { null } ?: "gemini-3.5-flash"
         val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey"
 
         val jsonBody = JSONObject().apply {

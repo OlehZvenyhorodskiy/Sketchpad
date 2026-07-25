@@ -1,7 +1,9 @@
 package com.example.ui.editor
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.widget.Toast
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -554,20 +557,29 @@ fun CanvasEditorScreen(
             // Right side panel removed per user request for clean canvas space
 
             // 5. Mini Sliders Overlay (Optional top overlay)
+            val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
             AnimatedVisibility(
                 visible = showMiniSliders,
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 70.dp)
+                modifier = if (isPortrait) {
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 12.dp)
+                        .fillMaxHeight(0.55f)
+                } else {
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 70.dp)
+                }
             ) {
                 MiniSlidersOverlay(
                     width = strokeWidth,
                     opacity = strokeOpacity,
                     currentColor = currentColor,
                     onWidthChange = { viewModel.setStrokeWidth(it) },
-                    onOpacityChange = { viewModel.setStrokeOpacity(it) }
+                    onOpacityChange = { viewModel.setStrokeOpacity(it) },
+                    vertical = isPortrait
                 )
             }
 
