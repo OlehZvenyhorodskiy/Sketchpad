@@ -119,6 +119,9 @@ fun CanvasEditorScreen(
     val canvas by viewModel.canvas.collectAsState()
     val pages by viewModel.pages.collectAsState()
     val currentPageIndex by viewModel.currentPageIndex.collectAsState()
+    val currentLayers = remember(pages, currentPageIndex) {
+        pages.getOrNull(currentPageIndex)?.getEffectiveLayers() ?: emptyList()
+    }
     val currentTool by viewModel.currentTool.collectAsState()
     val eraserMode by viewModel.eraserMode.collectAsState()
     val strokeWidth by viewModel.strokeWidth.collectAsState()
@@ -661,7 +664,8 @@ fun CanvasEditorScreen(
             messages = chatMessages,
             isLoading = isAiLoading,
             onSendMessage = { viewModel.sendAiPrompt(it) },
-            onDismiss = { showGeminiSheet = false }
+            onDismiss = { showGeminiSheet = false },
+            onSaveApiKey = { key -> com.example.ai.GeminiAssistantService.saveApiKey(context, key) }
         )
     }
 

@@ -280,6 +280,83 @@ object ExportManager {
     }
 
     /**
+     * Рендеринг сторінки у Bitmap високої роздільної здатності для AI Vision (offscreen).
+     */
+    fun captureCanvasHighRes(
+        page: PageEntity,
+        scale: Float = 3.0f,
+        pageWidth: Int = 1920,
+        pageHeight: Int = 1080
+    ): android.graphics.Bitmap {
+        val maxDimensionPx = 4096f
+        val rawW = pageWidth * scale
+        val rawH = pageHeight * scale
+        val safeScale = if (rawW > maxDimensionPx || rawH > maxDimensionPx) {
+            val maxTarget = maxOf(rawW, rawH)
+            scale * (maxDimensionPx / maxTarget)
+        } else {
+            scale.coerceAtLeast(0.1f)
+        }
+
+        val bmpW = (pageWidth * safeScale).toInt().coerceAtLeast(1)
+        val bmpH = (pageHeight * safeScale).toInt().coerceAtLeast(1)
+
+        val bitmap = android.graphics.Bitmap.createBitmap(bmpW, bmpH, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.scale(safeScale, safeScale)
+
+        val paint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+
+        page.visibleLayersBottomUp().forEach { layer ->
+            val layerAlpha = (layer.opacity * 255).toInt()
+
+            layer.strokes.forEach { stroke ->
+                val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                paint.strokeWidth = stroke.baseWidth
+                paint.color = stroke.colorHsla.toAndroidColor()
+                paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                paint.style = Paint.Style.STROKE
+                canvas.drawPath(path, paint)
+            }
+
+            layer.shapes.forEach { shape ->
+                paint.strokeWidth = shape.strokeWidth
+                paint.color = shape.strokeColor
+                paint.alpha = layerAlpha
+                paint.style = Paint.Style.STROKE
+                canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
+            }
+
+            layer.textBlocks.forEach { text ->
+                val textPaint = android.text.TextPaint().apply {
+                    color = text.color
+                    textSize = text.fontSize * 1.5f
+                    isAntiAlias = true
+                    alpha = layerAlpha
+                }
+                val maxWidth = text.width.toInt().coerceAtLeast(100)
+                val staticLayout = android.text.StaticLayout.Builder
+                    .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
+                    .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                    .setLineSpacing(2f, 1f)
+                    .build()
+
+                canvas.save()
+                canvas.translate(text.x, text.y)
+                staticLayout.draw(canvas)
+                canvas.restore()
+            }
+        }
+        return bitmap
+    }
+
+    /**
      * Видалення тимчасових файлів експорту з папки кешу.
      */
     fun cleanupTempExports(context: Context) {

@@ -102,14 +102,14 @@ fun TopFloatingToolbar(
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
             shadowElevation = 8.dp,
             tonalElevation = 6.dp,
-            modifier = if (isSlidersVertical) Modifier.wrapContentSize() else Modifier
+            modifier = Modifier.wrapContentSize()
         ) {
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
                 ToolIconButton(
                     icon = Icons.Default.Create,

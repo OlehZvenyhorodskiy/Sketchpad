@@ -25,6 +25,25 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_COLOR_VAL = floatPreferencesKey("color_val")
         val KEY_DRAW_WITH_FINGERS = booleanPreferencesKey("draw_with_fingers")
         val KEY_THEME_MODE = intPreferencesKey("theme_mode") // 0: SYSTEM, 1: LIGHT, 2: DARK
+        val KEY_SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
+    }
+
+    val selectedProvider: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SELECTED_PROVIDER] ?: "GEMINI"
+    }
+
+    suspend fun setSelectedProvider(provider: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SELECTED_PROVIDER] = provider
+        }
+    }
+
+    fun saveEncryptedApiKey(apiKey: String) {
+        com.example.ai.GeminiAssistantService.saveApiKey(context, apiKey)
+    }
+
+    fun getEncryptedApiKey(): String {
+        return com.example.ai.GeminiAssistantService.getApiKey(context)
     }
 
     val isLoggedIn: Flow<Boolean> = context.dataStore.data.map { prefs ->

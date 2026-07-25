@@ -873,7 +873,22 @@ class CanvasEditorViewModel(
                         Corner.TOP_LEFT, Corner.TOP_RIGHT -> chart.y - dh
                         else -> chart.y
                     }
-                    chart.copy(x = newX, y = newY, width = clampedW, height = clampedH)
+                    val scaleW = clampedW / chart.width.coerceAtLeast(10f)
+                    val scaleH = clampedH / chart.height.coerceAtLeast(10f)
+                    val newXMin = chart.xMin * scaleW
+                    val newXMax = chart.xMax * scaleW
+                    val newYMin = chart.yMin * scaleH
+                    val newYMax = chart.yMax * scaleH
+                    chart.copy(
+                        x = newX,
+                        y = newY,
+                        width = clampedW,
+                        height = clampedH,
+                        xMin = newXMin,
+                        xMax = newXMax,
+                        yMin = newYMin,
+                        yMax = newYMax
+                    )
                 } else chart
             })
         }
@@ -989,18 +1004,46 @@ class CanvasEditorViewModel(
         }
     }
 
+    private var lastScreenshotVersion = -1
+    private var cachedBase64Image: String? = null
+
     // AI Chat query
     fun sendAiPrompt(prompt: String) {
         val userMsg = ChatMessage(text = prompt, isUser = true)
         _chatMessages.value = _chatMessages.value + userMsg
         _isAiLoading.value = true
 
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val title = _canvas.value?.title ?: "Конспект"
+            val currentVer = _canvasVersion.value
+            val page = currentPage
+
+            val base64Image = if (page != null) {
+                if (currentVer != lastScreenshotVersion || cachedBase64Image == null) {
+                    try {
+                        val bitmap = ExportManager.captureCanvasHighRes(page, scale = 2.0f)
+                        val baos = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, baos)
+                        bitmap.recycle()
+                        val b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                        lastScreenshotVersion = currentVer
+                        cachedBase64Image = b64
+                        b64
+                    } catch (e: Exception) {
+                        android.util.Log.e("CanvasVM", "Failed to generate AI vision screenshot", e)
+                        cachedBase64Image
+                    }
+                } else {
+                    cachedBase64Image
+                }
+            } else null
+
             val response = geminiService.queryCanvasAssistant(
                 userPrompt = prompt,
                 pages = _pages.value,
-                canvasTitle = title
+                canvasTitle = title,
+                context = context,
+                pageBase64Image = base64Image
             )
             _isAiLoading.value = false
             val aiMsg = ChatMessage(text = response, isUser = false)

@@ -101,7 +101,8 @@ class GeminiAssistantService {
         pages: List<PageEntity>,
         canvasTitle: String,
         audioTranscripts: List<String> = emptyList(),
-        context: Context? = null
+        context: Context? = null,
+        pageBase64Image: String? = null
     ): String = withContext(Dispatchers.IO) {
         val apiKey = if (context != null) getApiKey(context) else {
             try { com.example.BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
@@ -152,6 +153,16 @@ class GeminiAssistantService {
                 val contentObj = JSONObject().apply {
                     val partsArray = JSONArray().apply {
                         put(JSONObject().put("text", "$contextBuilder\n\nЗапитання користувача: $userPrompt"))
+                        if (!pageBase64Image.isNullOrBlank()) {
+                            val imagePart = JSONObject().apply {
+                                val inlineData = JSONObject().apply {
+                                    put("mime_type", "image/png")
+                                    put("data", pageBase64Image)
+                                }
+                                put("inline_data", inlineData)
+                            }
+                            put(imagePart)
+                        }
                     }
                     put("parts", partsArray)
                 }

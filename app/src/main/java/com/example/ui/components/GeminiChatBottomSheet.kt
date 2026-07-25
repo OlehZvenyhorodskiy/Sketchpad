@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,9 +51,12 @@ fun GeminiChatBottomSheet(
     messages: List<ChatMessage>,
     isLoading: Boolean,
     onSendMessage: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSaveApiKey: ((String) -> Unit)? = null
 ) {
     var inputText by remember { mutableStateOf("") }
+    var showKeyDialog by remember { mutableStateOf(false) }
+    var apiKeyText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
@@ -87,7 +93,7 @@ fun GeminiChatBottomSheet(
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "AI-асистент конспекту (Gemini)",
                         style = MaterialTheme.typography.titleMedium,
@@ -99,6 +105,45 @@ fun GeminiChatBottomSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (onSaveApiKey != null) {
+                    IconButton(onClick = { showKeyDialog = true }) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                            contentDescription = "Налаштування API"
+                        )
+                    }
+                }
+            }
+
+            if (showKeyDialog && onSaveApiKey != null) {
+                AlertDialog(
+                    onDismissRequest = { showKeyDialog = false },
+                    title = { Text("Налаштування Gemini API Key") },
+                    text = {
+                        OutlinedTextField(
+                            value = apiKeyText,
+                            onValueChange = { apiKeyText = it },
+                            label = { Text("Введіть Ваш Gemini API Key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (apiKeyText.isNotBlank()) {
+                                onSaveApiKey(apiKeyText.trim())
+                            }
+                            showKeyDialog = false
+                        }) {
+                            Text("Зберегти")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showKeyDialog = false }) {
+                            Text("Скасувати")
+                        }
+                    }
+                )
             }
 
             // Message List
