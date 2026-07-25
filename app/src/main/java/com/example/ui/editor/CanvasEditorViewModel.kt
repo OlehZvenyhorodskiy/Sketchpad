@@ -399,12 +399,18 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    companion object {
+        private const val MAX_UNDO_DEPTH = 30
+    }
+
     fun executeCommand(command: com.example.data.models.CanvasCommand) {
         val page = currentPage ?: return
         val newPage = command.execute(page)
-        commandUndoStack.addLast(command)
-        if (commandUndoStack.size > 100) commandUndoStack.removeFirst()
-        commandRedoStack.clear()
+        synchronized(commandUndoStack) {
+            commandUndoStack.addLast(command)
+            if (commandUndoStack.size > MAX_UNDO_DEPTH) commandUndoStack.removeFirst()
+            commandRedoStack.clear()
+        }
         updateCurrentPage(newPage)
     }
 
@@ -413,15 +419,17 @@ class CanvasEditorViewModel(
             if (!undoRedoMutex.tryLock()) return@launch
             try {
                 val page = currentPage ?: return@launch
-                val command = commandUndoStack.removeLastOrNull()
+                val command = synchronized(commandUndoStack) { commandUndoStack.removeLastOrNull() }
                 if (command != null) {
                     val newPage = command.undo(page)
-                    commandRedoStack.addLast(command)
+                    synchronized(commandRedoStack) { commandRedoStack.addLast(command) }
                     updateCurrentPage(newPage)
-                } else if (pageUndoHistory.isNotEmpty()) {
-                    pageRedoHistory.add(page)
-                    val previousPage = pageUndoHistory.removeAt(pageUndoHistory.size - 1)
-                    updateCurrentPage(previousPage)
+                } else synchronized(pageUndoHistory) {
+                    if (pageUndoHistory.isNotEmpty()) {
+                        pageRedoHistory.add(page)
+                        val previousPage = pageUndoHistory.removeAt(pageUndoHistory.size - 1)
+                        updateCurrentPage(previousPage)
+                    }
                 }
             } finally {
                 undoRedoMutex.unlock()
@@ -434,15 +442,17 @@ class CanvasEditorViewModel(
             if (!undoRedoMutex.tryLock()) return@launch
             try {
                 val page = currentPage ?: return@launch
-                val command = commandRedoStack.removeLastOrNull()
+                val command = synchronized(commandRedoStack) { commandRedoStack.removeLastOrNull() }
                 if (command != null) {
                     val newPage = command.execute(page)
-                    commandUndoStack.addLast(command)
+                    synchronized(commandUndoStack) { commandUndoStack.addLast(command) }
                     updateCurrentPage(newPage)
-                } else if (pageRedoHistory.isNotEmpty()) {
-                    pageUndoHistory.add(page)
-                    val nextPage = pageRedoHistory.removeAt(pageRedoHistory.size - 1)
-                    updateCurrentPage(nextPage)
+                } else synchronized(pageUndoHistory) {
+                    if (pageRedoHistory.isNotEmpty()) {
+                        pageUndoHistory.add(page)
+                        val nextPage = pageRedoHistory.removeAt(pageRedoHistory.size - 1)
+                        updateCurrentPage(nextPage)
+                    }
                 }
             } finally {
                 undoRedoMutex.unlock()
@@ -451,9 +461,11 @@ class CanvasEditorViewModel(
     }
 
     private fun pushUndoState(page: PageEntity) {
-        if (pageUndoHistory.size >= 50) pageUndoHistory.removeAt(0)
-        pageUndoHistory.add(page)
-        pageRedoHistory.clear()
+        synchronized(pageUndoHistory) {
+            if (pageUndoHistory.size >= MAX_UNDO_DEPTH) pageUndoHistory.removeAt(0)
+            pageUndoHistory.add(page)
+            pageRedoHistory.clear()
+        }
     }
 
     private fun updateCurrentPage(page: PageEntity) {
