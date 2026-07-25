@@ -226,9 +226,14 @@ fun HsvColorPicker(
     onColorSelected: (Color) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hue by remember { mutableFloatStateOf(0f) }
-    var saturation by remember { mutableFloatStateOf(1f) }
-    var value by remember { mutableFloatStateOf(1f) }
+    val initialHsv = remember(initialColor) {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(initialColor.toArgb(), hsv)
+        hsv
+    }
+    var hue by remember(initialColor) { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember(initialColor) { mutableFloatStateOf(initialHsv[1]) }
+    var value by remember(initialColor) { mutableFloatStateOf(initialHsv[2]) }
 
     Box(
         modifier = modifier.size(220.dp),
