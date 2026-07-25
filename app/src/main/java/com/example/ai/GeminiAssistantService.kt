@@ -179,9 +179,10 @@ class GeminiAssistantService {
             put("systemInstruction", systemInstructionObj)
         }
 
+        val model = "gemini-3.5-flash"
         val mediaType = "application/json; charset=utf-8".toMediaType()
         val requestBody = jsonBody.toString().toRequestBody(mediaType)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
 
         val request = Request.Builder()
             .url(url)
@@ -191,6 +192,9 @@ class GeminiAssistantService {
         try {
             val response = client.newCall(request).execute()
             val responseStr = response.body?.string() ?: ""
+            if (response.code == 404) {
+                return@withContext "Помилка: модель AI недоступна. Оновіть додаток або перевірте API ключ у налаштуваннях."
+            }
             if (!response.isSuccessful) {
                 return@withContext "Помилка запиту до Gemini API (${response.code}). Перевірте з'єднання або ключі."
             }

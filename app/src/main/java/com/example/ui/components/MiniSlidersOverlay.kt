@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -44,8 +45,9 @@ fun MiniSlidersOverlay(
     ) {
         Column(
             modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .widthIn(min = 200.dp, max = 400.dp)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
-                .width(220.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically

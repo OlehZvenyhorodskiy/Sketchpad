@@ -48,9 +48,10 @@ class LatexAutoCompleter(private val apiKey: String = BuildConfig.GEMINI_API_KEY
                 put("contents", contentsArray)
             }
 
+            val model = "gemini-3.5-flash"
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val requestBody = jsonBody.toString().toRequestBody(mediaType)
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
 
             val request = Request.Builder()
                 .url(url)

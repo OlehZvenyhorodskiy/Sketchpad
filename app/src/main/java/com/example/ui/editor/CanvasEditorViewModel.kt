@@ -85,6 +85,13 @@ class CanvasEditorViewModel(
     private val _zoomScale = MutableStateFlow(3f)
     val zoomScale: StateFlow<Float> = _zoomScale.asStateFlow()
 
+    private val _panOffset = MutableStateFlow(Offset.Zero)
+    val panOffset: StateFlow<Offset> = _panOffset.asStateFlow()
+
+    fun updatePanOffset(offset: Offset) {
+        _panOffset.value = offset
+    }
+
     private val _rulerState = MutableStateFlow(RulerState())
     val rulerState: StateFlow<RulerState> = _rulerState.asStateFlow()
 

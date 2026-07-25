@@ -84,6 +84,7 @@ fun InteractiveCanvas(
     rulerState: RulerState,
     zoomScale: Float,
     onZoomChanged: (Float) -> Unit,
+    onPanOffsetChanged: (Offset) -> Unit = {},
     onStrokeAdded: (StrokeEntity) -> Unit,
     onEraseAtPoint: (Offset, Float) -> Unit,
     onTwoFingerTap: () -> Unit,
@@ -99,6 +100,7 @@ fun InteractiveCanvas(
     onPreloadImage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val density = LocalDensity.current
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     var currentScale by remember { mutableStateOf(zoomScale) }
     var canvasSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
@@ -117,6 +119,7 @@ fun InteractiveCanvas(
     var elementOriginalPos by remember { mutableStateOf(Offset.Zero) }
     var elementOriginalSize by remember { mutableStateOf(Offset.Zero) }
     var isResizingCorner by remember { mutableStateOf(false) }
+    var resizingCorner by remember { mutableStateOf<String?>(null) }
 
     // Preload image bitmaps off the UI thread via ViewModel LruCache
     val imageUris = remember(pageEntity) {
@@ -155,6 +158,7 @@ fun InteractiveCanvas(
                                 val newScale = (oldScale * zoom).coerceIn(0.5f, 8.0f)
                                 val zoomFactor = newScale / oldScale
                                 panOffset = centroid - (centroid - panOffset) * zoomFactor + pan
+                                onPanOffsetChanged(panOffset)
                                 if (newScale != oldScale) {
                                     currentScale = newScale
                                     onZoomChanged(newScale)
@@ -167,7 +171,15 @@ fun InteractiveCanvas(
             }
             .pointerInteropFilter { motionEvent ->
                 // ═══════════════════════════════════════════════════════
-                // 0. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
+                // 0a. Перевірка касання у верхній зоні тулбара (TopFloatingToolbar) — не знімаємо виділення
+                // ═══════════════════════════════════════════════════════
+                val topToolbarHeightPx = with(density) { 110.dp.toPx() }
+                if (motionEvent.y <= topToolbarHeightPx) {
+                    return@pointerInteropFilter false
+                }
+
+                // ═══════════════════════════════════════════════════════
+                // 0b. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
                 // ═══════════════════════════════════════════════════════
                 if (rulerState.isVisible && isTouchInsideRuler(motionEvent, rulerState)) {
                     return@pointerInteropFilter false
@@ -213,8 +225,9 @@ fun InteractiveCanvas(
                         if (currentTool == ToolType.SELECTOR) {
                             dragStartOffset = rawPoint
                             isResizingCorner = false
+                            resizingCorner = null
 
-                            // Check corner resize touch for active selection
+                            // Check corner resize touch for active selection (ALL 4 CORNERS)
                             val selId = selectedElementId
                             val selType = selectedElementType
                             var cornerHit = false
@@ -244,11 +257,27 @@ fun InteractiveCanvas(
                                         Offset(center.x + (dx * cosA - dy * sinA), center.y + (dx * sinA + dy * cosA))
                                     } else rawPoint
 
-                                    val distToCorner = Math.hypot((testPoint.x - r.right).toDouble(), (testPoint.y - r.bottom).toDouble())
-                                    if (distToCorner <= 48.0 / currentScale) {
+                                    val corners = listOf(
+                                        "TL" to Offset(r.left, r.top),
+                                        "TR" to Offset(r.right, r.top),
+                                        "BL" to Offset(r.left, r.bottom),
+                                        "BR" to Offset(r.right, r.bottom)
+                                    )
+                                    val hitRadius = 48.0 / currentScale
+                                    var hitCorner: String? = null
+                                    for ((name, corner) in corners) {
+                                        val dist = Math.hypot((testPoint.x - corner.x).toDouble(), (testPoint.y - corner.y).toDouble())
+                                        if (dist <= hitRadius) {
+                                            hitCorner = name
+                                            break
+                                        }
+                                    }
+                                    if (hitCorner != null) {
                                         cornerHit = true
                                         isResizingCorner = true
+                                        resizingCorner = hitCorner
                                         elementOriginalSize = Offset(r.width, r.height)
+                                        elementOriginalPos = Offset(r.left, r.top)
                                     }
                                 }
                             }
@@ -345,9 +374,48 @@ fun InteractiveCanvas(
                                     val dx = rawPoint.x - dragStartOffset.x
                                     val dy = rawPoint.y - dragStartOffset.y
                                     if (isResizingCorner) {
-                                        val newW = (elementOriginalSize.x + dx).coerceAtLeast(60f)
-                                        val newH = (elementOriginalSize.y + dy).coerceAtLeast(60f)
+                                        val origW = elementOriginalSize.x
+                                        val origH = elementOriginalSize.y
+                                        val origX = elementOriginalPos.x
+                                        val origY = elementOriginalPos.y
+
+                                        var newW = origW
+                                        var newH = origH
+                                        var newX = origX
+                                        var newY = origY
+
+                                        when (resizingCorner) {
+                                            "BR" -> {
+                                                newW = (origW + dx).coerceAtLeast(60f)
+                                                newH = (origH + dy).coerceAtLeast(60f)
+                                            }
+                                            "BL" -> {
+                                                newW = (origW - dx).coerceAtLeast(60f)
+                                                newH = (origH + dy).coerceAtLeast(60f)
+                                                newX = origX + (origW - newW)
+                                            }
+                                            "TR" -> {
+                                                newW = (origW + dx).coerceAtLeast(60f)
+                                                newH = (origH - dy).coerceAtLeast(60f)
+                                                newY = origY + (origH - newH)
+                                            }
+                                            "TL" -> {
+                                                newW = (origW - dx).coerceAtLeast(60f)
+                                                newH = (origH - dy).coerceAtLeast(60f)
+                                                newX = origX + (origW - newW)
+                                                newY = origY + (origH - newH)
+                                            }
+                                        }
+
                                         onResizeElement(id, type, newW, newH)
+                                        if (newX != origX || newY != origY) {
+                                            when (type) {
+                                                "SHAPE" -> onMoveShape(id, newX, newY)
+                                                "IMAGE" -> onMoveImage(id, newX, newY)
+                                                "TEXT" -> onMoveText(id, newX, newY)
+                                                "CHART" -> onMoveChart(id, newX, newY)
+                                            }
+                                        }
                                     } else {
                                         val newX = elementOriginalPos.x + dx
                                         val newY = elementOriginalPos.y + dy
@@ -389,6 +457,7 @@ fun InteractiveCanvas(
                         }
                         activeStrokePoints.clear()
                         eraserTouchPos = null
+                        resizingCorner = null
                     }
                 }
                 true
@@ -694,9 +763,10 @@ fun InteractiveCanvas(
                         }
 
                         // Axes (X and Y through center)
-                        val axisColor = (if (isDarkBackground) Color(0xFF94A3B8) else Color(0xFF64748B)).copy(alpha = layerAlpha)
-                        drawLine(axisColor, Offset(cx, cy + ch / 2f), Offset(cx + cw, cy + ch / 2f), strokeWidth = 1.5f)
-                        drawLine(axisColor, Offset(cx + cw / 2f, cy), Offset(cx + cw / 2f, cy + ch), strokeWidth = 1.5f)
+                        val axisStrokeWidth = 2.5f * currentScale
+                        val axisColor = if (isDarkBackground) Color(0xFFCBD5E1) else Color(0xFF475569)
+                        drawLine(axisColor, Offset(cx, cy + ch / 2f), Offset(cx + cw, cy + ch / 2f), strokeWidth = axisStrokeWidth)
+                        drawLine(axisColor, Offset(cx + cw / 2f, cy), Offset(cx + cw / 2f, cy + ch), strokeWidth = axisStrokeWidth)
 
                         // Selection border
                         if (selectedElementId == chart.id && selectedElementType == "CHART") {

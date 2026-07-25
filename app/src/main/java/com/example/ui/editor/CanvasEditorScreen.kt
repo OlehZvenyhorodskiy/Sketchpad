@@ -130,6 +130,7 @@ fun CanvasEditorScreen(
     val recentColors by viewModel.recentColors.collectAsState()
     val drawWithFingers by viewModel.drawWithFingers.collectAsState()
     val zoomScale by viewModel.zoomScale.collectAsState()
+    val panOffset by viewModel.panOffset.collectAsState()
     val rulerState by viewModel.rulerState.collectAsState()
     val audioStatus by viewModel.audioStatus.collectAsState()
     val audioRecordings by viewModel.audioRecordings.collectAsState()
@@ -181,7 +182,16 @@ fun CanvasEditorScreen(
     val insertImageLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
-        uri?.let { viewModel.insertImage(it) }
+        uri?.let {
+            viewModel.insertImage(
+                uri = it,
+                viewportWidth = viewportWidthPx,
+                viewportHeight = viewportHeightPx,
+                panOffsetX = panOffset.x,
+                panOffsetY = panOffset.y,
+                scale = zoomScale
+            )
+        }
     }
 
     // Audio Permission Launcher
@@ -337,6 +347,7 @@ fun CanvasEditorScreen(
                 rulerState = rulerState,
                 zoomScale = zoomScale,
                 onZoomChanged = { viewModel.setZoomScale(it) },
+                onPanOffsetChanged = { viewModel.updatePanOffset(it) },
                 onStrokeAdded = { stroke -> viewModel.addStrokeToCurrentPage(stroke) },
                 onEraseAtPoint = { pt, radius -> viewModel.eraseAtPoint(pt, radius) },
                 onTwoFingerTap = { viewModel.undo() },
@@ -629,13 +640,22 @@ fun CanvasEditorScreen(
                     shapeType = shapeType,
                     viewportWidth = viewportWidthPx,
                     viewportHeight = viewportHeightPx,
-                    panOffsetX = 0f,
-                    panOffsetY = 0f,
+                    panOffsetX = panOffset.x,
+                    panOffsetY = panOffset.y,
                     scale = zoomScale
                 )
             },
             onInsertChartClick = { showMathFunctionDialog = true },
-            onPasteContentClick = { viewModel.insertText("Вставлено з буфера") },
+            onPasteContentClick = {
+                viewModel.insertText(
+                    text = "Вставлено з буфера",
+                    viewportWidth = viewportWidthPx,
+                    viewportHeight = viewportHeightPx,
+                    panOffsetX = panOffset.x,
+                    panOffsetY = panOffset.y,
+                    scale = zoomScale
+                )
+            },
             onRecognizeShapeClick = { viewModel.recognizeAndVectorizeLastStroke() },
             onPlotFunctionClick = { viewModel.plotFunctionFromStrokes() },
             onLatexConvertClick = { viewModel.convertHandwritingToLatex() },
@@ -718,6 +738,8 @@ fun CanvasEditorScreen(
                     viewModel.insertChart(
                         viewportWidth = viewportWidthPx,
                         viewportHeight = viewportHeightPx,
+                        panOffsetX = panOffset.x,
+                        panOffsetY = panOffset.y,
                         scale = zoomScale
                     )
                         showMathFunctionDialog = false
@@ -733,6 +755,8 @@ fun CanvasEditorScreen(
                             xMax = xMax,
                             viewportWidth = viewportWidthPx,
                             viewportHeight = viewportHeightPx,
+                            panOffsetX = panOffset.x,
+                            panOffsetY = panOffset.y,
                             scale = zoomScale
                         )
                         showMathFunctionDialog = false
@@ -765,7 +789,14 @@ fun CanvasEditorScreen(
             confirmButton = {
                 Button(onClick = {
                     if (textInputVal.isNotBlank()) {
-                        viewModel.insertText(textInputVal.trim())
+                        viewModel.insertText(
+                            text = textInputVal.trim(),
+                            viewportWidth = viewportWidthPx,
+                            viewportHeight = viewportHeightPx,
+                            panOffsetX = panOffset.x,
+                            panOffsetY = panOffset.y,
+                            scale = zoomScale
+                        )
                         textInputVal = ""
                     }
                     showTextInputDialog = false
