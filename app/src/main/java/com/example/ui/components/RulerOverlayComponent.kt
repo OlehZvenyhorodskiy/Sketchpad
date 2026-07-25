@@ -153,7 +153,11 @@ fun RulerOverlayComponent(
                 .pointerInput(rulerState) {
                     detectDragGestures { change, _ ->
                         change.consume()
-                        val touchPos = change.position + handleRightPos
+                        val halfHandlePx = 20.dp.toPx()
+                        val touchPos = Offset(
+                            handleRightPos.x - halfHandlePx + change.position.x,
+                            handleRightPos.y - halfHandlePx + change.position.y
+                        )
                         val vec = touchPos - rulerState.center
                         val newDist = vec.getDistance().coerceIn(200f, 1400f)
                         val newAngle = atan2(vec.y, vec.x)

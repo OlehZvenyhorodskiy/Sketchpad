@@ -100,7 +100,7 @@ fun TopFloatingToolbar(
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
             shadowElevation = 8.dp,
             tonalElevation = 6.dp,
-            modifier = if (isSlidersVertical) Modifier.fillMaxWidth() else Modifier
+            modifier = if (isSlidersVertical) Modifier.wrapContentSize() else Modifier
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),

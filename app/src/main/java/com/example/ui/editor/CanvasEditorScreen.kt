@@ -94,6 +94,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.core.content.FileProvider
 import com.example.audio.RecordingStatus
 import com.example.data.models.EraserMode
@@ -152,6 +153,10 @@ fun CanvasEditorScreen(
     var mathFormulaVal by remember { mutableStateOf("sin(x)") }
     var mathXMinVal by remember { mutableStateOf("-10") }
     var mathXMaxVal by remember { mutableStateOf("10") }
+
+    // Viewport dimensions for centering spawned elements
+    var viewportWidthPx by remember { mutableStateOf(0f) }
+    var viewportHeightPx by remember { mutableStateOf(0f) }
 
     LaunchedEffect(audioRecordings) {
         if (audioRecordings.isNotEmpty()) {
@@ -309,6 +314,14 @@ fun CanvasEditorScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        viewportWidthPx = coords.size.width.toFloat()
+                        viewportHeightPx = coords.size.height.toFloat()
+                    }
+            ) {
             // 1. Interactive Canvas
             InteractiveCanvas(
                 canvasEntity = canvas,
@@ -341,6 +354,7 @@ fun CanvasEditorScreen(
                 getCachedBitmap = { viewModel.getCachedBitmap(it) },
                 onPreloadImage = { viewModel.preloadImageBitmap(it) }
             )
+            }
 
             // 2. Ruler Overlay
             RulerOverlayComponent(
@@ -607,7 +621,16 @@ fun CanvasEditorScreen(
             onDrawWithFingersChange = { viewModel.setDrawWithFingers(it) },
             onInsertImageClick = { insertImageLauncher.launch("image/*") },
             onInsertTextClick = { showTextInputDialog = true },
-            onInsertShapeClick = { shapeType -> viewModel.insertShape(shapeType) },
+            onInsertShapeClick = { shapeType ->
+                viewModel.insertShape(
+                    shapeType = shapeType,
+                    viewportWidth = viewportWidthPx,
+                    viewportHeight = viewportHeightPx,
+                    panOffsetX = 0f,
+                    panOffsetY = 0f,
+                    scale = zoomScale
+                )
+            },
             onInsertChartClick = { showMathFunctionDialog = true },
             onPasteContentClick = { viewModel.insertText("Вставлено з буфера") },
             onRecognizeShapeClick = { viewModel.recognizeAndVectorizeLastStroke() },
@@ -688,7 +711,11 @@ fun CanvasEditorScreen(
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                        viewModel.insertChart()
+                    viewModel.insertChart(
+                        viewportWidth = viewportWidthPx,
+                        viewportHeight = viewportHeightPx,
+                        scale = zoomScale
+                    )
                         showMathFunctionDialog = false
                     }) {
                         Text("Порожня сітка")
@@ -699,7 +726,10 @@ fun CanvasEditorScreen(
                         viewModel.insertMathFunctionChart(
                             formula = mathFormulaVal.trim().ifEmpty { "sin(x)" },
                             xMin = xMin,
-                            xMax = xMax
+                            xMax = xMax,
+                            viewportWidth = viewportWidthPx,
+                            viewportHeight = viewportHeightPx,
+                            scale = zoomScale
                         )
                         showMathFunctionDialog = false
                     }) {
@@ -805,7 +835,7 @@ fun CanvasEditorScreen(
     }
 
     if (showLayersPanel) {
-        val currentLayers = viewModel.currentPage?.getEffectiveLayers() ?: emptyList()
+        val currentLayers = pages.getOrNull(currentPageIndex)?.getEffectiveLayers() ?: emptyList()
         LayersBottomSheet(
             layers = currentLayers,
             activeLayerId = activeLayerId ?: viewModel.currentPage?.activeLayerId,

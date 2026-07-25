@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,7 +78,7 @@ fun MiniSlidersOverlay(
                 value = width,
                 onValueChange = onWidthChange,
                 valueRange = 1f..22f,
-                modifier = Modifier.height(30.dp)
+                modifier = Modifier.fillMaxWidth().height(30.dp)
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -93,7 +94,7 @@ fun MiniSlidersOverlay(
                 value = opacity,
                 onValueChange = onOpacityChange,
                 valueRange = 0.05f..1f,
-                modifier = Modifier.height(30.dp)
+                modifier = Modifier.fillMaxWidth().height(30.dp)
             )
         }
     }

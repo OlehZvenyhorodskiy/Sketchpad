@@ -32,9 +32,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.data.models.HslaColor
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -175,32 +188,17 @@ fun ColorPickerBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Hue slider
-            Text(text = "Відтінок (Hue): ${hue.toInt()}°", style = MaterialTheme.typography.bodyMedium)
-            Slider(
-                value = hue,
-                onValueChange = { hue = it },
-                valueRange = 0f..360f,
-                colors = SliderDefaults.colors(
-                    thumbColor = currentColor.toColor(),
-                    activeTrackColor = MaterialTheme.colorScheme.primary
-                )
-            )
-
-            // Saturation slider
-            Text(text = "Насиченість: ${(saturation * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-            Slider(
-                value = saturation,
-                onValueChange = { saturation = it },
-                valueRange = 0f..1f
-            )
-
-            // Lightness slider
-            Text(text = "Світлість: ${(lightness * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-            Slider(
-                value = lightness,
-                onValueChange = { lightness = it },
-                valueRange = 0f..1f
+            // Custom Color Picker Canvas (Hue Ring + Saturation/Lightness Square)
+            CustomColorPickerCanvas(
+                hue = hue,
+                saturation = saturation,
+                lightness = lightness,
+                onColorChanged = { newHue, newSat, newLight ->
+                    hue = newHue
+                    saturation = newSat
+                    lightness = newLight
+                },
+                modifier = Modifier.padding(vertical = 8.dp)
             )
 
             // Opacity slider
@@ -213,5 +211,106 @@ fun ColorPickerBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+fun CustomColorPickerCanvas(
+    hue: Float,
+    saturation: Float,
+    lightness: Float,
+    onColorChanged: (hue: Float, saturation: Float, lightness: Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var canvasSize by remember { mutableStateOf(Size.Zero) }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .pointerInput(Unit) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    val pos = change.position
+                    val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
+                    val radius = min(canvasSize.width, canvasSize.height) / 2f
+                    val ringWidth = 24.dp.toPx()
+                    val outerRadius = radius - ringWidth / 2f
+                    val innerRadius = outerRadius - ringWidth / 2f
+
+                    val dist = (pos - center).getDistance()
+                    if (dist >= innerRadius - 10f && dist <= radius + 20f) {
+                        val angle = (atan2(pos.y - center.y, pos.x - center.x) * 180f / Math.PI.toFloat() + 360f) % 360f
+                        onColorChanged(angle, saturation, lightness)
+                    } else if (abs(pos.x - center.x) <= innerRadius * 0.65f && abs(pos.y - center.y) <= innerRadius * 0.65f) {
+                        val squareHalf = innerRadius * 0.6f
+                        val newSat = ((pos.x - (center.x - squareHalf)) / (2f * squareHalf)).coerceIn(0f, 1f)
+                        val newLight = (1f - (pos.y - (center.y - squareHalf)) / (2f * squareHalf)).coerceIn(0f, 1f)
+                        onColorChanged(hue, newSat, newLight)
+                    }
+                }
+            }
+    ) {
+        canvasSize = size
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = min(size.width, size.height) / 2f
+        val ringWidth = 24.dp.toPx()
+        val outerRadius = radius - ringWidth / 2f
+        val innerRadius = outerRadius - ringWidth / 2f
+
+        // Outer Hue Ring
+        for (i in 0 until 360 step 2) {
+            val color = Color.hsl(i.toFloat(), 1f, 0.5f)
+            drawArc(
+                color = color,
+                startAngle = i.toFloat(),
+                sweepAngle = 3.5f,
+                useCenter = false,
+                topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
+                size = Size(outerRadius * 2f, outerRadius * 2f),
+                style = Stroke(width = ringWidth)
+            )
+        }
+
+        // Inner Saturation/Lightness Square
+        val squareHalf = innerRadius * 0.6f
+        val squareTopLeft = Offset(center.x - squareHalf, center.y - squareHalf)
+        val squareSize = Size(squareHalf * 2f, squareHalf * 2f)
+
+        drawRect(
+            brush = Brush.horizontalGradient(
+                colors = listOf(Color.hsl(hue, 0f, lightness), Color.hsl(hue, 1f, lightness)),
+                startX = squareTopLeft.x,
+                endX = squareTopLeft.x + squareSize.width
+            ),
+            topLeft = squareTopLeft,
+            size = squareSize
+        )
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                startY = squareTopLeft.y,
+                endY = squareTopLeft.y + squareSize.height
+            ),
+            topLeft = squareTopLeft,
+            size = squareSize
+        )
+
+        // Ring Selector Handle
+        val selectorAngleRad = Math.toRadians(hue.toDouble()).toFloat()
+        val selectorHandlePos = Offset(
+            center.x + outerRadius * cos(selectorAngleRad),
+            center.y + outerRadius * sin(selectorAngleRad)
+        )
+        drawCircle(color = Color.White, radius = 10.dp.toPx(), center = selectorHandlePos)
+        drawCircle(color = Color.hsl(hue, 1f, 0.5f), radius = 7.dp.toPx(), center = selectorHandlePos)
+
+        // Square Selector Handle
+        val squareHandlePos = Offset(
+            squareTopLeft.x + saturation * squareSize.width,
+            squareTopLeft.y + (1f - lightness) * squareSize.height
+        )
+        drawCircle(color = Color.White, radius = 8.dp.toPx(), center = squareHandlePos, style = Stroke(width = 3.dp.toPx()))
+        drawCircle(color = Color.hsl(hue, saturation, lightness), radius = 6.dp.toPx(), center = squareHandlePos)
     }
 }

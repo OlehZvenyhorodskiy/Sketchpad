@@ -186,7 +186,11 @@ data class ChartElementEntity(
     val axisRangeY: Float = 10f,
     val gridStep: Float = 20f,
     val axisLabelsVisible: Boolean = true,
-    val title: String = "Графік"
+    val title: String = "Графік",
+    val xMin: Float = -10f,
+    val xMax: Float = 10f,
+    val yMin: Float = -10f,
+    val yMax: Float = 10f
 )
 
 @JsonClass(generateAdapter = true)

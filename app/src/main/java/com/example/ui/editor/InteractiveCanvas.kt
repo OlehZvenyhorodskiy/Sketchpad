@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -814,13 +815,16 @@ fun InteractiveCanvas(
             val selType = selectedElementType
             if (selId != null && selType != null && pageEntity != null) {
                 var elemRect: Rect? = null
+                var elemRotation = 0f
 
                 when (selType) {
                     "SHAPE" -> pageEntity.findShape(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRotation = it.rotation
                     }
                     "IMAGE" -> pageEntity.findImage(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRotation = it.rotation
                     }
                     "TEXT" -> pageEntity.findText(selId)?.let {
                         elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
@@ -835,22 +839,25 @@ fun InteractiveCanvas(
                     val top = r.top * currentScale + panOffset.y
                     val right = r.right * currentScale + panOffset.x
                     val bottom = r.bottom * currentScale + panOffset.y
+                    val centerOffset = Offset((left + right) / 2f, (top + bottom) / 2f)
 
-                    drawRect(
-                        color = Color(0xFF38BDF8),
-                        topLeft = Offset(left, top),
-                        size = androidx.compose.ui.geometry.Size(right - left, bottom - top),
-                        style = Stroke(
-                            width = 2.5f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                    rotate(degrees = elemRotation, pivot = centerOffset) {
+                        drawRect(
+                            color = Color(0xFF38BDF8),
+                            topLeft = Offset(left, top),
+                            size = androidx.compose.ui.geometry.Size(right - left, bottom - top),
+                            style = Stroke(
+                                width = 2.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            )
                         )
-                    )
 
-                    val handleRadius = 6.dp.toPx()
-                    drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, top))
-                    drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, top))
-                    drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, bottom))
-                    drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, bottom))
+                        val handleRadius = 6.dp.toPx()
+                        drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, top))
+                        drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, top))
+                        drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, bottom))
+                        drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, bottom))
+                    }
                 }
             }
         }
@@ -893,6 +900,13 @@ fun InteractiveCanvas(
                     modifier = Modifier
                         .fillMaxSize()
                         .offset { IntOffset(screenX, screenY) }
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    awaitFirstDown().consume()
+                                }
+                            }
+                        }
                 ) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -932,11 +946,9 @@ fun InteractiveCanvas(
                                     }
                                     onUpdateImageOpacity(selId, nextOpacity)
                                 }) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.Opacity, contentDescription = "Прозорість", tint = MaterialTheme.colorScheme.primary)
-                                        Text("${(currentImgOpacity * 100).roundToInt()}%", fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, modifier = Modifier.padding(start = 2.dp))
-                                    }
+                                    Icon(imageVector = Icons.Default.Opacity, contentDescription = "Прозорість", tint = MaterialTheme.colorScheme.primary)
                                 }
+                                Text("${(currentImgOpacity * 100).roundToInt()}%", fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             }
 
                             // Rotate button

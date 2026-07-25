@@ -97,6 +97,14 @@ class CanvasEditorViewModel(
     private val _showLayersPanel = MutableStateFlow(false)
     val showLayersPanel: StateFlow<Boolean> = _showLayersPanel.asStateFlow()
 
+    // Multi-select state for lasso
+    private val _selectedElementIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedElementIds: StateFlow<Set<String>> = _selectedElementIds.asStateFlow()
+
+    // AI dirty-cache: tracks canvas modifications
+    private val _canvasVersion = MutableStateFlow(0)
+    val canvasVersion: StateFlow<Int> = _canvasVersion.asStateFlow()
+
     // ═══════════════════════════════════════════════════════
     // Academic Features State Flows (10 Cheat Codes)
     // ═══════════════════════════════════════════════════════
@@ -449,6 +457,7 @@ class CanvasEditorViewModel(
     }
 
     private fun updateCurrentPage(page: PageEntity) {
+        _canvasVersion.value++
         viewModelScope.launch {
             repository.updatePage(page)
         }
@@ -475,15 +484,26 @@ class CanvasEditorViewModel(
         }
     }
 
-    fun insertShape(shapeType: ShapeType, targetX: Float = 160f, targetY: Float = 160f) {
+    fun insertShape(
+        shapeType: ShapeType,
+        targetX: Float = 160f,
+        targetY: Float = 160f,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 90f else targetX
+        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 90f else targetY
         val newShape = ShapeEntity(
             shapeType = shapeType,
-            x = targetX,
-            y = targetY,
+            x = finalX,
+            y = finalY,
             width = 180f,
             height = 180f,
             fillColor = _currentColor.value.copy(alpha = 0.2f).toArgbInt(),
@@ -493,35 +513,64 @@ class CanvasEditorViewModel(
             if (layer.id == targetLayerId) layer.copy(shapes = layer.shapes + newShape)
             else layer
         }
+        _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
-    fun insertText(text: String, targetX: Float = 160f, targetY: Float = 160f) {
+    fun insertText(
+        text: String,
+        targetX: Float = 160f,
+        targetY: Float = 160f,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 120f else targetX
+        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 50f else targetY
         val newText = TextBlockEntity(
             text = text,
-            x = targetX,
-            y = targetY,
+            x = finalX,
+            y = finalY,
             color = _currentColor.value.toArgbInt()
         )
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) layer.copy(textBlocks = layer.textBlocks + newText)
             else layer
         }
+        _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
-    fun insertMathFunctionChart(formula: String = "sin(x)", xMin: Float = -10f, xMax: Float = 10f, targetX: Float = 160f, targetY: Float = 160f) {
+    fun insertMathFunctionChart(
+        formula: String = "sin(x)",
+        xMin: Float = -10f,
+        xMax: Float = 10f,
+        targetX: Float = 160f,
+        targetY: Float = 160f,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ) {
+        val actualTargetX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 190f else targetX
+        val actualTargetY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 130f else targetY
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
 
+        @Suppress("UNUSED_VARIABLE")
         val graphW = 380f
         val graphH = 260f
+        val useTargetX = actualTargetX
+        val useTargetY = actualTargetY
 
         val sampleCount = 160
         val step = (xMax - xMin) / sampleCount
@@ -551,8 +600,8 @@ class CanvasEditorViewModel(
             val normX = (xVal - xMin) / (xMax - xMin)
             val normY = 1.0 - ((yVal - minY) / (maxY - minY).coerceAtLeast(0.001))
 
-            val canvasX = targetX + normX.toFloat() * graphW
-            val canvasY = targetY + normY.toFloat() * graphH
+            val canvasX = useTargetX + normX.toFloat() * graphW
+            val canvasY = useTargetY + normY.toFloat() * graphH
             points.add(StrokePoint(canvasX, canvasY))
         }
 
@@ -565,15 +614,15 @@ class CanvasEditorViewModel(
 
         val textLabel = TextBlockEntity(
             text = "f(x) = $formula [$xMin .. $xMax]",
-            x = targetX,
-            y = targetY - 28f,
+            x = useTargetX,
+            y = useTargetY - 28f,
             fontSize = 15f,
             color = _currentColor.value.toArgbInt()
         )
 
         val gridChart = ChartElementEntity(
-            x = targetX,
-            y = targetY,
+            x = useTargetX,
+            y = useTargetY,
             width = graphW,
             height = graphH
         )
@@ -588,6 +637,7 @@ class CanvasEditorViewModel(
             } else layer
         }
 
+        _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
@@ -595,14 +645,24 @@ class CanvasEditorViewModel(
         return com.example.academic.MathExpressionEvaluator.eval(formula, x)
     }
 
-    fun insertChart(targetX: Float = 160f, targetY: Float = 160f) {
+    fun insertChart(
+        targetX: Float = 160f,
+        targetY: Float = 160f,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val finalX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - 190f else targetX
+        val finalY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - 130f else targetY
         val newChart = ChartElementEntity(
-            x = targetX,
-            y = targetY,
+            x = finalX,
+            y = finalY,
             width = 380f,
             height = 260f
         )
@@ -610,10 +670,20 @@ class CanvasEditorViewModel(
             if (layer.id == targetLayerId) layer.copy(charts = layer.charts + newChart)
             else layer
         }
+        _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
-    fun insertImage(uri: android.net.Uri, targetX: Float = 160f, targetY: Float = 160f) {
+    fun insertImage(
+        uri: android.net.Uri,
+        targetX: Float = 160f,
+        targetY: Float = 160f,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ) {
         val page = currentPage ?: return
         viewModelScope.launch {
             val imagePath = repository.saveImportedImage(uri)
@@ -657,11 +727,13 @@ class CanvasEditorViewModel(
             pushUndoState(migrated)
             val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
 
+            val finalImgX = if (viewportWidth > 0f) (-panOffsetX + viewportWidth / 2f) / scale - w / 2f else targetX
+            val finalImgY = if (viewportHeight > 0f) (-panOffsetY + viewportHeight / 2f) / scale - h / 2f else targetY
             val newImg = ImageElementEntity(
                 id = UUID.randomUUID().toString(),
                 sourceUri = imagePath,
-                x = targetX,
-                y = targetY,
+                x = finalImgX,
+                y = finalImgY,
                 width = w,
                 height = h,
                 rotation = initialRotation,
@@ -673,6 +745,7 @@ class CanvasEditorViewModel(
                 else layer
             }
 
+            _canvasVersion.value++
             updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
         }
     }
@@ -748,6 +821,33 @@ class CanvasEditorViewModel(
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(charts = layer.charts.map {
                 if (it.id == chartId) it.copy(width = width.coerceAtLeast(100f), height = height.coerceAtLeast(100f)) else it
+            })
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    enum class Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
+    fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchor: Corner = Corner.BOTTOM_RIGHT) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(charts = layer.charts.map { chart ->
+                if (chart.id == chartId) {
+                    val clampedW = newWidth.coerceAtLeast(100f)
+                    val clampedH = newHeight.coerceAtLeast(100f)
+                    val dw = clampedW - chart.width
+                    val dh = clampedH - chart.height
+                    val newX = when (anchor) {
+                        Corner.TOP_LEFT, Corner.BOTTOM_LEFT -> chart.x - dw
+                        else -> chart.x
+                    }
+                    val newY = when (anchor) {
+                        Corner.TOP_LEFT, Corner.TOP_RIGHT -> chart.y - dh
+                        else -> chart.y
+                    }
+                    chart.copy(x = newX, y = newY, width = clampedW, height = clampedH)
+                } else chart
             })
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
@@ -881,7 +981,7 @@ class CanvasEditorViewModel(
         }
     }
 
-    // Export PDF/SVG
+    // Export PDF/SVG/PNG
     fun exportPdf(onSuccess: (File) -> Unit) {
         val page = currentPage ?: return
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -902,6 +1002,40 @@ class CanvasEditorViewModel(
                 onSuccess(file)
             }
         }
+    }
+
+    fun exportPng(onSuccess: (File) -> Unit, scale: Float = 3.0f, cropRect: android.graphics.RectF? = null) {
+        val page = currentPage ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.png")
+            ExportManager.exportToPng(page, file, scale, cropRect)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onSuccess(file)
+            }
+        }
+    }
+
+    fun updateSelectedElementIds(ids: Set<String>) {
+        _selectedElementIds.value = ids
+    }
+
+    fun deleteSelectedElements() {
+        val page = currentPage ?: return
+        val ids = _selectedElementIds.value
+        if (ids.isEmpty()) return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(
+                shapes = layer.shapes.filterNot { it.id in ids },
+                images = layer.images.filterNot { it.id in ids },
+                textBlocks = layer.textBlocks.filterNot { it.id in ids },
+                charts = layer.charts.filterNot { it.id in ids }
+            )
+        }
+        _selectedElementIds.value = emptySet()
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun saveCanvasThumbnail(bitmap: android.graphics.Bitmap) {

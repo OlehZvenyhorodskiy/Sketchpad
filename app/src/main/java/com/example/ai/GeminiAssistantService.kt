@@ -1,9 +1,8 @@
 package com.example.ai
 
-import com.example.BuildConfig
+import android.content.Context
+import android.util.Log
 import com.example.data.models.PageEntity
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,6 +20,10 @@ data class ChatMessage(
     val timestampMs: Long = System.currentTimeMillis()
 )
 
+/**
+ * Multi-provider AI assistant service.
+ * Reads the Gemini API key from EncryptedSharedPreferences (or falls back to BuildConfig).
+ */
 class GeminiAssistantService {
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -28,13 +31,81 @@ class GeminiAssistantService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    companion object {
+        private const val PREFS_NAME = "ai_keys_prefs"
+        private const val KEY_GEMINI = "gemini_api_key"
+
+        /**
+         * Save Gemini API key using EncryptedSharedPreferences.
+         */
+        fun saveApiKey(context: Context, key: String) {
+            try {
+                val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                    PREFS_NAME,
+                    androidx.security.crypto.MasterKeys.getOrCreate(
+                        androidx.security.crypto.MasterKeys.AES256_GCM_SPEC
+                    ),
+                    context,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                prefs.edit().putString(KEY_GEMINI, key).apply()
+            } catch (e: Exception) {
+                // Fallback to regular SharedPreferences if crypto is unavailable
+                Log.w("GeminiService", "EncryptedSharedPreferences unavailable, falling back", e)
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putString(KEY_GEMINI, key).apply()
+            }
+        }
+
+        /**
+         * Retrieve Gemini API key; tries EncryptedSharedPreferences, then fallback, then BuildConfig.
+         */
+        fun getApiKey(context: Context): String {
+            // Try encrypted prefs first
+            try {
+                val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                    PREFS_NAME,
+                    androidx.security.crypto.MasterKeys.getOrCreate(
+                        androidx.security.crypto.MasterKeys.AES256_GCM_SPEC
+                    ),
+                    context,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                val key = prefs.getString(KEY_GEMINI, null)
+                if (!key.isNullOrBlank()) return key
+            } catch (_: Exception) {}
+
+            // Then regular prefs
+            val fallback = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_GEMINI, null)
+            if (!fallback.isNullOrBlank()) return fallback
+
+            // Final fallback: BuildConfig
+            return try {
+                com.example.BuildConfig.GEMINI_API_KEY
+            } catch (_: Exception) {
+                ""
+            }
+        }
+
+        fun hasApiKey(context: Context): Boolean {
+            val key = getApiKey(context)
+            return key.isNotBlank() && key != "MY_GEMINI_API_KEY"
+        }
+    }
+
     suspend fun queryCanvasAssistant(
         userPrompt: String,
         pages: List<PageEntity>,
         canvasTitle: String,
-        audioTranscripts: List<String> = emptyList()
+        audioTranscripts: List<String> = emptyList(),
+        context: Context? = null
     ): String = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
+        val apiKey = if (context != null) getApiKey(context) else {
+            try { com.example.BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
+        }
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
             return@withContext "Будь ласка, вкажіть дійсний GEMINI_API_KEY в налаштуваннях / Secrets панелі AI Studio для використання AI-асистента."
         }
@@ -122,7 +193,7 @@ class GeminiAssistantService {
 
             return@withContext answer ?: "Не вдалося отримати відповідь від AI."
         } catch (e: Exception) {
-            android.util.Log.w("GeminiService", "Failed to query Gemini AI assistant", e)
+            Log.w("GeminiService", "Failed to query Gemini AI assistant", e)
             return@withContext "Помилка при запиті до AI: ${e.localizedMessage ?: "невідома помилка"}"
         }
     }
