@@ -45,6 +45,7 @@ class CanvasEditorViewModel(
     private val context: Context
 ) : ViewModel() {
 
+    private val userPrefs = com.example.data.repository.UserPreferencesRepository(context)
     private val audioRecorderManager = AudioRecorderManager(context)
     private val geminiService = GeminiAssistantService()
 
@@ -62,7 +63,7 @@ class CanvasEditorViewModel(
     private val _currentTool = MutableStateFlow(ToolType.PEN)
     val currentTool: StateFlow<ToolType> = _currentTool.asStateFlow()
 
-    private val _eraserMode = MutableStateFlow(EraserMode.OBJECT)
+    private val _eraserMode = MutableStateFlow(userPrefs.getEraserModeSync())
     val eraserMode: StateFlow<EraserMode> = _eraserMode.asStateFlow()
 
     private val _strokeWidth = MutableStateFlow(4f)
@@ -254,6 +255,7 @@ class CanvasEditorViewModel(
 
     fun setEraserMode(mode: EraserMode) {
         _eraserMode.value = mode
+        userPrefs.setEraserModeSync(mode)
     }
 
     fun setStrokeWidth(w: Float) {
@@ -1050,29 +1052,102 @@ class CanvasEditorViewModel(
         _isAiWindowVisible.value = false
     }
 
+    val selectedProviderId: StateFlow<String> = userPrefs.selectedProvider.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = userPrefs.getSelectedProviderIdSync()
+    )
+
+    fun getSelectedProviderIdSync(): String = userPrefs.getSelectedProviderIdSync()
+    fun getApiKeyForProvider(providerId: String): String = userPrefs.getApiKeyForProvider(providerId)
+    fun saveApiKeyForProvider(providerId: String, key: String) = userPrefs.saveApiKeyForProvider(providerId, key)
+    fun getCustomEndpoint(providerId: String): String = userPrefs.getCustomEndpoint(providerId)
+    fun saveCustomEndpoint(providerId: String, endpoint: String) = userPrefs.saveCustomEndpoint(providerId, endpoint)
+    fun getCustomModel(providerId: String): String = userPrefs.getCustomModel(providerId)
+    fun saveCustomModel(providerId: String, model: String) = userPrefs.saveCustomModel(providerId, model)
+    fun hasExplicitProviderChoice(): Boolean = userPrefs.hasExplicitProviderChoice()
+    fun setHasExplicitProviderChoice(hasChoice: Boolean) = userPrefs.setHasExplicitProviderChoice(hasChoice)
+
+    fun selectAiProvider(providerId: String, apiKey: String, endpoint: String? = null, model: String? = null) {
+        viewModelScope.launch {
+            userPrefs.setSelectedProvider(providerId)
+            if (apiKey.isNotBlank()) userPrefs.saveApiKeyForProvider(providerId, apiKey)
+            if (endpoint != null) userPrefs.saveCustomEndpoint(providerId, endpoint)
+            if (model != null) userPrefs.saveCustomModel(providerId, model)
+            userPrefs.setHasExplicitProviderChoice(true)
+        }
+    }
+
     fun getStoredApiKey(): String {
-        return GeminiAssistantService.getApiKey(context)
+        return getApiKeyForProvider(getSelectedProviderIdSync())
     }
 
     fun saveApiKey(key: String) {
-        GeminiAssistantService.saveApiKey(context, key)
+        saveApiKeyForProvider(getSelectedProviderIdSync(), key)
     }
 
     private var lastScreenshotVersion = -1
     private var cachedBase64Image: String? = null
 
-    // AI Chat query
+    private fun buildCanvasContextPrompt(userPrompt: String, pages: List<PageEntity>, canvasTitle: String): String {
+        val contextBuilder = StringBuilder()
+        contextBuilder.append("Контекст поточного конспекту/канви: \"$canvasTitle\"\n\n")
+
+        pages.forEachIndexed { index, page ->
+            contextBuilder.append("--- Сторінка ${index + 1} ---\n")
+            val layers = page.getEffectiveLayers()
+            val textBlocks = layers.flatMap { it.textBlocks }
+            val shapes = layers.flatMap { it.shapes }
+            val charts = layers.flatMap { it.charts }
+            val strokes = layers.flatMap { it.strokes }
+
+            if (textBlocks.isNotEmpty()) {
+                contextBuilder.append("Текстові блоки:\n")
+                textBlocks.forEach { tb ->
+                    contextBuilder.append("- ${tb.text}\n")
+                }
+            }
+            if (shapes.isNotEmpty()) {
+                contextBuilder.append("Фігури на сторінці: ${shapes.joinToString { it.shapeType.name }}\n")
+            }
+            if (charts.isNotEmpty()) {
+                contextBuilder.append("Графіки: ${charts.joinToString { it.title }}\n")
+            }
+            if (strokes.isNotEmpty()) {
+                contextBuilder.append("Рукописних штрихів/ліній на сторінці: ${strokes.size}\n")
+            }
+        }
+
+        val systemInstruction = "Ти — інтелектуальний помічник конспекту. Твоє завдання — допомагати користувачеві вивчати матеріали, відповідати на запитання, пояснювати формули та робити короткі підсумки ЛИШЕ на основі наданого контексту конспекту. Відповідай українською мовою, чітко, структуровано та приязно."
+
+        return "$systemInstruction\n\n$contextBuilder\n\nЗапитання користувача: $userPrompt"
+    }
+
+    // AI Chat query with multi-provider routing
     fun sendAiPrompt(prompt: String) {
         val userMsg = ChatMessage(text = prompt, isUser = true)
         _chatMessages.value = _chatMessages.value + userMsg
         _isAiLoading.value = true
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val providerId = userPrefs.getSelectedProviderIdSync()
+            val provider = com.example.ai.AiProviderRegistry.getProvider(providerId)
+            val apiKey = getApiKeyForProvider(providerId)
+            val endpoint = getCustomEndpoint(providerId)
+            val model = getCustomModel(providerId)
+
+            if (apiKey.isBlank()) {
+                _isAiLoading.value = false
+                val aiMsg = ChatMessage(text = "Будь ласка, вкажіть API-ключ для провайдера ${provider.displayName}.", isUser = false)
+                _chatMessages.value = _chatMessages.value + aiMsg
+                return@launch
+            }
+
             val title = _canvas.value?.title ?: "Конспект"
             val currentVer = _canvasVersion.value
             val page = currentPage
 
-            val base64Image = if (page != null) {
+            val base64Image = if (provider.supportsVision && page != null) {
                 if (currentVer != lastScreenshotVersion || cachedBase64Image == null) {
                     try {
                         val canvasBgInt = _canvas.value?.backgroundColor ?: 0xFF121212.toInt()
@@ -1094,13 +1169,16 @@ class CanvasEditorViewModel(
                 }
             } else null
 
-            val response = geminiService.queryCanvasAssistant(
-                userPrompt = prompt,
-                pages = _pages.value,
-                canvasTitle = title,
-                context = context,
-                pageBase64Image = base64Image
+            val fullPrompt = buildCanvasContextPrompt(prompt, _pages.value, title)
+
+            val response = provider.query(
+                text = fullPrompt,
+                imageBase64 = base64Image,
+                apiKey = apiKey,
+                endpoint = endpoint,
+                model = model
             )
+
             _isAiLoading.value = false
             val aiMsg = ChatMessage(text = response, isUser = false)
             _chatMessages.value = _chatMessages.value + aiMsg

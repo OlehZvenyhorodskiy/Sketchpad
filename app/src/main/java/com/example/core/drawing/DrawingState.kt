@@ -40,6 +40,19 @@ data class RulerState(
         return Pair(Pair(topStart, topEnd), Pair(bottomStart, bottomEnd))
     }
 
+    fun nearestEdge(point: Offset, guideZone: Float): Pair<Offset, Pair<Offset, Offset>>? {
+        if (!isVisible) return null
+        val (top, bottom) = getEdgeLines()
+        val pTop = projectPointToSegment(point, top.first, top.second)
+        val pBot = projectPointToSegment(point, bottom.first, bottom.second)
+        val dTop = (point - pTop).getDistance()
+        val dBot = (point - pBot).getDistance()
+        val best = if (dTop <= dBot) pTop to top else pBot to bottom
+        return if (minOf(dTop, dBot) <= guideZone) (best.first to best.second) else null
+    }
+
+    fun projectOn(edge: Pair<Offset, Offset>, point: Offset): Offset = projectPointToSegment(point, edge.first, edge.second)
+
     fun snapPointIfClose(point: Offset, thresholdDp: Float = 16f): Offset? {
         if (!isVisible) return null
         val (top, bottom) = getEdgeLines()
@@ -53,7 +66,7 @@ data class RulerState(
         return null
     }
 
-    private fun projectPointToSegment(p: Offset, a: Offset, b: Offset): Offset {
+    fun projectPointToSegment(p: Offset, a: Offset, b: Offset): Offset {
         val ab = b - a
         val abSq = ab.x * ab.x + ab.y * ab.y
         if (abSq == 0f) return a

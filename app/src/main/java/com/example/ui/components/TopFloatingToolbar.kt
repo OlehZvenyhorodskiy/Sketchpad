@@ -82,6 +82,19 @@ fun TopFloatingToolbar(
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
+                                .clip(CircleShape)
+                                .background(currentColor.copy(alpha = strokeOpacity).toColor())
+                        )
+                    }
                     Slider(
                         value = strokeWidth,
                         onValueChange = onStrokeWidthChange,
@@ -141,8 +154,9 @@ fun TopFloatingToolbar(
                     isSelected = currentTool == ToolType.SELECTOR,
                     onClick = { onToolSelect(ToolType.SELECTOR) }
                 )
+                val eraserIcon = if (eraserMode == EraserMode.PIXEL) Icons.Default.Circle else Icons.Default.CropSquare
                 ToolIconButton(
-                    icon = Icons.Default.Radio,
+                    icon = eraserIcon,
                     label = if (eraserMode == EraserMode.OBJECT) "Стерка (Об'єкт)" else "Стерка (Піксель)",
                     isSelected = currentTool == ToolType.ERASER,
                     onClick = {

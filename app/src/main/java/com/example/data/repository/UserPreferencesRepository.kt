@@ -105,6 +105,73 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    fun getEraserModeSync(): com.example.data.models.EraserMode {
+        return try {
+            val prefs = context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            val name = prefs.getString("eraser_mode", com.example.data.models.EraserMode.PIXEL.name)
+            com.example.data.models.EraserMode.valueOf(name ?: com.example.data.models.EraserMode.PIXEL.name)
+        } catch (_: Exception) {
+            com.example.data.models.EraserMode.PIXEL
+        }
+    }
+
+    fun setEraserModeSync(mode: com.example.data.models.EraserMode) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putString("eraser_mode", mode.name).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun hasExplicitProviderChoice(): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            prefs.getBoolean("has_explicit_provider_choice", false)
+        } catch (_: Exception) { false }
+    }
+
+    fun setHasExplicitProviderChoice(hasChoice: Boolean) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putBoolean("has_explicit_provider_choice", hasChoice).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun saveApiKeyForProvider(providerId: String, key: String) {
+        com.example.ai.GeminiAssistantService.saveApiKeyForProvider(context, providerId, key)
+    }
+
+    fun getApiKeyForProvider(providerId: String): String {
+        return com.example.ai.GeminiAssistantService.getApiKeyForProvider(context, providerId)
+    }
+
+    fun getCustomEndpoint(providerId: String): String {
+        return try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .getString("custom_endpoint_${providerId.lowercase()}", "") ?: ""
+        } catch (_: Exception) { "" }
+    }
+
+    fun saveCustomEndpoint(providerId: String, endpoint: String) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putString("custom_endpoint_${providerId.lowercase()}", endpoint).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getCustomModel(providerId: String): String {
+        return try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .getString("custom_model_${providerId.lowercase()}", "") ?: ""
+        } catch (_: Exception) { "" }
+    }
+
+    fun saveCustomModel(providerId: String, model: String) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putString("custom_model_${providerId.lowercase()}", model).apply()
+        } catch (_: Exception) {}
+    }
+
     suspend fun saveStrokeSettings(width: Float, opacity: Float, tool: String? = null) {
         context.dataStore.edit { prefs ->
             prefs[KEY_PEN_WIDTH] = width

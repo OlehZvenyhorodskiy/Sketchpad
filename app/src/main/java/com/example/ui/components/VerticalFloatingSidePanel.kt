@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,12 +75,14 @@ fun VerticalFloatingSidePanel(
 
             if (panelType == PanelType.WIDTH) {
                 Box(
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(value.dp.coerceIn(2.dp, 24.dp))
+                            .size(value.dp.coerceIn(3.dp, 36.dp))
                             .clip(CircleShape)
                             .background(currentColor.copy(alpha = opacity).toColor())
                     )

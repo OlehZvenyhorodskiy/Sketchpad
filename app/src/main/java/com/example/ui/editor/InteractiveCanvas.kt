@@ -121,6 +121,16 @@ fun InteractiveCanvas(
     var isResizingCorner by remember { mutableStateOf(false) }
     var resizingCorner by remember { mutableStateOf<String?>(null) }
 
+    var rulerGuideEdge by remember { mutableStateOf<Pair<Offset, Offset>?>(null) }
+    var cursorPos by remember { mutableStateOf<Offset?>(null) }
+    var previewPulse by remember { mutableStateOf(false) }
+
+    LaunchedEffect(strokeWidth, strokeOpacity, currentColor) {
+        previewPulse = true
+        kotlinx.coroutines.delay(600)
+        previewPulse = false
+    }
+
     // Preload image bitmaps off the UI thread via ViewModel LruCache
     val imageUris = remember(pageEntity) {
         pageEntity?.getEffectiveLayers()?.flatMap { it.images }?.map { it.sourceUri }?.distinct() ?: emptyList()
@@ -217,18 +227,31 @@ fun InteractiveCanvas(
                 val y = (motionEvent.y - panOffset.y) / safeScale
                 var rawPoint = Offset(x, y)
 
-                if (currentTool != ToolType.SELECTOR) {
-                    rulerState.snapPointIfClose(rawPoint)?.let { snapped ->
-                        rawPoint = snapped
-                    }
-                }
-
                 val pressure = if (motionEvent.pressure > 0f) motionEvent.pressure else 0.5f
                 val tilt = motionEvent.getAxisValue(MotionEvent.AXIS_TILT)
 
                 when (motionEvent.action) {
                     MotionEvent.ACTION_DOWN -> {
                         activeStrokePoints.clear()
+                        if (currentTool != ToolType.SELECTOR && currentTool != ToolType.ERASER) {
+                            if (rulerState.isVisible) {
+                                val g = rulerState.nearestEdge(rawPoint, guideZone = (40f / safeScale + rulerState.width / 2f))
+                                if (g != null) {
+                                    rulerGuideEdge = g.second
+                                    rawPoint = g.first
+                                } else {
+                                    rulerGuideEdge = null
+                                    rulerState.snapPointIfClose(rawPoint)?.let { snapped -> rawPoint = snapped }
+                                }
+                            } else {
+                                rulerGuideEdge = null
+                            }
+                            cursorPos = rawPoint
+                        } else {
+                            rulerGuideEdge = null
+                            if (currentTool == ToolType.ERASER) cursorPos = rawPoint
+                        }
+
                         if (currentTool == ToolType.SELECTOR) {
                             dragStartOffset = rawPoint
                             isResizingCorner = false
@@ -436,10 +459,17 @@ fun InteractiveCanvas(
                                 }
                             }
                             ToolType.ERASER -> {
+                                cursorPos = rawPoint
                                 eraserTouchPos = rawPoint
                                 onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
                             }
                             else -> {
+                                rulerGuideEdge?.let { edge ->
+                                    rawPoint = rulerState.projectOn(edge, rawPoint)
+                                } ?: run {
+                                    rulerState.snapPointIfClose(rawPoint)?.let { snapped -> rawPoint = snapped }
+                                }
+                                cursorPos = rawPoint
                                 activeStrokePoints.add(
                                     StrokePoint(
                                         x = rawPoint.x,
@@ -465,6 +495,8 @@ fun InteractiveCanvas(
                         activeStrokePoints.clear()
                         eraserTouchPos = null
                         resizingCorner = null
+                        rulerGuideEdge = null
+                        cursorPos = null
                     }
                 }
                 true
@@ -970,6 +1002,40 @@ fun InteractiveCanvas(
                         drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, bottom))
                         drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, bottom))
                     }
+                }
+            }
+
+            // 6. Brush Cursor & Slider Change Preview Circle Overlay
+            cursorPos?.let { cp ->
+                val screen = Offset(cp.x * currentScale + panOffset.x, cp.y * currentScale + panOffset.y)
+                when (currentTool) {
+                    ToolType.ERASER -> drawCircle(
+                        color = Color.White.copy(alpha = 0.8f),
+                        radius = (strokeWidth * 2.5f / 2f) * currentScale,
+                        center = screen,
+                        style = Stroke(2f)
+                    )
+                    ToolType.SELECTOR -> {}
+                    else -> drawCircle(
+                        color = currentColor.copy(alpha = strokeOpacity).toColor(),
+                        radius = (strokeWidth / 2f) * currentScale,
+                        center = screen
+                    )
+                }
+            } ?: run {
+                if (previewPulse && currentTool != ToolType.SELECTOR) {
+                    val viewportCenter = Offset(canvasWidth / 2f, canvasHeight / 2f)
+                    drawCircle(
+                        color = currentColor.copy(alpha = (strokeOpacity * 0.6f).coerceAtLeast(0.3f)).toColor(),
+                        radius = (strokeWidth / 2f) * currentScale,
+                        center = viewportCenter
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.8f),
+                        radius = (strokeWidth / 2f) * currentScale,
+                        center = viewportCenter,
+                        style = Stroke(1.5f)
+                    )
                 }
             }
         }

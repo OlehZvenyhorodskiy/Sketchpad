@@ -58,6 +58,8 @@ fun AiChatContent(
     onSendMessage: (String) -> Unit,
     onSaveApiKey: ((String) -> Unit)? = null,
     initialApiKey: String = "",
+    selectedProviderDisplayName: String = "Google Gemini",
+    onChangeProvider: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -103,11 +105,29 @@ fun AiChatContent(
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "AI-асистент конспекту",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "AI-асистент",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (onChangeProvider != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            onClick = onChangeProvider,
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                text = selectedProviderDisplayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = "Відповідає по вмісту вашої поточної канви",
                     style = MaterialTheme.typography.bodySmall,
@@ -282,7 +302,9 @@ fun GeminiChatBottomSheet(
     onSendMessage: (String) -> Unit,
     onDismiss: () -> Unit,
     onSaveApiKey: ((String) -> Unit)? = null,
-    initialApiKey: String = ""
+    initialApiKey: String = "",
+    selectedProviderDisplayName: String = "Google Gemini",
+    onChangeProvider: (() -> Unit)? = null
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -294,6 +316,8 @@ fun GeminiChatBottomSheet(
             onSendMessage = onSendMessage,
             onSaveApiKey = onSaveApiKey,
             initialApiKey = initialApiKey,
+            selectedProviderDisplayName = selectedProviderDisplayName,
+            onChangeProvider = onChangeProvider,
             modifier = Modifier.fillMaxHeight(0.75f)
         )
     }

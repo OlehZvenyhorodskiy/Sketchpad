@@ -25,6 +25,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -50,25 +56,48 @@ fun RulerOverlayComponent(
 ) {
     if (!rulerState.isVisible) return
 
-    val angleDeg = (rulerState.angleRad * 180f / Math.PI).toFloat()
+    val rulerStateRef = rememberUpdatedState(rulerState)
+    val onRulerChangeRef = rememberUpdatedState(onRulerChange)
+
+    var isCenterDragging by remember { mutableStateOf(false) }
+    var localCenter by remember { mutableStateOf(rulerState.center) }
+    LaunchedEffect(rulerState.center) {
+        if (!isCenterDragging) localCenter = rulerState.center
+    }
+
+    var isRightDragging by remember { mutableStateOf(false) }
+    var localAngleRad by remember { mutableStateOf(rulerState.angleRad) }
+    var localLength by remember { mutableStateOf(rulerState.length) }
+    LaunchedEffect(rulerState.angleRad, rulerState.length) {
+        if (!isRightDragging) {
+            localAngleRad = rulerState.angleRad
+            localLength = rulerState.length
+        }
+    }
+
+    val displayCenter = if (isCenterDragging) localCenter else rulerState.center
+    val displayAngleRad = if (isRightDragging) localAngleRad else rulerState.angleRad
+    val displayLength = if (isRightDragging) localLength else rulerState.length
+
+    val angleDeg = (displayAngleRad * 180f / Math.PI).toFloat()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            translate(left = rulerState.center.x, top = rulerState.center.y) {
+            translate(left = displayCenter.x, top = displayCenter.y) {
                 rotate(degrees = angleDeg, pivot = Offset.Zero) {
-                    val halfW = rulerState.length / 2f
+                    val halfW = displayLength / 2f
                     val halfH = rulerState.width / 2f
 
                     // Semi-transparent ruler body
                     drawRect(
                         color = Color(0xD90F172A),
                         topLeft = Offset(-halfW, -halfH),
-                        size = androidx.compose.ui.geometry.Size(rulerState.length, rulerState.width)
+                        size = androidx.compose.ui.geometry.Size(displayLength, rulerState.width)
                     )
                     drawRect(
                         color = Color(0xFF38BDF8),
                         topLeft = Offset(-halfW, -halfH),
-                        size = androidx.compose.ui.geometry.Size(rulerState.length, rulerState.width),
+                        size = androidx.compose.ui.geometry.Size(displayLength, rulerState.width),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
                     )
 
@@ -111,16 +140,30 @@ fun RulerOverlayComponent(
             modifier = Modifier
                 .offset {
                     IntOffset(
-                        (rulerState.center.x - 24.dp.toPx()).roundToInt(),
-                        (rulerState.center.y - 24.dp.toPx()).roundToInt()
+                        (displayCenter.x - 24.dp.toPx()).roundToInt(),
+                        (displayCenter.y - 24.dp.toPx()).roundToInt()
                     )
                 }
                 .size(48.dp)
-                .pointerInput(rulerState) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        onRulerChange(rulerState.copy(center = rulerState.center + dragAmount))
-                    }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            isCenterDragging = true
+                            localCenter = rulerStateRef.value.center
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            localCenter += dragAmount
+                        },
+                        onDragEnd = {
+                            isCenterDragging = false
+                            onRulerChangeRef.value(rulerStateRef.value.copy(center = localCenter))
+                        },
+                        onDragCancel = {
+                            isCenterDragging = false
+                            onRulerChangeRef.value(rulerStateRef.value.copy(center = localCenter))
+                        }
+                    )
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -134,9 +177,9 @@ fun RulerOverlayComponent(
         }
 
         // Right Handle: Rotate & Scale Length
-        val dx = cos(rulerState.angleRad) * (rulerState.length / 2f)
-        val dy = sin(rulerState.angleRad) * (rulerState.length / 2f)
-        val handleRightPos = Offset(rulerState.center.x + dx, rulerState.center.y + dy)
+        val dx = cos(displayAngleRad) * (displayLength / 2f)
+        val dy = sin(displayAngleRad) * (displayLength / 2f)
+        val handleRightPos = Offset(displayCenter.x + dx, displayCenter.y + dy)
 
         Surface(
             shape = CircleShape,
@@ -150,29 +193,44 @@ fun RulerOverlayComponent(
                     )
                 }
                 .size(40.dp)
-                .pointerInput(rulerState) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        val halfHandlePx = 20.dp.toPx()
-                        val touchPos = Offset(
-                            handleRightPos.x - halfHandlePx + change.position.x,
-                            handleRightPos.y - halfHandlePx + change.position.y
-                        )
-                        val vec = touchPos - rulerState.center
-                        val newDist = vec.getDistance().coerceIn(200f, 1400f)
-                        var newAngle = atan2(vec.y, vec.x)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            isRightDragging = true
+                            localAngleRad = rulerStateRef.value.angleRad
+                            localLength = rulerStateRef.value.length
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val halfHandlePx = 20.dp.toPx()
+                            val touchPos = Offset(
+                                handleRightPos.x - halfHandlePx + change.position.x,
+                                handleRightPos.y - halfHandlePx + change.position.y
+                            )
+                            val vec = touchPos - displayCenter
+                            val newDist = vec.getDistance().coerceIn(200f, 1400f)
+                            var newAngle = atan2(vec.y, vec.x)
 
-                        val currentDeg = (newAngle * 180f / Math.PI).toFloat()
-                        val snapAnglesDeg = floatArrayOf(-180f, -135f, -90f, -45f, 0f, 45f, 90f, 135f, 180f)
-                        for (snapDeg in snapAnglesDeg) {
-                            if (kotlin.math.abs(currentDeg - snapDeg) <= 6f) {
-                                newAngle = (snapDeg * Math.PI / 180f).toFloat()
-                                break
+                            val currentDeg = (newAngle * 180f / Math.PI).toFloat()
+                            val snapAnglesDeg = floatArrayOf(-180f, -135f, -90f, -45f, 0f, 45f, 90f, 135f, 180f)
+                            for (snapDeg in snapAnglesDeg) {
+                                if (kotlin.math.abs(currentDeg - snapDeg) <= 6f) {
+                                    newAngle = (snapDeg * Math.PI / 180f).toFloat()
+                                    break
+                                }
                             }
+                            localAngleRad = newAngle
+                            localLength = newDist * 2f
+                        },
+                        onDragEnd = {
+                            isRightDragging = false
+                            onRulerChangeRef.value(rulerStateRef.value.copy(angleRad = localAngleRad, length = localLength))
+                        },
+                        onDragCancel = {
+                            isRightDragging = false
+                            onRulerChangeRef.value(rulerStateRef.value.copy(angleRad = localAngleRad, length = localLength))
                         }
-
-                        onRulerChange(rulerState.copy(angleRad = newAngle, length = newDist * 2f))
-                    }
+                    )
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -194,8 +252,8 @@ fun RulerOverlayComponent(
             modifier = Modifier
                 .offset {
                     IntOffset(
-                        (rulerState.center.x - 130.dp.toPx()).roundToInt(),
-                        (rulerState.center.y - 80.dp.toPx()).roundToInt()
+                        (displayCenter.x - 130.dp.toPx()).roundToInt(),
+                        (displayCenter.y - 80.dp.toPx()).roundToInt()
                     )
                 }
         ) {

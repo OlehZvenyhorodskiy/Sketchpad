@@ -152,6 +152,11 @@ fun CanvasEditorScreen(
     var showInsertSheet by remember { mutableStateOf(false) }
     var showPageStripSheet by remember { mutableStateOf(false) }
     var showGeminiSheet by remember { mutableStateOf(false) }
+    var showProviderPicker by remember { mutableStateOf(false) }
+    val selectedProviderId by viewModel.selectedProviderId.collectAsState()
+    val providerDisplayName = remember(selectedProviderId) {
+        com.example.ai.AiProviderRegistry.getProvider(selectedProviderId).displayName
+    }
     var showExportDialog by remember { mutableStateOf(false) }
     var showAudioSheet by remember { mutableStateOf(false) }
     var showAudioPill by remember { mutableStateOf(false) }
@@ -318,7 +323,15 @@ fun CanvasEditorScreen(
         floatingActionButton = {
             // AI Assistant FAB
             FloatingActionButton(
-                onClick = { showGeminiSheet = true },
+                onClick = {
+                    val id = viewModel.getSelectedProviderIdSync()
+                    val hasKey = viewModel.getApiKeyForProvider(id).isNotBlank()
+                    if (id.isBlank() || (id == "GEMINI" && !viewModel.hasExplicitProviderChoice()) || !hasKey) {
+                        showProviderPicker = true
+                    } else {
+                        showGeminiSheet = true
+                    }
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
@@ -674,7 +687,12 @@ fun CanvasEditorScreen(
             onSendMessage = { viewModel.sendAiPrompt(it) },
             onDismiss = { showGeminiSheet = false },
             onSaveApiKey = { key -> viewModel.saveApiKey(key) },
-            initialApiKey = viewModel.getStoredApiKey()
+            initialApiKey = viewModel.getStoredApiKey(),
+            selectedProviderDisplayName = providerDisplayName,
+            onChangeProvider = {
+                showGeminiSheet = false
+                showProviderPicker = true
+            }
         )
     }
 
@@ -685,7 +703,24 @@ fun CanvasEditorScreen(
             onSendMessage = { viewModel.sendAiPrompt(it) },
             onClose = { viewModel.hideAiWindow() },
             onSaveApiKey = { key -> viewModel.saveApiKey(key) },
-            initialApiKey = viewModel.getStoredApiKey()
+            initialApiKey = viewModel.getStoredApiKey(),
+            selectedProviderDisplayName = providerDisplayName,
+            onChangeProvider = { showProviderPicker = true }
+        )
+    }
+
+    if (showProviderPicker) {
+        com.example.ui.components.AiProviderPickerSheet(
+            onPick = { providerId, apiKey, endpoint, model ->
+                viewModel.selectAiProvider(providerId, apiKey, endpoint, model)
+                showProviderPicker = false
+                showGeminiSheet = true
+            },
+            onDismiss = { showProviderPicker = false },
+            currentProviderId = selectedProviderId,
+            getKeyForProvider = { viewModel.getApiKeyForProvider(it) },
+            getEndpointForProvider = { viewModel.getCustomEndpoint(it) },
+            getModelForProvider = { viewModel.getCustomModel(it) }
         )
     }
 

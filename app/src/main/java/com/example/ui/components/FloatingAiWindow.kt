@@ -58,6 +58,8 @@ fun FloatingAiWindow(
     onClose: () -> Unit,
     onSaveApiKey: ((String) -> Unit)? = null,
     initialApiKey: String = "",
+    selectedProviderDisplayName: String = "Google Gemini",
+    onChangeProvider: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(true) }
@@ -157,6 +159,8 @@ fun FloatingAiWindow(
                             onSendMessage = onSendMessage,
                             onSaveApiKey = onSaveApiKey,
                             initialApiKey = initialApiKey,
+                            selectedProviderDisplayName = selectedProviderDisplayName,
+                            onChangeProvider = onChangeProvider,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

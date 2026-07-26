@@ -35,6 +35,55 @@ class GeminiAssistantService {
         private const val PREFS_NAME = "ai_keys_prefs"
         private const val KEY_GEMINI = "gemini_api_key"
 
+        fun saveApiKeyForProvider(context: Context, providerId: String, key: String) {
+            val keyName = "api_key_${providerId.lowercase()}"
+            try {
+                val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                    PREFS_NAME,
+                    androidx.security.crypto.MasterKeys.getOrCreate(
+                        androidx.security.crypto.MasterKeys.AES256_GCM_SPEC
+                    ),
+                    context,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                prefs.edit().putString(keyName, key).apply()
+            } catch (e: Throwable) {
+                Log.w("GeminiService", "EncryptedSharedPreferences unavailable, falling back", e)
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putString(keyName, key).apply()
+            }
+            if (providerId.equals("GEMINI", ignoreCase = true)) {
+                saveApiKey(context, key)
+            }
+        }
+
+        fun getApiKeyForProvider(context: Context, providerId: String): String {
+            val keyName = "api_key_${providerId.lowercase()}"
+            try {
+                val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                    PREFS_NAME,
+                    androidx.security.crypto.MasterKeys.getOrCreate(
+                        androidx.security.crypto.MasterKeys.AES256_GCM_SPEC
+                    ),
+                    context,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                val key = prefs.getString(keyName, null)
+                if (!key.isNullOrBlank()) return key
+            } catch (_: Throwable) {}
+
+            val fallback = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(keyName, null)
+            if (!fallback.isNullOrBlank()) return fallback
+
+            if (providerId.equals("GEMINI", ignoreCase = true)) {
+                return getApiKey(context)
+            }
+            return ""
+        }
+
         /**
          * Save Gemini API key using EncryptedSharedPreferences.
          */
