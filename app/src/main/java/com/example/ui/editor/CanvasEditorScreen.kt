@@ -152,7 +152,6 @@ fun CanvasEditorScreen(
     var showInsertSheet by remember { mutableStateOf(false) }
     var showPageStripSheet by remember { mutableStateOf(false) }
     var showGeminiSheet by remember { mutableStateOf(false) }
-    var showMiniSliders by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showAudioSheet by remember { mutableStateOf(false) }
     var showAudioPill by remember { mutableStateOf(false) }
@@ -391,7 +390,7 @@ fun CanvasEditorScreen(
                 currentColor = currentColor,
                 rulerVisible = rulerState.isVisible,
                 isSlidersVertical = isSlidersVertical,
-                onToolSelect = { viewModel.selectTool(it) },
+                onToolSelect = { viewModel.selectTool(it, viewportWidthPx, viewportHeightPx) },
                 onEraserModeToggle = {
                     val nextMode = if (eraserMode == EraserMode.OBJECT) EraserMode.PIXEL else EraserMode.OBJECT
                     viewModel.setEraserMode(nextMode)
@@ -556,32 +555,7 @@ fun CanvasEditorScreen(
 
             // Right side panel removed per user request for clean canvas space
 
-            // 5. Mini Sliders Overlay (Optional top overlay)
-            val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
-            AnimatedVisibility(
-                visible = showMiniSliders,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = if (isPortrait) {
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 12.dp)
-                        .fillMaxHeight(0.55f)
-                } else {
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 70.dp)
-                }
-            ) {
-                MiniSlidersOverlay(
-                    width = strokeWidth,
-                    opacity = strokeOpacity,
-                    currentColor = currentColor,
-                    onWidthChange = { viewModel.setStrokeWidth(it) },
-                    onOpacityChange = { viewModel.setStrokeOpacity(it) },
-                    vertical = isPortrait
-                )
-            }
+
 
             // 5. Bottom 'Додати' Floating Button
             ExtendedFloatingActionButton(
@@ -871,7 +845,7 @@ fun CanvasEditorScreen(
                     Button(
                         onClick = {
                             showExportDialog = false
-                            viewModel.exportImage { file ->
+                            viewModel.exportPng { file ->
                                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                     type = "image/png"
@@ -884,6 +858,24 @@ fun CanvasEditorScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Експортувати в PNG (Фото)")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            viewModel.exportImage { file ->
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/svg+xml"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися SVG"))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Експортувати в SVG (Вектор)")
                     }
                 }
             },

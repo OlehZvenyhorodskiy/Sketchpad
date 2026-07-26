@@ -15,11 +15,17 @@ object ExportManager {
     /**
      * Експорт сторінки у SVG (векторний формат).
      */
-    fun exportToSvg(page: PageEntity, outputFile: File, pageWidth: Float = 1920f, pageHeight: Float = 1080f) {
+    fun exportToSvg(
+        page: PageEntity,
+        outputFile: File,
+        pageWidth: Float = 1920f,
+        pageHeight: Float = 1080f,
+        backgroundColor: Int = android.graphics.Color.WHITE
+    ) {
         val sb = StringBuilder()
         sb.appendLine("""<?xml version="1.0" encoding="UTF-8"?>""")
         sb.appendLine("""<svg xmlns="http://www.w3.org/2000/svg" width="$pageWidth" height="$pageHeight" viewBox="0 0 $pageWidth $pageHeight">""")
-        sb.appendLine("""  <rect width="100%" height="100%" fill="white"/>""")
+        sb.appendLine("""  <rect width="$pageWidth" height="$pageHeight" fill="${colorToHex(backgroundColor)}"/>""")
 
         page.visibleLayersBottomUp().forEach { layer ->
             sb.appendLine("""  <g opacity="${layer.opacity}" ${if (!layer.isVisible) """visibility="hidden"""" else ""}>""")
@@ -68,14 +74,28 @@ object ExportManager {
     /**
      * Експорт однієї сторінки у PDF (векторний).
      */
-    fun exportToPdf(page: PageEntity, outputFile: File, context: Context, pageWidth: Int = 1920, pageHeight: Int = 1080) {
-        exportPagesToPdf(listOf(page), outputFile, context, pageWidth, pageHeight)
+    fun exportToPdf(
+        page: PageEntity,
+        outputFile: File,
+        context: Context,
+        pageWidth: Int = 1920,
+        pageHeight: Int = 1080,
+        backgroundColor: Int = android.graphics.Color.WHITE
+    ) {
+        exportPagesToPdf(listOf(page), outputFile, context, pageWidth, pageHeight, backgroundColor)
     }
 
     /**
      * Посторінковий експорт списку сторінок у PDF із захистом від OOM (BUG-012).
      */
-    fun exportPagesToPdf(pages: List<PageEntity>, outputFile: File, context: Context, pageWidth: Int = 1920, pageHeight: Int = 1080) {
+    fun exportPagesToPdf(
+        pages: List<PageEntity>,
+        outputFile: File,
+        context: Context,
+        pageWidth: Int = 1920,
+        pageHeight: Int = 1080,
+        backgroundColor: Int = android.graphics.Color.WHITE
+    ) {
         val pdfDocument = PdfDocument()
 
         pages.forEachIndexed { index, page ->
@@ -83,7 +103,7 @@ object ExportManager {
             val pdfPage = pdfDocument.startPage(pageInfo)
             val canvas = pdfPage.canvas
 
-            canvas.drawColor(android.graphics.Color.WHITE)
+            canvas.drawColor(backgroundColor)
 
             val paint = Paint().apply {
                 isAntiAlias = true
@@ -151,7 +171,8 @@ object ExportManager {
         requestedScale: Float = 3.0f,
         cropRect: android.graphics.RectF? = null,
         pageWidth: Int = 1920,
-        pageHeight: Int = 1080
+        pageHeight: Int = 1080,
+        backgroundColor: Int = android.graphics.Color.WHITE
     ) {
         val maxDimensionPx = 4096f
         val rawW = pageWidth * requestedScale
@@ -171,7 +192,7 @@ object ExportManager {
 
         try {
             val canvas = Canvas(bitmap)
-            canvas.drawColor(android.graphics.Color.WHITE)
+            canvas.drawColor(backgroundColor)
             canvas.scale(safeScale, safeScale)
 
             val paint = Paint().apply {

@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,7 +32,7 @@ fun VerticalFloatingSidePanel(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.fillMaxHeight(0.65f),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
         shadowElevation = 8.dp,
@@ -41,6 +40,7 @@ fun VerticalFloatingSidePanel(
     ) {
         Column(
             modifier = Modifier
+                .fillMaxHeight()
                 .padding(horizontal = 10.dp, vertical = 14.dp)
                 .width(56.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -86,22 +86,25 @@ fun VerticalFloatingSidePanel(
                 }
             }
 
-            // Вертикальний слайдер через graphicsLayer rotation
-            Box(
+            // Вертикальний слайдер з розтягуванням track на всю висоту BoxWithConstraints
+            BoxWithConstraints(
                 modifier = Modifier
-                    .height(180.dp)
-                    .width(36.dp),
+                    .weight(1f)
+                    .width(48.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val trackLength = maxHeight
                 Slider(
                     value = value,
                     onValueChange = onValueChange,
                     valueRange = valueRange,
                     modifier = Modifier
-                        .width(180.dp)
+                        .requiredWidth(trackLength)
+                        .requiredHeight(48.dp)
                         .graphicsLayer { rotationZ = -90f }
                 )
             }
         }
     }
 }
+

@@ -160,7 +160,17 @@ fun RulerOverlayComponent(
                         )
                         val vec = touchPos - rulerState.center
                         val newDist = vec.getDistance().coerceIn(200f, 1400f)
-                        val newAngle = atan2(vec.y, vec.x)
+                        var newAngle = atan2(vec.y, vec.x)
+
+                        val currentDeg = (newAngle * 180f / Math.PI).toFloat()
+                        val snapAnglesDeg = floatArrayOf(-180f, -135f, -90f, -45f, 0f, 45f, 90f, 135f, 180f)
+                        for (snapDeg in snapAnglesDeg) {
+                            if (kotlin.math.abs(currentDeg - snapDeg) <= 6f) {
+                                newAngle = (snapDeg * Math.PI / 180f).toFloat()
+                                break
+                            }
+                        }
+
                         onRulerChange(rulerState.copy(angleRad = newAngle, length = newDist * 2f))
                     }
                 }

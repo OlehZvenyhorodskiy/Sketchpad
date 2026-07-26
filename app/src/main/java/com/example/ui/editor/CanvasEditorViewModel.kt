@@ -199,10 +199,27 @@ class CanvasEditorViewModel(
             initialValue = emptyList()
         )
 
+    private var userPickedColor = false
+
+    private fun luminance(colorInt: Int): Float {
+        val r = ((colorInt shr 16) and 0xFF) / 255f
+        val g = ((colorInt shr 8) and 0xFF) / 255f
+        val b = (colorInt and 0xFF) / 255f
+        return 0.2126f * r + 0.7152f * g + 0.0722f * b
+    }
+
+    private fun ensureContrastingDefaultColor(bgInt: Int?) {
+        if (userPickedColor) return
+        val bg = bgInt ?: return
+        val lum = luminance(bg)
+        _currentColor.value = if (lum < 0.5f) HslaColor.WHITE else HslaColor.BLACK
+    }
+
     init {
         viewModelScope.launch {
             repository.getCanvasById(canvasId).collect { c ->
                 _canvas.value = c
+                ensureContrastingDefaultColor(c?.backgroundColor)
             }
         }
         viewModelScope.launch {
@@ -218,9 +235,18 @@ class CanvasEditorViewModel(
     val currentPage: PageEntity?
         get() = _pages.value.getOrNull(_currentPageIndex.value)
 
-    fun selectTool(tool: ToolType) {
+    fun selectTool(tool: ToolType, viewportWidth: Float = 0f, viewportHeight: Float = 0f) {
         if (tool == ToolType.RULER) {
-            _rulerState.value = _rulerState.value.copy(isVisible = !_rulerState.value.isVisible)
+            val current = _rulerState.value
+            val willBeVisible = !current.isVisible
+            val newCenter = if (willBeVisible && (current.center == Offset.Zero || (viewportWidth > 0f && viewportHeight > 0f))) {
+                if (viewportWidth > 0f && viewportHeight > 0f) Offset(viewportWidth / 2f, viewportHeight / 2f)
+                else if (current.center == Offset.Zero) Offset(540f, 960f)
+                else current.center
+            } else {
+                current.center
+            }
+            _rulerState.value = current.copy(isVisible = willBeVisible, center = newCenter)
         } else {
             _currentTool.value = tool
         }
@@ -239,6 +265,7 @@ class CanvasEditorViewModel(
     }
 
     fun setColor(color: HslaColor) {
+        userPickedColor = true
         _currentColor.value = color
         val list = _recentColors.value.toMutableList()
         list.remove(color)
@@ -487,6 +514,7 @@ class CanvasEditorViewModel(
         viewModelScope.launch {
             repository.updateCanvas(c.copy(backgroundColor = colorInt))
         }
+        ensureContrastingDefaultColor(colorInt)
     }
 
     fun updateBackgroundPattern(pattern: BackgroundPattern) {
@@ -1082,9 +1110,10 @@ class CanvasEditorViewModel(
     // Export PDF/SVG/PNG
     fun exportPdf(onSuccess: (File) -> Unit) {
         val page = currentPage ?: return
+        val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.pdf")
-            ExportManager.exportToPdf(page, file, context)
+            ExportManager.exportToPdf(page, file, context, backgroundColor = bgInt)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onSuccess(file)
             }
@@ -1093,20 +1122,26 @@ class CanvasEditorViewModel(
 
     fun exportImage(onSuccess: (File) -> Unit) {
         val page = currentPage ?: return
+        val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.svg")
-            ExportManager.exportToSvg(page, file)
+            ExportManager.exportToSvg(page, file, backgroundColor = bgInt)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onSuccess(file)
             }
         }
     }
 
-    fun exportPng(onSuccess: (File) -> Unit, scale: Float = 3.0f, cropRect: android.graphics.RectF? = null) {
+    fun exportPng(onSuccess: (File) -> Unit) {
+        exportPng(scale = 3.0f, cropRect = null, onSuccess = onSuccess)
+    }
+
+    fun exportPng(scale: Float = 3.0f, cropRect: android.graphics.RectF? = null, onSuccess: (File) -> Unit) {
         val page = currentPage ?: return
+        val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.png")
-            ExportManager.exportToPng(page, file, scale, cropRect)
+            ExportManager.exportToPng(page, file, scale, cropRect, backgroundColor = bgInt)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onSuccess(file)
             }
