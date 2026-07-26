@@ -381,11 +381,12 @@ fun CanvasEditorScreen(
                 onDeleteElement = { id, type -> viewModel.deleteElement(id, type) },
                 onRotateElement = { id, type -> viewModel.rotateElement(id, type) },
                 onUpdateImageOpacity = { id, op -> viewModel.updateImageOpacity(id, op) },
-                onResizeElement = { id, type, w, h ->
+                onResizeElement = { id, type, w, h, anchor ->
                     when (type) {
                         "SHAPE" -> viewModel.updateShapeSize(id, w, h)
                         "IMAGE" -> viewModel.updateImageSize(id, w, h)
-                        "CHART" -> viewModel.updateChartSize(id, w, h)
+                        "CHART" -> viewModel.updateChartSize(id, w, h, anchor)
+                        "TEXT" -> viewModel.updateTextSize(id, w, h)
                     }
                 },
                 getCachedBitmap = { viewModel.getCachedBitmap(it) },

@@ -97,7 +97,7 @@ fun InteractiveCanvas(
     onDeleteElement: (String, String) -> Unit = { _, _ -> },
     onRotateElement: (String, String) -> Unit = { _, _ -> },
     onUpdateImageOpacity: (String, Float) -> Unit = { _, _ -> },
-    onResizeElement: (String, String, Float, Float) -> Unit = { _, _, _, _ -> },
+    onResizeElement: (String, String, Float, Float, String) -> Unit = { _, _, _, _, _ -> },
     getCachedBitmap: (String) -> android.graphics.Bitmap? = { null },
     onPreloadImage: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -446,7 +446,7 @@ fun InteractiveCanvas(
                                             }
                                         }
 
-                                        onResizeElement(id, type, newW, newH)
+                                        onResizeElement(id, type, newW, newH, resizingCorner ?: "BR")
                                         if (newX != origX || newY != origY) {
                                             when (type) {
                                                 "SHAPE" -> onMoveShape(id, newX, newY)
@@ -1089,7 +1089,7 @@ fun InteractiveCanvas(
                         )
                     } else {
                         drawCircle(
-                            color = currentColor.copy(alpha = (strokeOpacity * 0.6f).coerceAtLeast(0.3f)).toColor(),
+                            color = currentColor.copy(alpha = strokeOpacity).toColor(),
                             radius = (strokeWidth / 2f) * currentScale,
                             center = viewportCenter
                         )
@@ -1164,7 +1164,7 @@ fun InteractiveCanvas(
                             IconButton(onClick = {
                                 val newW = elemSize!!.x * 1.25f
                                 val newH = elemSize!!.y * 1.25f
-                                onResizeElement(selId, selType, newW, newH)
+                                onResizeElement(selId, selType, newW, newH, "BR")
                             }) {
                                 Icon(imageVector = Icons.Default.ZoomIn, contentDescription = "Збільшити", tint = MaterialTheme.colorScheme.primary)
                             }
@@ -1173,7 +1173,7 @@ fun InteractiveCanvas(
                             IconButton(onClick = {
                                 val newW = (elemSize!!.x * 0.8f).coerceAtLeast(60f)
                                 val newH = (elemSize!!.y * 0.8f).coerceAtLeast(60f)
-                                onResizeElement(selId, selType, newW, newH)
+                                onResizeElement(selId, selType, newW, newH, "BR")
                             }) {
                                 Icon(imageVector = Icons.Default.ZoomOut, contentDescription = "Зменшити", tint = MaterialTheme.colorScheme.primary)
                             }

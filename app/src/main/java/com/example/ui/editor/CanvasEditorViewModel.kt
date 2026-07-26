@@ -911,20 +911,24 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
-    fun updateChartSize(chartId: String, width: Float, height: Float) {
+    fun updateTextSize(textId: String, width: Float, height: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(charts = layer.charts.map {
-                if (it.id == chartId) it.copy(width = width.coerceAtLeast(100f), height = height.coerceAtLeast(100f)) else it
+            layer.copy(textBlocks = layer.textBlocks.map {
+                if (it.id == textId) it.copy(width = width.coerceAtLeast(60f), height = height.coerceAtLeast(30f)) else it
             })
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun updateChartSize(chartId: String, width: Float, height: Float, anchorStr: String = "BR") {
+        resizeChart(chartId, width, height, anchorStr)
+    }
+
     enum class Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
-    fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchor: Corner = Corner.BOTTOM_RIGHT) {
+    fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchorStr: String = "BR") {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         val updatedLayers = migrated.layers.map { layer ->
@@ -941,31 +945,17 @@ class CanvasEditorViewModel(
                     val newRangeX = clampedW / ppuX
                     val newRangeY = clampedH / ppuY
 
-                    val dw = clampedW - chart.width
-                    val dh = clampedH - chart.height
-
-                    val newX = when (anchor) {
-                        Corner.TOP_LEFT, Corner.BOTTOM_LEFT -> chart.x - dw
-                        else -> chart.x
-                    }
-                    val newY = when (anchor) {
-                        Corner.TOP_LEFT, Corner.TOP_RIGHT -> chart.y - dh
-                        else -> chart.y
-                    }
-
-                    val (newXMin, newXMax) = when (anchor) {
-                        Corner.TOP_LEFT, Corner.BOTTOM_LEFT -> Pair(chart.xMax - newRangeX, chart.xMax)
+                    val (newXMin, newXMax) = when (anchorStr) {
+                        "BL", "TL" -> Pair(chart.xMax - newRangeX, chart.xMax)
                         else -> Pair(chart.xMin, chart.xMin + newRangeX)
                     }
 
-                    val (newYMin, newYMax) = when (anchor) {
-                        Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT -> Pair(chart.yMax - newRangeY, chart.yMax)
+                    val (newYMin, newYMax) = when (anchorStr) {
+                        "BL", "BR" -> Pair(chart.yMax - newRangeY, chart.yMax)
                         else -> Pair(chart.yMin, chart.yMin + newRangeY)
                     }
 
                     chart.copy(
-                        x = newX,
-                        y = newY,
                         width = clampedW,
                         height = clampedH,
                         xMin = newXMin,
@@ -979,6 +969,16 @@ class CanvasEditorViewModel(
             })
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchor: Corner) {
+        val strAnchor = when (anchor) {
+            Corner.TOP_LEFT -> "TL"
+            Corner.TOP_RIGHT -> "TR"
+            Corner.BOTTOM_LEFT -> "BL"
+            Corner.BOTTOM_RIGHT -> "BR"
+        }
+        resizeChart(chartId, newWidth, newHeight, strAnchor)
     }
 
     fun updateShapePosition(shapeId: String, newX: Float, newY: Float) {
