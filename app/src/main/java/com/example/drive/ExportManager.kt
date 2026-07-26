@@ -39,6 +39,14 @@ object ExportManager {
                 sb.appendLine("""    <path d="$pathData" fill="none" stroke="$color" stroke-width="$width" stroke-opacity="$opacity" stroke-linecap="round" stroke-linejoin="round"/>""")
             }
 
+            // Eraser marks → SVG fallback using canvas background color
+            layer.eraserMarks.forEach { mark ->
+                val pathData = buildSvgPathData(mark.points)
+                val bgColorHex = colorToHex(backgroundColor)
+                val width = mark.width
+                sb.appendLine("""    <path d="$pathData" fill="none" stroke="$bgColorHex" stroke-width="$width" stroke-linecap="round" stroke-linejoin="round"/>""")
+            }
+
             // Shapes → <rect>, <ellipse>, <line>
             layer.shapes.forEach { shape ->
                 when (shape.shapeType) {
@@ -115,12 +123,30 @@ object ExportManager {
             page.visibleLayersBottomUp().forEach { layer ->
                 val layerAlpha = (layer.opacity * 255).toInt()
 
-                layer.strokes.forEach { stroke ->
-                    val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                    paint.strokeWidth = stroke.baseWidth
-                    paint.color = stroke.colorHsla.toAndroidColor()
-                    paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                    canvas.drawPath(path, paint)
+                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                    val saveCount = canvas.saveLayer(null, null)
+                    layer.strokes.forEach { stroke ->
+                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                        paint.strokeWidth = stroke.baseWidth
+                        paint.color = stroke.colorHsla.toAndroidColor()
+                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                        canvas.drawPath(path, paint)
+                    }
+                    if (layer.eraserMarks.isNotEmpty()) {
+                        val clearPaint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                        }
+                        layer.eraserMarks.forEach { mark ->
+                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
+                            clearPaint.strokeWidth = mark.width
+                            canvas.drawPath(path, clearPaint)
+                        }
+                    }
+                    canvas.restoreToCount(saveCount)
                 }
 
                 layer.shapes.forEach { shape ->
@@ -205,13 +231,31 @@ object ExportManager {
             page.visibleLayersBottomUp().forEach { layer ->
                 val layerAlpha = (layer.opacity * 255).toInt()
 
-                layer.strokes.forEach { stroke ->
-                    val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                    paint.strokeWidth = stroke.baseWidth
-                    paint.color = stroke.colorHsla.toAndroidColor()
-                    paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                    paint.style = Paint.Style.STROKE
-                    canvas.drawPath(path, paint)
+                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                    val saveCount = canvas.saveLayer(null, null)
+                    layer.strokes.forEach { stroke ->
+                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                        paint.strokeWidth = stroke.baseWidth
+                        paint.color = stroke.colorHsla.toAndroidColor()
+                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                        paint.style = Paint.Style.STROKE
+                        canvas.drawPath(path, paint)
+                    }
+                    if (layer.eraserMarks.isNotEmpty()) {
+                        val clearPaint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                        }
+                        layer.eraserMarks.forEach { mark ->
+                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
+                            clearPaint.strokeWidth = mark.width
+                            canvas.drawPath(path, clearPaint)
+                        }
+                    }
+                    canvas.restoreToCount(saveCount)
                 }
 
                 layer.shapes.forEach { shape ->
@@ -338,14 +382,32 @@ object ExportManager {
         page.visibleLayersBottomUp().forEach { layer ->
             val layerAlpha = (layer.opacity * 255).toInt()
 
-            layer.strokes.forEach { stroke ->
-                val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                paint.strokeWidth = stroke.baseWidth
-                paint.color = stroke.colorHsla.toAndroidColor()
-                paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                paint.style = Paint.Style.STROKE
-                canvas.drawPath(path, paint)
-            }
+                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                    val saveCount = canvas.saveLayer(null, null)
+                    layer.strokes.forEach { stroke ->
+                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
+                        paint.strokeWidth = stroke.baseWidth
+                        paint.color = stroke.colorHsla.toAndroidColor()
+                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                        paint.style = Paint.Style.STROKE
+                        canvas.drawPath(path, paint)
+                    }
+                    if (layer.eraserMarks.isNotEmpty()) {
+                        val clearPaint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                        }
+                        layer.eraserMarks.forEach { mark ->
+                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
+                            clearPaint.strokeWidth = mark.width
+                            canvas.drawPath(path, clearPaint)
+                        }
+                    }
+                    canvas.restoreToCount(saveCount)
+                }
 
             layer.shapes.forEach { shape ->
                 paint.strokeWidth = shape.strokeWidth

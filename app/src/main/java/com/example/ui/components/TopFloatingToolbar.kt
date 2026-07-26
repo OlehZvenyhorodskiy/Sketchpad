@@ -82,18 +82,27 @@ fun TopFloatingToolbar(
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
+                    val isEraser = currentTool == ToolType.ERASER
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
-                                .clip(CircleShape)
-                                .background(currentColor.copy(alpha = strokeOpacity).toColor())
-                        )
+                        if (isEraser) {
+                            Box(
+                                modifier = Modifier
+                                    .size((strokeWidth * 2.5f).dp.coerceIn(4.dp, 28.dp))
+                                    .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
+                                    .clip(CircleShape)
+                                    .background(currentColor.copy(alpha = strokeOpacity).toColor())
+                            )
+                        }
                     }
                     Slider(
                         value = strokeWidth,

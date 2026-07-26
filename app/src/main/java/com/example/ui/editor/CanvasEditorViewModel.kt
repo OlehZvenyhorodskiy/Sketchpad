@@ -423,16 +423,29 @@ class CanvasEditorViewModel(
                     }
                     layer.copy(strokes = updatedStrokes)
                 } else {
-                    val updatedStrokes = mutableListOf<StrokeEntity>()
-                    layer.strokes.forEach { stroke ->
-                        val erased = DrawingEngine.erasePixelMode(stroke, point, radius)
-                        updatedStrokes.addAll(erased)
-                    }
-                    layer.copy(strokes = updatedStrokes)
+                    val updatedEraserMarks = layer.eraserMarks + com.example.data.models.EraserMark(
+                        points = listOf(StrokePoint(point.x, point.y)),
+                        width = radius
+                    )
+                    layer.copy(eraserMarks = updatedEraserMarks)
                 }
             } else layer
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun addEraserMarkToCurrentPage(mark: com.example.data.models.EraserMark) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id ?: "default"
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) {
+                layer.copy(eraserMarks = layer.eraserMarks + mark)
+            } else layer
+        }
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     companion object {
@@ -705,6 +718,9 @@ class CanvasEditorViewModel(
     }
 
     fun insertChart(
+        showAxisLabels: Boolean = true,
+        xStep: Float = 1f,
+        yStep: Float = 1f,
         targetX: Float = 160f,
         targetY: Float = 160f,
         viewportWidth: Float = 0f,
@@ -724,11 +740,27 @@ class CanvasEditorViewModel(
         val elemH = 260f
         val finalX = (-panOffsetX + safeVpW / 2f) / safeScale - elemW / 2f
         val finalY = (-panOffsetY + safeVpH / 2f) / safeScale - elemH / 2f
+        val xMin = -10f
+        val xMax = 10f
+        val yMin = -10f
+        val yMax = 10f
+        val ppuX = (elemW / (xMax - xMin)).let { if (it.isNaN() || it <= 0f) 20f else it }
+        val ppuY = (elemH / (yMax - yMin)).let { if (it.isNaN() || it <= 0f) 20f else it }
         val newChart = ChartElementEntity(
             x = finalX,
             y = finalY,
             width = elemW,
-            height = elemH
+            height = elemH,
+            showAxisLabels = showAxisLabels,
+            axisLabelsVisible = showAxisLabels,
+            xMin = xMin,
+            xMax = xMax,
+            yMin = yMin,
+            yMax = yMax,
+            xStep = xStep,
+            yStep = yStep,
+            pixelsPerUnitX = ppuX,
+            pixelsPerUnitY = ppuY
         )
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) layer.copy(charts = layer.charts + newChart)
@@ -900,8 +932,18 @@ class CanvasEditorViewModel(
                 if (chart.id == chartId) {
                     val clampedW = newWidth.coerceAtLeast(100f)
                     val clampedH = newHeight.coerceAtLeast(100f)
+
+                    var ppuX = chart.pixelsPerUnitX
+                    var ppuY = chart.pixelsPerUnitY
+                    if (ppuX <= 0f) ppuX = (chart.width / (chart.xMax - chart.xMin).let { if (it <= 0f) 20f else it }).let { if (it <= 0f) 20f else it }
+                    if (ppuY <= 0f) ppuY = (chart.height / (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }).let { if (it <= 0f) 20f else it }
+
+                    val newRangeX = clampedW / ppuX
+                    val newRangeY = clampedH / ppuY
+
                     val dw = clampedW - chart.width
                     val dh = clampedH - chart.height
+
                     val newX = when (anchor) {
                         Corner.TOP_LEFT, Corner.BOTTOM_LEFT -> chart.x - dw
                         else -> chart.x
@@ -910,12 +952,17 @@ class CanvasEditorViewModel(
                         Corner.TOP_LEFT, Corner.TOP_RIGHT -> chart.y - dh
                         else -> chart.y
                     }
-                    val scaleW = clampedW / chart.width.coerceAtLeast(10f)
-                    val scaleH = clampedH / chart.height.coerceAtLeast(10f)
-                    val newXMin = chart.xMin * scaleW
-                    val newXMax = chart.xMax * scaleW
-                    val newYMin = chart.yMin * scaleH
-                    val newYMax = chart.yMax * scaleH
+
+                    val (newXMin, newXMax) = when (anchor) {
+                        Corner.TOP_LEFT, Corner.BOTTOM_LEFT -> Pair(chart.xMax - newRangeX, chart.xMax)
+                        else -> Pair(chart.xMin, chart.xMin + newRangeX)
+                    }
+
+                    val (newYMin, newYMax) = when (anchor) {
+                        Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT -> Pair(chart.yMax - newRangeY, chart.yMax)
+                        else -> Pair(chart.yMin, chart.yMin + newRangeY)
+                    }
+
                     chart.copy(
                         x = newX,
                         y = newY,
@@ -924,7 +971,9 @@ class CanvasEditorViewModel(
                         xMin = newXMin,
                         xMax = newXMax,
                         yMin = newYMin,
-                        yMax = newYMax
+                        yMax = newYMax,
+                        pixelsPerUnitX = ppuX,
+                        pixelsPerUnitY = ppuY
                     )
                 } else chart
             })

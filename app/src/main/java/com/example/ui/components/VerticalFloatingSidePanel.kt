@@ -30,6 +30,7 @@ fun VerticalFloatingSidePanel(
     currentColor: HslaColor,
     opacity: Float,
     onValueChange: (Float) -> Unit,
+    isEraser: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -80,12 +81,20 @@ fun VerticalFloatingSidePanel(
                         .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(value.dp.coerceIn(3.dp, 36.dp))
-                            .clip(CircleShape)
-                            .background(currentColor.copy(alpha = opacity).toColor())
-                    )
+                    if (isEraser) {
+                        Box(
+                            modifier = Modifier
+                                .size((value * 2.5f).dp.coerceIn(4.dp, 36.dp))
+                                .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(value.dp.coerceIn(3.dp, 36.dp))
+                                .clip(CircleShape)
+                                .background(currentColor.copy(alpha = opacity).toColor())
+                        )
+                    }
                 }
             }
 

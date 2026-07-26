@@ -176,6 +176,13 @@ data class ImageElementEntity(
 )
 
 @JsonClass(generateAdapter = true)
+data class EraserMark(
+    val id: String = UUID.randomUUID().toString(),
+    val points: List<StrokePoint>,
+    val width: Float
+)
+
+@JsonClass(generateAdapter = true)
 data class ChartElementEntity(
     val id: String = UUID.randomUUID().toString(),
     val x: Float,
@@ -186,6 +193,9 @@ data class ChartElementEntity(
     val axisRangeY: Float = 10f,
     val gridStep: Float = 20f,
     val axisLabelsVisible: Boolean = true,
+    val showAxisLabels: Boolean = true,
+    val pixelsPerUnitX: Float = 0f,
+    val pixelsPerUnitY: Float = 0f,
     val title: String = "Графік",
     val xMin: Float = -10f,
     val xMax: Float = 10f,
@@ -241,13 +251,14 @@ data class LayerEntity(
     val blendMode: BlendMode = BlendMode.NORMAL,
     val isLocked: Boolean = false,
     val strokes: List<StrokeEntity> = emptyList(),
+    val eraserMarks: List<EraserMark> = emptyList(),
     val shapes: List<ShapeEntity> = emptyList(),
     val textBlocks: List<TextBlockEntity> = emptyList(),
     val images: List<ImageElementEntity> = emptyList(),
     val charts: List<ChartElementEntity> = emptyList()
 ) {
     val totalElements: Int
-        get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size
+        get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size + eraserMarks.size
 }
 
 @Entity(tableName = "pages")

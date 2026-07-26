@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import com.example.ui.components.PanelType
 import com.example.ui.components.VerticalFloatingSidePanel
+import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -166,6 +167,10 @@ fun CanvasEditorScreen(
     var mathFormulaVal by remember { mutableStateOf("sin(x)") }
     var mathXMinVal by remember { mutableStateOf("-10") }
     var mathXMaxVal by remember { mutableStateOf("10") }
+    var showChartDialog by remember { mutableStateOf(false) }
+    var chartWithSteps by remember { mutableStateOf(false) }
+    var chartXStepVal by remember { mutableStateOf("1.0") }
+    var chartYStepVal by remember { mutableStateOf("5.0") }
 
     // Viewport dimensions for centering spawned elements
     var viewportWidthPx by remember { mutableStateOf(0f) }
@@ -366,6 +371,7 @@ fun CanvasEditorScreen(
                 onZoomChanged = { viewModel.setZoomScale(it) },
                 onPanOffsetChanged = { viewModel.updatePanOffset(it) },
                 onStrokeAdded = { stroke -> viewModel.addStrokeToCurrentPage(stroke) },
+                onEraserMarkAdded = { mark -> viewModel.addEraserMarkToCurrentPage(mark) },
                 onEraseAtPoint = { pt, radius -> viewModel.eraseAtPoint(pt, radius) },
                 onTwoFingerTap = { viewModel.undo() },
                 onMoveShape = { id, x, y -> viewModel.updateShapePosition(id, x, y) },
@@ -430,6 +436,7 @@ fun CanvasEditorScreen(
                     currentColor = currentColor,
                     opacity = strokeOpacity,
                     onValueChange = { viewModel.setStrokeWidth(it) },
+                    isEraser = currentTool == ToolType.ERASER,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
@@ -646,7 +653,7 @@ fun CanvasEditorScreen(
                     scale = zoomScale
                 )
             },
-            onInsertChartClick = { showMathFunctionDialog = true },
+            onInsertChartClick = { showChartDialog = true },
             onPasteContentClick = {
                 viewModel.insertText(
                     text = "Вставлено з буфера",
@@ -770,13 +777,7 @@ fun CanvasEditorScreen(
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                    viewModel.insertChart(
-                        viewportWidth = viewportWidthPx,
-                        viewportHeight = viewportHeightPx,
-                        panOffsetX = panOffset.x,
-                        panOffsetY = panOffset.y,
-                        scale = zoomScale
-                    )
+                        showChartDialog = true
                         showMathFunctionDialog = false
                     }) {
                         Text("Порожня сітка")
@@ -954,6 +955,83 @@ fun CanvasEditorScreen(
             onRenameClick = { recording, name -> viewModel.renameAudioRecording(recording, name) },
             onDeleteClick = { recording -> viewModel.deleteAudioRecording(recording) },
             onDismiss = { showAudioSheet = false }
+        )
+    }
+
+    if (showChartDialog) {
+        AlertDialog(
+            onDismissRequest = { showChartDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.ShowChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Вставити графік")
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Оберіть тип координатної сітки:", style = MaterialTheme.typography.bodyMedium)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { chartWithSteps = false }
+                    ) {
+                        RadioButton(selected = !chartWithSteps, onClick = { chartWithSteps = false })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Пустий графік (без цифр)")
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { chartWithSteps = true }
+                    ) {
+                        RadioButton(selected = chartWithSteps, onClick = { chartWithSteps = true })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Графік з кроками")
+                    }
+
+                    if (chartWithSteps) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = chartXStepVal,
+                                onValueChange = { chartXStepVal = it },
+                                label = { Text("Крок X") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = chartYStepVal,
+                                onValueChange = { chartYStepVal = it },
+                                label = { Text("Крок Y") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val xs = (if (chartWithSteps) chartXStepVal.toFloatOrNull() else 1f)?.takeIf { it > 0f } ?: 1f
+                    val ys = (if (chartWithSteps) chartYStepVal.toFloatOrNull() else 5f)?.takeIf { it > 0f } ?: 5f
+                    viewModel.insertChart(
+                        showAxisLabels = chartWithSteps,
+                        xStep = xs,
+                        yStep = ys,
+                        viewportWidth = viewportWidthPx,
+                        viewportHeight = viewportHeightPx,
+                        panOffsetX = panOffset.x,
+                        panOffsetY = panOffset.y,
+                        scale = zoomScale
+                    )
+                    showChartDialog = false
+                }) {
+                    Text("Створити")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChartDialog = false }) {
+                    Text("Скасувати")
+                }
+            }
         )
     }
 }
