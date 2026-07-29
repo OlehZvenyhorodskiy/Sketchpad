@@ -24,7 +24,12 @@ enum class BackgroundPattern {
     GRID_SQUARE,
     GRID_ISOMETRIC,
     PROTRACTOR,
-    MUSIC_STAFF
+    MUSIC_STAFF,
+    GRAPH_MM,
+    DOT_GRID,
+    CORNELL_NOTES,
+    KANBAN_TEMPLATE,
+    ISO_3D
 }
 
 enum class ToolType {
@@ -36,12 +41,18 @@ enum class ToolType {
     LASER,
     SELECTOR,
     ERASER,
-    RULER
+    RULER,
+    TEXT
 }
 
 enum class EraserMode {
     OBJECT,
     PIXEL
+}
+
+enum class SelectionMode {
+    SINGLE,
+    LASSO
 }
 
 enum class ShapeType {
@@ -50,7 +61,11 @@ enum class ShapeType {
     TRIANGLE,
     ARROW,
     STAR,
-    BOLD_ARROW
+    BOLD_ARROW,
+    HEXAGON,
+    PENTAGON,
+    CLOUD,
+    SPEECH_BUBBLE
 }
 
 @JsonClass(generateAdapter = true)

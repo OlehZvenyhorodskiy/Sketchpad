@@ -19,12 +19,19 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+enum class RulerMode {
+    RULER,
+    PROTRACTOR,
+    COMPASS
+}
+
 data class RulerState(
     val isVisible: Boolean = false,
     val center: Offset = Offset(400f, 400f),
     val angleRad: Float = 0f,
     val length: Float = 700f,
-    val width: Float = 90f
+    val width: Float = 90f,
+    val mode: RulerMode = RulerMode.RULER
 ) {
     fun getEdgeLines(): Pair<Pair<Offset, Offset>, Pair<Offset, Offset>> {
         val dx = cos(angleRad) * length / 2f
@@ -194,6 +201,45 @@ object DrawingEngine {
                     val y = cy + (r * sin(angle)).toFloat()
                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
+                path.close()
+            }
+            ShapeType.HEXAGON -> {
+                val cx = rect.center.x
+                val cy = rect.center.y
+                val rx = rect.width / 2f
+                val ry = rect.height / 2f
+                for (i in 0 until 6) {
+                    val angle = i * Math.PI / 3 - Math.PI / 6
+                    val x = cx + (rx * cos(angle)).toFloat()
+                    val y = cy + (ry * sin(angle)).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            ShapeType.PENTAGON -> {
+                val cx = rect.center.x
+                val cy = rect.center.y
+                val rx = rect.width / 2f
+                val ry = rect.height / 2f
+                for (i in 0 until 5) {
+                    val angle = i * 2 * Math.PI / 5 - Math.PI / 2
+                    val x = cx + (rx * cos(angle)).toFloat()
+                    val y = cy + (ry * sin(angle)).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            ShapeType.CLOUD -> {
+                path.addOval(Rect(rect.left, rect.top + rect.height * 0.2f, rect.left + rect.width * 0.6f, rect.bottom))
+                path.addOval(Rect(rect.left + rect.width * 0.25f, rect.top, rect.right - rect.width * 0.25f, rect.bottom - rect.height * 0.15f))
+                path.addOval(Rect(rect.right - rect.width * 0.6f, rect.top + rect.height * 0.2f, rect.right, rect.bottom))
+            }
+            ShapeType.SPEECH_BUBBLE -> {
+                val bubbleRect = Rect(rect.left, rect.top, rect.right, rect.bottom - rect.height * 0.25f)
+                path.addOval(bubbleRect)
+                path.moveTo(rect.left + rect.width * 0.3f, rect.bottom - rect.height * 0.3f)
+                path.lineTo(rect.left + rect.width * 0.15f, rect.bottom)
+                path.lineTo(rect.left + rect.width * 0.45f, rect.bottom - rect.height * 0.25f)
                 path.close()
             }
         }

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.models.HslaColor
+import com.example.ui.theme.ThemedPanel
 
 @Composable
 fun RightSideToolPanel(
@@ -98,9 +99,7 @@ fun RightSideToolPanel(
             enter = expandHorizontally(expandFrom = Alignment.End),
             exit = shrinkHorizontally(shrinkTowards = Alignment.End)
         ) {
-            Surface(
-                shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
+            ThemedPanel(
                 shadowElevation = 8.dp,
                 tonalElevation = 6.dp
             ) {

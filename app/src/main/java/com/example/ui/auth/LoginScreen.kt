@@ -163,6 +163,9 @@ fun LoginScreen(
         }
     }
 
+    var inputName by remember { mutableStateOf("") }
+    var inputEmail by remember { mutableStateOf("") }
+
     if (showGoogleAccountPicker) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showGoogleAccountPicker = false },
@@ -175,100 +178,59 @@ fun LoginScreen(
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text("Виберіть Google обліковий запис")
+                    Text("Вхід в обліковий запис")
                 }
             },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Оберіть запис для входу в MeCanvas:",
+                        text = "Введіть ваші дані для синхронізації та профілю:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Primary User Account option
-                    Surface(
-                        onClick = {
-                            showGoogleAccountPicker = false
-                            scope.launch {
-                                userPreferencesRepository.setLoggedIn(
-                                    loggedIn = true,
-                                    email = "olehzvenyhorodskiy@gmail.com",
-                                    name = "Олег Звенигородський"
-                                )
-                                Toast.makeText(context, "Вітаємо, Олег Звенигородський!", Toast.LENGTH_SHORT).show()
-                                onLoginSuccess()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
+                    androidx.compose.material3.OutlinedTextField(
+                        value = inputName,
+                        onValueChange = { inputName = it },
+                        label = { Text("Ім'я та Прізвище") },
+                        placeholder = { Text("Олександр Іваненко") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("ОЗ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Олег Звенигородський", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                Text("olehzvenyhorodskiy@gmail.com", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-                            }
-                        }
-                    }
+                    )
 
-                    // Secondary Student Account
-                    Surface(
-                        onClick = {
-                            showGoogleAccountPicker = false
-                            scope.launch {
-                                userPreferencesRepository.setLoggedIn(
-                                    loggedIn = true,
-                                    email = "student.mecanvas@gmail.com",
-                                    name = "Студент MeCanvas"
-                                )
-                                Toast.makeText(context, "Вхід виконано успішно!", Toast.LENGTH_SHORT).show()
-                                onLoginSuccess()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    androidx.compose.material3.OutlinedTextField(
+                        value = inputEmail,
+                        onValueChange = { inputEmail = it },
+                        label = { Text("Електронна пошта (Email)") },
+                        placeholder = { Text("example@gmail.com") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("SM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Студентський акаунт", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                Text("student.mecanvas@gmail.com", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    )
                 }
             },
-            confirmButton = {},
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val name = inputName.trim().ifEmpty { "Користувач" }
+                        val email = inputEmail.trim().ifEmpty { "user@mecanvas.app" }
+                        showGoogleAccountPicker = false
+                        scope.launch {
+                            userPreferencesRepository.setLoggedIn(
+                                loggedIn = true,
+                                email = email,
+                                name = name
+                            )
+                            Toast.makeText(context, "Вітаємо, $name!", Toast.LENGTH_SHORT).show()
+                            onLoginSuccess()
+                        }
+                    }
+                ) {
+                    Text("Увійти")
+                }
+            },
             dismissButton = {
                 TextButton(onClick = { showGoogleAccountPicker = false }) {
                     Text("Скасувати")

@@ -9,20 +9,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.*
-import com.example.data.models.StrokePoint
 
 @Composable
 fun LassoSelectionOverlay(
     isActive: Boolean,
-    onSelectionComplete: (List<StrokePoint>) -> Unit,
+    scale: Float,
+    panOffset: Offset,
+    onLassoComplete: (List<Offset>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (!isActive) return
 
-    var lassoPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
-    var isDrawing by remember { mutableStateOf(false) }
+    var screenPoints by remember { mutableStateOf(emptyList<Offset>()) }
 
     Canvas(
         modifier = modifier
@@ -30,34 +31,44 @@ fun LassoSelectionOverlay(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    isDrawing = true
-                    lassoPoints = listOf(down.position)
-
+                    screenPoints = listOf(down.position)
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.first()
                         if (change.pressed) {
-                            lassoPoints = lassoPoints + change.position
+                            screenPoints = screenPoints + change.position
                             change.consume()
                         }
                     } while (change.pressed)
 
-                    isDrawing = false
-                    if (lassoPoints.size > 3) {
-                        onSelectionComplete(lassoPoints.map { StrokePoint(it.x, it.y, 1f, 0f) })
+                    if (screenPoints.size > 3) {
+                        val worldPoints = screenPoints.map { sp ->
+                            Offset(
+                                (sp.x - panOffset.x) / scale,
+                                (sp.y - panOffset.y) / scale
+                            )
+                        }
+                        onLassoComplete(worldPoints)
                     }
-                    lassoPoints = emptyList()
+                    screenPoints = emptyList()
                 }
             }
     ) {
-        if (lassoPoints.size > 1) {
+        if (screenPoints.size > 1) {
             val path = Path().apply {
-                moveTo(lassoPoints[0].x, lassoPoints[0].y)
-                lassoPoints.forEach { lineTo(it.x, it.y) }
+                moveTo(screenPoints[0].x, screenPoints[0].y)
+                screenPoints.forEach { lineTo(it.x, it.y) }
                 close()
             }
-            drawPath(path, Color(0x332196F3))  // semi-transparent blue
-            drawPath(path, Color(0xFF2196F3), style = Stroke(2f))
+            drawPath(path, Color(0x2238BDF8))
+            drawPath(
+                path = path,
+                color = Color(0xFF38BDF8),
+                style = Stroke(
+                    width = 2.5f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 8f), 0f)
+                )
+            )
         }
     }
 }

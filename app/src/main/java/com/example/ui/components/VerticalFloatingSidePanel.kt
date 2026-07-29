@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.WidthNormal
 import androidx.compose.material3.*
+import com.example.ui.theme.ThemedPanel
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,10 +34,8 @@ fun VerticalFloatingSidePanel(
     isEraser: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    ThemedPanel(
         modifier = modifier.fillMaxHeight(0.65f),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
         shadowElevation = 8.dp,
         tonalElevation = 6.dp
     ) {

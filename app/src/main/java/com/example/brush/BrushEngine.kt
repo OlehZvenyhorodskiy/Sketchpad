@@ -1,14 +1,17 @@
 package com.example.brush
 
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import com.example.core.drawing.PathSmoothing
 import com.example.data.models.StrokePoint
+import java.io.File
 import kotlin.random.Random
 
 /**
- * Движок рендеринг пензля з підтримкою pressure, tilt, jitter, scatter.
+ * Brush rendering engine supporting pressure, tilt, jitter, scatter, and texture stamp.
  */
 object BrushEngine {
 
@@ -21,6 +24,32 @@ object BrushEngine {
     ) {
         if (points.size < 2) return
 
+        // 1. Texture Stamp Rendering (if texturePath exists and is valid)
+        if (!brush.texturePath.isNullOrBlank() && File(brush.texturePath).exists()) {
+            try {
+                val bitmap = BitmapFactory.decodeFile(brush.texturePath)
+                if (bitmap != null) {
+                    val stampPaint = Paint().apply {
+                        isAntiAlias = true
+                        isFilterBitmap = true
+                        alpha = (brush.opacity * 255).toInt()
+                    }
+                    val stampSize = brush.baseWidth * scale * 2.5f
+                    points.forEach { p ->
+                        val dstRect = RectF(
+                            p.x - stampSize / 2f,
+                            p.y - stampSize / 2f,
+                            p.x + stampSize / 2f,
+                            p.y + stampSize / 2f
+                        )
+                        canvas.drawBitmap(bitmap, null, dstRect, stampPaint)
+                    }
+                    return
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 2. Standard Path Rendering
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.STROKE
@@ -35,11 +64,11 @@ object BrushEngine {
             }
         }
 
-        // Згладжування
+        // Smoothing
         val smoothedPoints = PathSmoothing.adaptiveSimplify(points, epsilon = 1.5f / scale)
         val path = PathSmoothing.createCatmullRomPath(smoothedPoints, tension = brush.smoothing)
 
-        // Pressure-based width: використовуємо середній pressure
+        // Pressure-based width
         val avgPressure = points.map { it.pressure }.average().toFloat()
         val adjustedPressure = brush.pressureCurve.apply(avgPressure)
         val width = brush.baseWidth * scale *
@@ -62,7 +91,7 @@ object BrushEngine {
             canvas.drawPath(path, paint)
         }
 
-        // Scatter (для spray)
+        // Scatter (spray effect)
         if (brush.scatter > 0f) {
             val scatterPaint = Paint().apply {
                 isAntiAlias = true

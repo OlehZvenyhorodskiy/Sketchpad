@@ -98,6 +98,11 @@ fun InteractiveCanvas(
     onRotateElement: (String, String) -> Unit = { _, _ -> },
     onUpdateImageOpacity: (String, Float) -> Unit = { _, _ -> },
     onResizeElement: (String, String, Float, Float, String) -> Unit = { _, _, _, _, _ -> },
+    selectionMode: com.example.data.models.SelectionMode = com.example.data.models.SelectionMode.SINGLE,
+    selectedElementIds: Set<String> = emptySet(),
+    onLassoComplete: (List<Offset>) -> Unit = {},
+    onMoveSelectedGroup: (Float, Float) -> Unit = { _, _ -> },
+    onResizeAndMoveElement: (String, String, Float, Float, Float, Float, String) -> Unit = { _, _, _, _, _, _, _ -> },
     getCachedBitmap: (String) -> android.graphics.Bitmap? = { null },
     onPreloadImage: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -146,10 +151,8 @@ fun InteractiveCanvas(
         }
     }
 
-    // Default to dark background (#121212) if not specified or white
-    val bgColor = canvasEntity?.backgroundColor?.let {
-        if (it == 0xFFFFFFFF.toInt()) Color(0xFF121212) else Color(it)
-    } ?: Color(0xFF121212)
+    // Canvas background color (defaults to white if not specified)
+    val bgColor = canvasEntity?.backgroundColor?.let { Color(it) } ?: Color.White
 
     val pattern = canvasEntity?.backgroundPattern ?: BackgroundPattern.DOTTED
     val isDarkBackground = (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) < 0.5f
@@ -167,6 +170,10 @@ fun InteractiveCanvas(
                             val pan = event.calculatePan()
                             val centroid = event.calculateCentroid()
                             if (zoom != 1f || pan != Offset.Zero) {
+                                activeStrokePoints.clear()
+                                activeEraserPoints.clear()
+                                eraserTouchPos = null
+                                cursorPos = null
                                 val oldScale = currentScale
                                 val newScale = (oldScale * zoom).coerceIn(0.5f, 8.0f)
                                 val zoomFactor = newScale / oldScale
@@ -184,17 +191,10 @@ fun InteractiveCanvas(
             }
             .pointerInteropFilter { motionEvent ->
                 // ═══════════════════════════════════════════════════════
-                // 0a. Перевірка касання у верхній зоні тулбара (TopFloatingToolbar) — не знімаємо виділення
+                // 0a. Перевірка касання у верхній зоні тулбара (TopFloatingToolbar)
                 // ═══════════════════════════════════════════════════════
-                val topToolbarHeightPx = with(density) { 110.dp.toPx() }
-                if (motionEvent.y <= topToolbarHeightPx) {
-                    return@pointerInteropFilter false
-                }
-
-                // Захищаємо плаваючий тулбар виділення
-                // Він з'являється лише коли selectedElementId != null
-                val floatingToolbarBottomPx = topToolbarHeightPx + with(density) { 70.dp.toPx() }
-                if (selectedElementId != null && motionEvent.y <= floatingToolbarBottomPx) {
+                val topToolbarHeightPx = with(density) { 90.dp.toPx() }
+                if (motionEvent.y <= topToolbarHeightPx && selectedElementId == null) {
                     return@pointerInteropFilter false
                 }
 
@@ -210,7 +210,9 @@ fun InteractiveCanvas(
                 // ═══════════════════════════════════════════════════════
                 if (motionEvent.pointerCount > 1) {
                     activeStrokePoints.clear()
+                    activeEraserPoints.clear()
                     eraserTouchPos = null
+                    cursorPos = null
                     return@pointerInteropFilter false
                 }
 
@@ -669,6 +671,65 @@ fun InteractiveCanvas(
                         y += staffSpacing * 8
                     }
                 }
+                BackgroundPattern.GRAPH_MM -> {
+                    val mmSpacing = 8f * currentScale
+                    var x = panOffset.x % mmSpacing
+                    if (x < 0) x += mmSpacing
+                    var colIdx = 0
+                    while (x < canvasWidth) {
+                        val isMajor = (colIdx % 5 == 0)
+                        drawLine(gridColor, Offset(x, 0f), Offset(x, canvasHeight), strokeWidth = if (isMajor) 1.5f else 0.5f)
+                        x += mmSpacing
+                        colIdx++
+                    }
+                    var y = panOffset.y % mmSpacing
+                    if (y < 0) y += mmSpacing
+                    var rowIdx = 0
+                    while (y < canvasHeight) {
+                        val isMajor = (rowIdx % 5 == 0)
+                        drawLine(gridColor, Offset(0f, y), Offset(canvasWidth, y), strokeWidth = if (isMajor) 1.5f else 0.5f)
+                        y += mmSpacing
+                        rowIdx++
+                    }
+                }
+                BackgroundPattern.DOT_GRID -> {
+                    val spacing = 28f * currentScale
+                    var x = panOffset.x % spacing
+                    if (x < 0) x += spacing
+                    while (x < canvasWidth) {
+                        var y = panOffset.y % spacing
+                        if (y < 0) y += spacing
+                        while (y < canvasHeight) {
+                            drawCircle(color = gridColor, radius = 2f * currentScale.coerceAtLeast(0.8f), center = Offset(x, y))
+                            y += spacing
+                        }
+                        x += spacing
+                    }
+                }
+                BackgroundPattern.CORNELL_NOTES -> {
+                    val marginX = 140f * currentScale + panOffset.x
+                    val summaryY = canvasHeight - 160f * currentScale
+                    drawLine(gridColor.copy(alpha = 0.6f), Offset(marginX, 0f), Offset(marginX, summaryY), strokeWidth = 2.5f)
+                    drawLine(gridColor.copy(alpha = 0.6f), Offset(0f, summaryY), Offset(canvasWidth, summaryY), strokeWidth = 2.5f)
+                }
+                BackgroundPattern.KANBAN_TEMPLATE -> {
+                    val colW = canvasWidth / 3f
+                    drawLine(gridColor.copy(alpha = 0.5f), Offset(colW, 0f), Offset(colW, canvasHeight), strokeWidth = 2f)
+                    drawLine(gridColor.copy(alpha = 0.5f), Offset(colW * 2, 0f), Offset(colW * 2, canvasHeight), strokeWidth = 2f)
+                }
+                BackgroundPattern.ISO_3D -> {
+                    val isoSpacing = 65f * currentScale
+                    var startX = panOffset.x % (isoSpacing * 2) - canvasHeight
+                    while (startX < canvasWidth + canvasHeight) {
+                        drawLine(gridColor, Offset(startX, 0f), Offset(startX + canvasHeight * 0.577f, canvasHeight), strokeWidth = 0.8f)
+                        startX += isoSpacing
+                    }
+                    startX = panOffset.x % (isoSpacing * 2) - canvasHeight
+                    while (startX < canvasWidth + canvasHeight) {
+                        drawLine(gridColor, Offset(startX + canvasHeight * 0.577f, 0f), Offset(startX, canvasHeight), strokeWidth = 0.8f)
+                        startX += isoSpacing
+                    }
+                }
                 BackgroundPattern.BLANK, BackgroundPattern.NONE -> {}
             }
 
@@ -775,15 +836,15 @@ fun InteractiveCanvas(
 
                         // Grid lines (vertical) based on xStep
                         var currWorldX = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
-                        while (currWorldX <= chart.xMax) {
+                        while (currWorldX <= chart.xMax + 0.0001f) {
                             val relX = (currWorldX - chart.xMin) / xSpan
                             val lineScreenX = cx + relX * cw
-                            if (lineScreenX in cx..cx + cw) {
+                            if (lineScreenX in (cx - 1f)..(cx + cw + 1f)) {
                                 drawLine(
                                     color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
                                     start = Offset(lineScreenX, cy),
                                     end = Offset(lineScreenX, cy + ch),
-                                    strokeWidth = 0.8f
+                                    strokeWidth = (1f * currentScale).coerceAtLeast(1f)
                                 )
                             }
                             currWorldX += stepX
@@ -791,15 +852,15 @@ fun InteractiveCanvas(
 
                         // Grid lines (horizontal) based on yStep
                         var currWorldY = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
-                        while (currWorldY <= chart.yMax) {
+                        while (currWorldY <= chart.yMax + 0.0001f) {
                             val relY = 1f - (currWorldY - chart.yMin) / ySpan
                             val lineScreenY = cy + relY * ch
-                            if (lineScreenY in cy..cy + ch) {
+                            if (lineScreenY in (cy - 1f)..(cy + ch + 1f)) {
                                 drawLine(
                                     color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
                                     start = Offset(cx, lineScreenY),
                                     end = Offset(cx + cw, lineScreenY),
-                                    strokeWidth = 0.8f
+                                    strokeWidth = (1f * currentScale).coerceAtLeast(1f)
                                 )
                             }
                             currWorldY += stepY
@@ -811,22 +872,23 @@ fun InteractiveCanvas(
                         val axisXScreenY = cy + relZeroY * ch
                         val axisYScreenX = cx + relZeroX * cw
 
-                        val axisStrokeWidth = 2.5f * currentScale
+                        val axisStrokeWidth = (2.5f * currentScale).coerceAtLeast(2f)
                         val axisColor = if (isDarkBackground) Color(0xFFCBD5E1) else Color(0xFF475569)
                         drawLine(axisColor, Offset(cx, axisXScreenY), Offset(cx + cw, axisXScreenY), strokeWidth = axisStrokeWidth)
                         drawLine(axisColor, Offset(axisYScreenX, cy), Offset(axisYScreenX, cy + ch), strokeWidth = axisStrokeWidth)
 
                         // Axis labels
                         if (chart.showAxisLabels && chart.axisLabelsVisible) {
+                            val labelTextSize = with(density) { 12.sp.toPx() * currentScale }.coerceIn(24f, 60f)
                             drawIntoCanvas { canvas ->
                                 val textPaint = android.text.TextPaint().apply {
                                     color = if (isDarkBackground) android.graphics.Color.LTGRAY else android.graphics.Color.DKGRAY
-                                    textSize = (10f * currentScale).coerceIn(8f, 16f)
+                                    textSize = labelTextSize
                                     isAntiAlias = true
                                 }
                                 // X-axis labels
                                 var wx = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
-                                while (wx <= chart.xMax) {
+                                while (wx <= chart.xMax + 0.0001f) {
                                     val relX = (wx - chart.xMin) / xSpan
                                     val screenX = cx + relX * cw
                                     if (screenX in cx..cx + cw) {
@@ -837,7 +899,7 @@ fun InteractiveCanvas(
                                 }
                                 // Y-axis labels
                                 var wy = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
-                                while (wy <= chart.yMax) {
+                                while (wy <= chart.yMax + 0.0001f) {
                                     if (wy != 0f) {
                                         val relY = 1f - (wy - chart.yMin) / ySpan
                                         val screenY = cy + relY * ch

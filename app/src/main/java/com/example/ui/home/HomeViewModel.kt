@@ -88,7 +88,7 @@ class HomeViewModel(
         title: String = "Нова канва",
         pageSizePreset: com.example.data.models.PageSizePreset = com.example.data.models.PageSizePreset.UNLIMITED,
         pattern: com.example.data.models.BackgroundPattern = com.example.data.models.BackgroundPattern.DOTTED,
-        bgColor: Int = 0xFF121212.toInt(),
+        bgColor: Int = 0xFFFFFFFF.toInt(),
         onCreated: (String) -> Unit
     ) {
         viewModelScope.launch {

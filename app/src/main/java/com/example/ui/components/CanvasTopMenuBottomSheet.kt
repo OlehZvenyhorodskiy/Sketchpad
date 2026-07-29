@@ -47,6 +47,9 @@ import com.example.data.models.BackgroundPattern
 import com.example.data.models.HslaColor
 import com.example.data.models.PageSizePreset
 
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material3.OutlinedButton
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanvasTopMenuBottomSheet(
@@ -57,6 +60,7 @@ fun CanvasTopMenuBottomSheet(
     onPatternChange: (BackgroundPattern) -> Unit,
     onPresetChange: (PageSizePreset, Float?, Float?) -> Unit,
     onOpenCustomColorPicker: () -> Unit,
+    onOpenThemeSettings: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val bgPresets = remember {
@@ -197,6 +201,21 @@ fun CanvasTopMenuBottomSheet(
                         label = { Text("Висота (px)") },
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+
+            if (onOpenThemeSettings != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenThemeSettings()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.Palette, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Теми й оформлення додатка")
                 }
             }
 

@@ -26,7 +26,12 @@ fun GridBackgroundSelector(
         BackgroundPattern.GRID_SQUARE to "Квадратна сітка",
         BackgroundPattern.GRID_ISOMETRIC to "Ізометрія",
         BackgroundPattern.PROTRACTOR to "Транспортир",
-        BackgroundPattern.MUSIC_STAFF to "Нотоносець"
+        BackgroundPattern.MUSIC_STAFF to "Нотоносець",
+        BackgroundPattern.GRAPH_MM to "Міліметрівка",
+        BackgroundPattern.DOT_GRID to "Крапковий папір",
+        BackgroundPattern.CORNELL_NOTES to "Cornell Notes",
+        BackgroundPattern.KANBAN_TEMPLATE to "Kanban Дошка",
+        BackgroundPattern.ISO_3D to "3D Скетч"
     )
 
     ModalBottomSheet(onDismissRequest = onDismiss) {

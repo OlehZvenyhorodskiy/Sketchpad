@@ -3,7 +3,7 @@ package com.example.brush
 import com.example.data.models.ToolType
 
 object BrushPresets {
-    val all: List<BrushProfile> = listOf(
+    val builtIn: List<BrushProfile> = listOf(
         BrushProfile(
             id = "pen_fine", name = "Тонке перо", toolType = ToolType.PEN,
             baseWidth = 2f, pressureSensitivity = 0.8f, smoothing = 0.6f,
@@ -53,5 +53,10 @@ object BrushPresets {
         )
     )
 
-    fun getById(id: String): BrushProfile = all.find { it.id == id } ?: all[0]
+    val all: List<BrushProfile> get() = builtIn
+
+    fun combine(custom: List<BrushProfile>): List<BrushProfile> = builtIn + custom
+
+    fun getById(id: String, custom: List<BrushProfile> = emptyList()): BrushProfile =
+        combine(custom).find { it.id == id } ?: builtIn[0]
 }

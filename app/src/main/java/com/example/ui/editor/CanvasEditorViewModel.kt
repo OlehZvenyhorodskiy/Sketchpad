@@ -106,8 +106,18 @@ class CanvasEditorViewModel(
     val showLayersPanel: StateFlow<Boolean> = _showLayersPanel.asStateFlow()
 
     // Multi-select state for lasso
+    private val _selectionMode = MutableStateFlow(com.example.data.models.SelectionMode.SINGLE)
+    val selectionMode: StateFlow<com.example.data.models.SelectionMode> = _selectionMode.asStateFlow()
+
     private val _selectedElementIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedElementIds: StateFlow<Set<String>> = _selectedElementIds.asStateFlow()
+
+    fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
+        _selectionMode.value = mode
+        if (mode == com.example.data.models.SelectionMode.SINGLE) {
+            _selectedElementIds.value = emptySet()
+        }
+    }
 
     // AI dirty-cache: tracks canvas modifications
     private val _canvasVersion = MutableStateFlow(0)
@@ -1025,6 +1035,213 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun resizeAndMoveElement(
+        id: String,
+        type: String,
+        newW: Float,
+        newH: Float,
+        newX: Float,
+        newY: Float,
+        anchor: String
+    ) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            when (type) {
+                "SHAPE" -> layer.copy(shapes = layer.shapes.map {
+                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(30f), height = newH.coerceAtLeast(30f)) else it
+                })
+                "IMAGE" -> layer.copy(images = layer.images.map {
+                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(50f), height = newH.coerceAtLeast(50f)) else it
+                })
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map {
+                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(60f), height = newH.coerceAtLeast(30f)) else it
+                })
+                "CHART" -> layer.copy(charts = layer.charts.map { chart ->
+                    if (chart.id == id) {
+                        val clampedW = newW.coerceAtLeast(100f)
+                        val clampedH = newH.coerceAtLeast(100f)
+                        var ppuX = chart.pixelsPerUnitX
+                        var ppuY = chart.pixelsPerUnitY
+                        if (ppuX <= 0f) ppuX = clampedW / (chart.xMax - chart.xMin).let { if (it <= 0f) 20f else it }
+                        if (ppuY <= 0f) ppuY = clampedH / (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }
+                        val newRangeX = clampedW / ppuX
+                        val newRangeY = clampedH / ppuY
+                        val (nxMin, nxMax) = when (anchor) {
+                            "BL", "TL" -> Pair(chart.xMax - newRangeX, chart.xMax)
+                            else -> Pair(chart.xMin, chart.xMin + newRangeX)
+                        }
+                        val (nyMin, nyMax) = when (anchor) {
+                            "BL", "BR" -> Pair(chart.yMax - newRangeY, chart.yMax)
+                            else -> Pair(chart.yMin, chart.yMin + newRangeY)
+                        }
+                        chart.copy(
+                            x = newX, y = newY,
+                            width = clampedW, height = clampedH,
+                            xMin = nxMin, xMax = nxMax,
+                            yMin = nyMin, yMax = nyMax,
+                            pixelsPerUnitX = ppuX, pixelsPerUnitY = ppuY
+                        )
+                    } else chart
+                })
+                else -> layer
+            }
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun selectElementsInLasso(lassoWorldPoints: List<Offset>) {
+        val page = currentPage ?: return
+        if (lassoWorldPoints.size < 3) return
+
+        val hitIds = mutableSetOf<String>()
+
+        page.getEffectiveLayers().filter { it.isVisible }.forEach { layer ->
+            layer.shapes.forEach { shape ->
+                val center = Offset(shape.x + shape.width / 2f, shape.y + shape.height / 2f)
+                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(shape.id)
+            }
+            layer.images.forEach { img ->
+                val center = Offset(img.x + img.width / 2f, img.y + img.height / 2f)
+                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(img.id)
+            }
+            layer.textBlocks.forEach { tb ->
+                val center = Offset(tb.x + tb.width / 2f, tb.y + tb.height / 2f)
+                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(tb.id)
+            }
+            layer.charts.forEach { chart ->
+                val center = Offset(chart.x + chart.width / 2f, chart.y + chart.height / 2f)
+                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(chart.id)
+            }
+        }
+
+        _selectedElementIds.value = hitIds
+    }
+
+    private fun isPointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
+        var inside = false
+        val n = polygon.size
+        var j = n - 1
+        for (i in 0 until n) {
+            val yi = polygon[i].y; val yj = polygon[j].y
+            val xi = polygon[i].x; val xj = polygon[j].x
+            if ((yi > point.y) != (yj > point.y) &&
+                point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi
+            ) {
+                inside = !inside
+            }
+            j = i
+        }
+        return inside
+    }
+
+    fun moveSelectedElements(dx: Float, dy: Float) {
+        val page = currentPage ?: return
+        val ids = _selectedElementIds.value
+        if (ids.isEmpty()) return
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(
+                shapes = layer.shapes.map {
+                    if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+                },
+                images = layer.images.map {
+                    if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+                },
+                textBlocks = layer.textBlocks.map {
+                    if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+                },
+                charts = layer.charts.map {
+                    if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+                }
+            )
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun scaleSelectedElements(factor: Float) {
+        val page = currentPage ?: return
+        val ids = _selectedElementIds.value
+        if (ids.isEmpty()) return
+        val migrated = ensureLayersExist(page)
+
+        val centers = mutableListOf<Offset>()
+        migrated.getEffectiveLayers().forEach { layer ->
+            layer.shapes.filter { it.id in ids }.forEach {
+                centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
+            }
+            layer.images.filter { it.id in ids }.forEach {
+                centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
+            }
+            layer.textBlocks.filter { it.id in ids }.forEach {
+                centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
+            }
+            layer.charts.filter { it.id in ids }.forEach {
+                centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
+            }
+        }
+        if (centers.isEmpty()) return
+        val centroid = Offset(
+            centers.map { it.x }.average().toFloat(),
+            centers.map { it.y }.average().toFloat()
+        )
+
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(
+                shapes = layer.shapes.map { s ->
+                    if (s.id in ids) {
+                        val newW = s.width * factor; val newH = s.height * factor
+                        val cx = s.x + s.width / 2f; val cy = s.y + s.height / 2f
+                        val newCx = centroid.x + (cx - centroid.x) * factor
+                        val newCy = centroid.y + (cy - centroid.y) * factor
+                        s.copy(
+                            x = newCx - newW / 2f, y = newCy - newH / 2f,
+                            width = newW.coerceAtLeast(30f), height = newH.coerceAtLeast(30f)
+                        )
+                    } else s
+                },
+                images = layer.images.map { img ->
+                    if (img.id in ids) {
+                        val newW = img.width * factor; val newH = img.height * factor
+                        val cx = img.x + img.width / 2f; val cy = img.y + img.height / 2f
+                        val newCx = centroid.x + (cx - centroid.x) * factor
+                        val newCy = centroid.y + (cy - centroid.y) * factor
+                        img.copy(
+                            x = newCx - newW / 2f, y = newCy - newH / 2f,
+                            width = newW.coerceAtLeast(50f), height = newH.coerceAtLeast(50f)
+                        )
+                    } else img
+                },
+                textBlocks = layer.textBlocks.map { tb ->
+                    if (tb.id in ids) {
+                        val newW = tb.width * factor; val newH = tb.height * factor
+                        val cx = tb.x + tb.width / 2f; val cy = tb.y + tb.height / 2f
+                        val newCx = centroid.x + (cx - centroid.x) * factor
+                        val newCy = centroid.y + (cy - centroid.y) * factor
+                        tb.copy(
+                            x = newCx - newW / 2f, y = newCy - newH / 2f,
+                            width = newW.coerceAtLeast(60f), height = newH.coerceAtLeast(30f),
+                            fontSize = tb.fontSize * factor
+                        )
+                    } else tb
+                },
+                charts = layer.charts.map { ch ->
+                    if (ch.id in ids) {
+                        val newW = ch.width * factor; val newH = ch.height * factor
+                        val cx = ch.x + ch.width / 2f; val cy = ch.y + ch.height / 2f
+                        val newCx = centroid.x + (cx - centroid.x) * factor
+                        val newCy = centroid.y + (cy - centroid.y) * factor
+                        ch.copy(
+                            x = newCx - newW / 2f, y = newCy - newH / 2f,
+                            width = newW.coerceAtLeast(100f), height = newH.coerceAtLeast(100f)
+                        )
+                    } else ch
+                }
+            )
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
     fun setCurrentPage(index: Int) {
         if (index in 0 until _pages.value.size) {
             _currentPageIndex.value = index
@@ -1199,8 +1416,7 @@ class CanvasEditorViewModel(
             val base64Image = if (provider.supportsVision && page != null) {
                 if (currentVer != lastScreenshotVersion || cachedBase64Image == null) {
                     try {
-                        val canvasBgInt = _canvas.value?.backgroundColor ?: 0xFF121212.toInt()
-                        val effectiveBgColor = if (canvasBgInt == 0xFFFFFFFF.toInt()) 0xFF121212.toInt() else canvasBgInt
+                        val effectiveBgColor = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
                         val bitmap = ExportManager.captureCanvasHighRes(page, scale = 2.0f, backgroundColor = effectiveBgColor)
                         val baos = java.io.ByteArrayOutputStream()
                         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, baos)

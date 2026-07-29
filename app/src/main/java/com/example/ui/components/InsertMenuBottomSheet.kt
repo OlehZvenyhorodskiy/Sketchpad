@@ -194,6 +194,10 @@ fun InsertMenuBottomSheet(
                                         ShapeType.ARROW -> "➔"
                                         ShapeType.STAR -> "★"
                                         ShapeType.BOLD_ARROW -> "🡺"
+                                        ShapeType.HEXAGON -> "⬡"
+                                        ShapeType.PENTAGON -> "⬟"
+                                        ShapeType.CLOUD -> "☁"
+                                        ShapeType.SPEECH_BUBBLE -> "💬"
                                     },
                                     fontSize = 20.sp,
                                     color = MaterialTheme.colorScheme.primary
@@ -206,6 +210,10 @@ fun InsertMenuBottomSheet(
                                         ShapeType.ARROW -> "Стрілка"
                                         ShapeType.STAR -> "Зірка"
                                         ShapeType.BOLD_ARROW -> "Широка"
+                                        ShapeType.HEXAGON -> "Шестикут"
+                                        ShapeType.PENTAGON -> "П'ятикут"
+                                        ShapeType.CLOUD -> "Хмара"
+                                        ShapeType.SPEECH_BUBBLE -> "Бабл"
                                     },
                                     fontSize = 10.sp
                                 )

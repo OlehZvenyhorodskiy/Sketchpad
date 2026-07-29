@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.geometry.Offset
@@ -89,7 +90,8 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onCanvasClick: (String) -> Unit
+    onCanvasClick: (String) -> Unit,
+    onOpenThemeSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val canvases by viewModel.canvases.collectAsState()
@@ -107,7 +109,7 @@ fun HomeScreen(
     var showCreateCanvasDialog by remember { mutableStateOf(false) }
     var newCanvasTitle by remember { mutableStateOf("Нова канва") }
     var selectedPreset by remember { mutableStateOf(com.example.data.models.PageSizePreset.UNLIMITED) }
-    var selectedColorInt by remember { mutableIntStateOf(0xFF121212.toInt()) }
+    var selectedColorInt by remember { mutableIntStateOf(0xFFFFFFFF.toInt()) }
     var selectedPattern by remember { mutableStateOf(com.example.data.models.BackgroundPattern.DOTTED) }
 
     // File picker for import PDF or photo
@@ -156,6 +158,10 @@ fun HomeScreen(
                             Icon(imageVector = Icons.Default.Search, contentDescription = "Пошук")
                         }
 
+                        IconButton(onClick = onOpenThemeSettings) {
+                            Icon(imageVector = Icons.Default.Palette, contentDescription = "Теми й зовнішній вигляд")
+                        }
+
                         OutlinedButton(
                             onClick = { importPickerLauncher.launch(arrayOf("application/pdf", "image/*")) },
                             modifier = Modifier.padding(horizontal = 4.dp)
@@ -167,6 +173,20 @@ fun HomeScreen(
 
                         // Account Profile Button
                         Box {
+                            val userInitials = remember(userName) {
+                                val name = userName?.trim()
+                                if (!name.isNullOrEmpty()) {
+                                    val parts = name.split("\\s+".toRegex())
+                                    if (parts.size >= 2) {
+                                        "${parts[0].first()}${parts[1].first()}".uppercase()
+                                    } else {
+                                        name.take(2).uppercase()
+                                    }
+                                } else {
+                                    "ГК"
+                                }
+                            }
+
                             IconButton(onClick = { showAccountMenu = true }) {
                                 androidx.compose.material3.Surface(
                                     shape = androidx.compose.foundation.shape.CircleShape,
@@ -175,7 +195,7 @@ fun HomeScreen(
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
-                                            text = userName?.take(2)?.uppercase() ?: "ОЗ",
+                                            text = userInitials,
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -191,11 +211,20 @@ fun HomeScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Column {
-                                            Text(userName ?: "Олег Звенигородський", fontWeight = FontWeight.Bold)
-                                            Text(userEmail ?: "olehzvenyhorodskiy@gmail.com", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(userName ?: "Користувач", fontWeight = FontWeight.Bold)
+                                            Text(userEmail ?: "Автономний режим", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     },
                                     onClick = { showAccountMenu = false }
+                                )
+                                androidx.compose.material3.HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Тема й зовнішній вигляд") },
+                                    leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) },
+                                    onClick = {
+                                        showAccountMenu = false
+                                        onOpenThemeSettings()
+                                    }
                                 )
                                 androidx.compose.material3.HorizontalDivider()
                                 DropdownMenuItem(

@@ -25,7 +25,74 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_COLOR_VAL = floatPreferencesKey("color_val")
         val KEY_DRAW_WITH_FINGERS = booleanPreferencesKey("draw_with_fingers")
         val KEY_THEME_MODE = intPreferencesKey("theme_mode") // 0: SYSTEM, 1: LIGHT, 2: DARK
+        val KEY_THEME_STYLE = intPreferencesKey("theme_style") // 0..6 (AppThemeStyle)
+        val KEY_ACCENT_COLOR = intPreferencesKey("accent_color") // ARGB int
+        val KEY_LEFT_HANDED_MODE = booleanPreferencesKey("left_handed_mode")
         val KEY_SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
+        val KEY_CURSOR_SHAPE = intPreferencesKey("cursor_shape") // 0: CIRCLE, 1: RING, 2: CROSSHAIR
+        val KEY_CURSOR_SIZE = floatPreferencesKey("cursor_size") // dp
+        val KEY_CURSOR_FOLLOWS_ACCENT = booleanPreferencesKey("cursor_follows_accent")
+        val KEY_SAVED_PALETTES = stringPreferencesKey("saved_palettes")
+    }
+
+    val themeStyle: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_THEME_STYLE] ?: 0
+    }
+
+    val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ACCENT_COLOR] ?: 0xFF38BDF8.toInt()
+    }
+
+    val leftHandedMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LEFT_HANDED_MODE] ?: false
+    }
+
+    val cursorShape: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CURSOR_SHAPE] ?: 0
+    }
+
+    val cursorSize: Flow<Float> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CURSOR_SIZE] ?: 12f
+    }
+
+    val cursorFollowsAccent: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CURSOR_FOLLOWS_ACCENT] ?: true
+    }
+
+    val savedPalettesJson: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SAVED_PALETTES]
+    }
+
+    suspend fun setCursorSettings(shape: Int, size: Float, followsAccent: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CURSOR_SHAPE] = shape
+            prefs[KEY_CURSOR_SIZE] = size
+            prefs[KEY_CURSOR_FOLLOWS_ACCENT] = followsAccent
+        }
+    }
+
+    suspend fun setSavedPalettesJson(json: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SAVED_PALETTES] = json
+        }
+    }
+
+    suspend fun setThemeStyle(styleOrdinal: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_THEME_STYLE] = styleOrdinal
+        }
+    }
+
+    suspend fun setAccentColor(colorInt: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ACCENT_COLOR] = colorInt
+        }
+    }
+
+    suspend fun setLeftHandedMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LEFT_HANDED_MODE] = enabled
+        }
     }
 
     val selectedProvider: Flow<String> = context.dataStore.data.map { prefs ->

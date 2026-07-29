@@ -118,7 +118,8 @@ import com.example.ui.components.RulerOverlayComponent
 @Composable
 fun CanvasEditorScreen(
     viewModel: CanvasEditorViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onOpenThemeSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val canvas by viewModel.canvas.collectAsState()
@@ -132,6 +133,8 @@ fun CanvasEditorScreen(
     val strokeWidth by viewModel.strokeWidth.collectAsState()
     val strokeOpacity by viewModel.strokeOpacity.collectAsState()
     val currentColor by viewModel.currentColor.collectAsState()
+    val selectionMode by viewModel.selectionMode.collectAsState()
+    val selectedElementIds by viewModel.selectedElementIds.collectAsState()
     val recentColors by viewModel.recentColors.collectAsState()
     val drawWithFingers by viewModel.drawWithFingers.collectAsState()
     val zoomScale by viewModel.zoomScale.collectAsState()
@@ -389,10 +392,25 @@ fun CanvasEditorScreen(
                         "TEXT" -> viewModel.updateTextSize(id, w, h)
                     }
                 },
+                selectionMode = selectionMode,
+                selectedElementIds = selectedElementIds,
+                onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) },
+                onMoveSelectedGroup = { dx, dy -> viewModel.moveSelectedElements(dx, dy) },
+                onResizeAndMoveElement = { id, type, w, h, x, y, anchor ->
+                    viewModel.resizeAndMoveElement(id, type, w, h, x, y, anchor)
+                },
                 getCachedBitmap = { viewModel.getCachedBitmap(it) },
                 onPreloadImage = { viewModel.preloadImageBitmap(it) }
             )
             }
+
+            // 1b. Lasso Selection Overlay
+            com.example.ui.components.LassoSelectionOverlay(
+                isActive = currentTool == com.example.data.models.ToolType.SELECTOR && selectionMode == com.example.data.models.SelectionMode.LASSO,
+                scale = zoomScale,
+                panOffset = panOffset,
+                onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) }
+            )
 
             // 2. Ruler Overlay
             RulerOverlayComponent(
@@ -410,10 +428,15 @@ fun CanvasEditorScreen(
                 currentColor = currentColor,
                 rulerVisible = rulerState.isVisible,
                 isSlidersVertical = isSlidersVertical,
+                selectionMode = selectionMode,
                 onToolSelect = { viewModel.selectTool(it, viewportWidthPx, viewportHeightPx) },
                 onEraserModeToggle = {
                     val nextMode = if (eraserMode == EraserMode.OBJECT) EraserMode.PIXEL else EraserMode.OBJECT
                     viewModel.setEraserMode(nextMode)
+                },
+                onSelectionModeToggle = {
+                    val nextMode = if (selectionMode == com.example.data.models.SelectionMode.SINGLE) com.example.data.models.SelectionMode.LASSO else com.example.data.models.SelectionMode.SINGLE
+                    viewModel.setSelectionMode(nextMode)
                 },
                 onStrokeWidthChange = { viewModel.setStrokeWidth(it) },
                 onStrokeOpacityChange = { viewModel.setStrokeOpacity(it) },
@@ -625,6 +648,7 @@ fun CanvasEditorScreen(
                 showTopMenuSheet = false
                 showColorPickerSheet = true
             },
+            onOpenThemeSettings = onOpenThemeSettings,
             onDismiss = { showTopMenuSheet = false }
         )
     }

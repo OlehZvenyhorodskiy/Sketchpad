@@ -25,6 +25,7 @@ import com.example.ui.editor.CanvasEditorViewModel
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.HomeViewModel
 import com.example.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,12 +33,25 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MyApplicationTheme {
+            val context = LocalContext.current
+            val userPrefsRepository = remember { UserPreferencesRepository(context) }
+            val themeStyleOrdinal = userPrefsRepository.themeStyle.collectAsState(initial = 0).value
+            val accentColorArgb = userPrefsRepository.accentColor.collectAsState(initial = 0xFF38BDF8.toInt()).value
+
+            val style = com.example.ui.theme.AppThemeStyle.entries.getOrElse(themeStyleOrdinal) {
+                com.example.ui.theme.AppThemeStyle.SYSTEM_DEFAULT
+            }
+            val accentColor = androidx.compose.ui.graphics.Color(accentColorArgb)
+
+            MyApplicationTheme(
+                themeStyle = style,
+                accentColor = accentColor
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MeCanvasApp()
+                    MeCanvasApp(userPrefsRepository = userPrefsRepository)
                 }
             }
         }
@@ -45,13 +59,18 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MeCanvasApp() {
+fun MeCanvasApp(userPrefsRepository: UserPreferencesRepository) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { CanvasRepository(context) }
-    val userPrefsRepository = remember { UserPreferencesRepository(context) }
     val isLoggedIn = userPrefsRepository.isLoggedIn.collectAsState(initial = false).value
     val homeViewModel = remember { HomeViewModel(repository, userPrefsRepository) }
+
+    val themeStyleOrdinal = userPrefsRepository.themeStyle.collectAsState(initial = 0).value
+    val accentColorArgb = userPrefsRepository.accentColor.collectAsState(initial = 0xFF38BDF8.toInt()).value
+    val isLeftHanded = userPrefsRepository.leftHandedMode.collectAsState(initial = false).value
+
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val startDestination = if (isLoggedIn) "home" else "login"
 
@@ -77,7 +96,34 @@ fun MeCanvasApp() {
                 viewModel = homeViewModel,
                 onCanvasClick = { canvasId ->
                     navController.navigate("editor/$canvasId")
+                },
+                onOpenThemeSettings = {
+                    navController.navigate("theme_settings")
                 }
+            )
+        }
+
+        composable("theme_settings") {
+            com.example.ui.home.ThemeSettingsScreen(
+                currentThemeOrdinal = themeStyleOrdinal,
+                currentAccentArgb = accentColorArgb,
+                isLeftHanded = isLeftHanded,
+                onThemeSelected = { style ->
+                    scope.launch {
+                        userPrefsRepository.setThemeStyle(style)
+                    }
+                },
+                onAccentColorChanged = { colorInt ->
+                    scope.launch {
+                        userPrefsRepository.setAccentColor(colorInt)
+                    }
+                },
+                onLeftHandedChanged = { enabled ->
+                    scope.launch {
+                        userPrefsRepository.setLeftHandedMode(enabled)
+                    }
+                },
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -91,7 +137,8 @@ fun MeCanvasApp() {
             }
             CanvasEditorScreen(
                 viewModel = editorViewModel,
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onOpenThemeSettings = { navController.navigate("theme_settings") }
             )
         }
     }

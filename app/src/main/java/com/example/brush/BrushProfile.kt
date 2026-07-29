@@ -20,6 +20,7 @@ data class BrushProfile(
     val flow: Float = 1f,                    // накопичення фарби
     val smoothing: Float = 0.5f,             // згладжування Catmull-Rom tension
     val textureResId: Int? = null,           // текстура пензля (bitmap)
+    val texturePath: String? = null,          // шлях до завантаженої текстури
     val isDashed: Boolean = false,
     val dashPattern: FloatArray = floatArrayOf(10f, 5f)
 )

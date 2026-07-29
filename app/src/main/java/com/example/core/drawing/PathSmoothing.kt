@@ -68,18 +68,18 @@ object PathSmoothing {
                 val tt2 = tt * tt
                 val tt3 = tt2 * tt
 
-                val x = 0.5f * (
-                    (2f * p1x) +
-                    (-p0x + p2x) * tt * tension +
-                    (2f * p0x - 5f * p1x + 4f * p2x - p3x) * tt2 * tension +
-                    (-p0x + 3f * p1x - 3f * p2x + p3x) * tt3 * tension
-                )
-                val y = 0.5f * (
-                    (2f * p1y) +
-                    (-p0y + p2y) * tt * tension +
-                    (2f * p0y - 5f * p1y + 4f * p2y - p3y) * tt2 * tension +
-                    (-p0y + 3f * p1y - 3f * p2y + p3y) * tt3 * tension
-                )
+                val h00 = 2f * tt3 - 3f * tt2 + 1f
+                val h10 = tt3 - 2f * tt2 + tt
+                val h01 = -2f * tt3 + 3f * tt2
+                val h11 = tt3 - tt2
+
+                val m1x = tension * (p2x - p0x) * 0.5f
+                val m1y = tension * (p2y - p0y) * 0.5f
+                val m2x = tension * (p3x - p1x) * 0.5f
+                val m2y = tension * (p3y - p1y) * 0.5f
+
+                val x = h00 * p1x + h10 * m1x + h01 * p2x + h11 * m2x
+                val y = h00 * p1y + h10 * m1y + h01 * p2y + h11 * m2y
 
                 path.lineTo(x, y)
             }

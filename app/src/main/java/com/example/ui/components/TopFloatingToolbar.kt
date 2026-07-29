@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.example.ui.theme.ThemedPanel
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,8 +34,10 @@ fun TopFloatingToolbar(
     currentColor: HslaColor,
     rulerVisible: Boolean,
     isSlidersVertical: Boolean,
+    selectionMode: com.example.data.models.SelectionMode = com.example.data.models.SelectionMode.SINGLE,
     onToolSelect: (ToolType) -> Unit,
     onEraserModeToggle: () -> Unit,
+    onSelectionModeToggle: () -> Unit = {},
     onStrokeWidthChange: (Float) -> Unit,
     onStrokeOpacityChange: (Float) -> Unit,
     onColorPickerClick: () -> Unit,
@@ -45,19 +48,20 @@ fun TopFloatingToolbar(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 8.dp, end = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = if (isSlidersVertical)
+            Arrangement.Center
+        else
+            Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // ═══════════════════════════════════════════════════════════
         // LEFT PILL: Width Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
         // ═══════════════════════════════════════════════════════════
         if (!isSlidersVertical) {
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+            ThemedPanel(
+                modifier = Modifier.weight(1f),
                 shadowElevation = 6.dp,
-                tonalElevation = 4.dp,
-                modifier = Modifier.weight(1f)
+                tonalElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -119,12 +123,10 @@ fun TopFloatingToolbar(
         // ═══════════════════════════════════════════════════════════
         // CENTER PILL: Drawing Tools — ЗАВЖДИ ВИДИМИЙ
         // ═══════════════════════════════════════════════════════════
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
+        ThemedPanel(
+            modifier = Modifier.wrapContentSize(),
             shadowElevation = 8.dp,
-            tonalElevation = 6.dp,
-            modifier = Modifier.wrapContentSize()
+            tonalElevation = 6.dp
         ) {
             Row(
                 modifier = Modifier
@@ -157,11 +159,15 @@ fun TopFloatingToolbar(
                     isSelected = currentTool == ToolType.MARKER,
                     onClick = { onToolSelect(ToolType.MARKER) }
                 )
+                val selectorIcon = if (selectionMode == com.example.data.models.SelectionMode.LASSO) Icons.Default.HighlightAlt else Icons.Default.CropSquare
                 ToolIconButton(
-                    icon = Icons.Default.CropSquare,
-                    label = "Ласо",
+                    icon = selectorIcon,
+                    label = if (selectionMode == com.example.data.models.SelectionMode.LASSO) "Виділення (Ласо)" else "Виділення (Одиночне)",
                     isSelected = currentTool == ToolType.SELECTOR,
-                    onClick = { onToolSelect(ToolType.SELECTOR) }
+                    onClick = {
+                        if (currentTool == ToolType.SELECTOR) onSelectionModeToggle()
+                        else onToolSelect(ToolType.SELECTOR)
+                    }
                 )
                 val eraserIcon = if (eraserMode == EraserMode.PIXEL) Icons.Default.Circle else Icons.Default.CropSquare
                 ToolIconButton(
@@ -212,12 +218,10 @@ fun TopFloatingToolbar(
         // RIGHT PILL: Opacity Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
         // ═══════════════════════════════════════════════════════════
         if (!isSlidersVertical) {
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+            ThemedPanel(
+                modifier = Modifier.weight(1f),
                 shadowElevation = 6.dp,
-                tonalElevation = 4.dp,
-                modifier = Modifier.weight(1f)
+                tonalElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
