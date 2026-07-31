@@ -18,6 +18,7 @@ import com.example.data.models.StrokeEntity
 import com.example.data.models.StrokePoint
 import com.example.data.models.TextBlockEntity
 import com.example.data.models.ToolType
+import com.example.drive.ExportManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -59,9 +60,16 @@ class CanvasRepository(private val context: Context) {
         bgColor: Int = 0xFFFFFFFF.toInt()
     ): String = withContext(Dispatchers.IO) {
         val canvasId = UUID.randomUUID().toString()
+        val defaultBaseTitle = context.getString(R.string.new_canvas_default_title)
+        val requestedTitle = title.trim().ifBlank { defaultBaseTitle }
+        val resolvedTitle = if (requestedTitle == defaultBaseTitle) {
+            nextAvailableCanvasTitle(defaultBaseTitle, canvasDao.getAllCanvasesSync().map { it.title })
+        } else {
+            requestedTitle
+        }
         val canvas = CanvasEntity(
             id = canvasId,
-            title = title,
+            title = resolvedTitle,
             pageSizePreset = pageSizePreset,
             backgroundPattern = pattern,
             backgroundColor = bgColor,
@@ -245,6 +253,24 @@ class CanvasRepository(private val context: Context) {
         }
     }
 
+    suspend fun generateThumbnail(canvasId: String, pageOverride: PageEntity? = null) = withContext(Dispatchers.IO) {
+        val canvas = canvasDao.getCanvasByIdSync(canvasId) ?: return@withContext
+        val page = pageOverride ?: pageDao.getPagesForCanvasSync(canvasId).firstOrNull() ?: return@withContext
+        val bitmap = ExportManager.captureCanvasHighRes(
+            page = page,
+            context = context,
+            scale = 0.25f,
+            pageWidth = 1280,
+            pageHeight = 800,
+            backgroundColor = canvas.backgroundColor
+        )
+        try {
+            saveThumbnail(canvasId, bitmap)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     suspend fun saveAudioRecording(
         canvasId: String,
         filePath: String,
@@ -277,4 +303,11 @@ class CanvasRepository(private val context: Context) {
         }
         return@withContext targetFile.absolutePath
     }
+}
+
+internal fun nextAvailableCanvasTitle(baseTitle: String, existingTitles: Collection<String>): String {
+    val occupied = existingTitles.mapTo(hashSetOf()) { it.trim() }
+    var index = 1
+    while ("$baseTitle $index" in occupied) index++
+    return "$baseTitle $index"
 }

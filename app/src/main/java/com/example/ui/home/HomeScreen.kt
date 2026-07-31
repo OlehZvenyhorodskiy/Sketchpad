@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,6 +52,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -83,6 +86,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.models.CanvasEntity
+import com.example.data.models.BackgroundPattern
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -142,6 +146,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column {
                 TopAppBar(
@@ -156,18 +161,33 @@ fun HomeScreen(
                             )
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Sketchpad",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.home_tagline),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Create,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Sketchpad",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.home_tagline),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     },
@@ -247,39 +267,61 @@ fun HomeScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.background
                     )
                 )
 
-                TabRow(selectedTabIndex = selectedTabIndex) {
-                    Tab(
-                        selected = selectedTabIndex == 0,
-                        onClick = { selectedTabIndex = 0 },
-                        text = { Text(stringResource(R.string.my_canvases_count, canvases.size)) }
-                    )
-                    Tab(
-                        selected = selectedTabIndex == 1,
-                        onClick = { selectedTabIndex = 1 },
-                        text = { Text(stringResource(R.string.note_templates)) }
-                    )
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.padding(4.dp)) {
+                        listOf(
+                            stringResource(R.string.my_canvases_count, canvases.size),
+                            stringResource(R.string.note_templates)
+                        ).forEachIndexed { index, label ->
+                            Surface(
+                                onClick = { selectedTabIndex = index },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (selectedTabIndex == index) {
+                                    MaterialTheme.colorScheme.surface
+                                } else {
+                                    Color.Transparent
+                                },
+                                tonalElevation = if (selectedTabIndex == index) 3.dp else 0.dp,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = { showCreateCanvasDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.create_canvas))
-            }
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                icon = { Icon(imageVector = Icons.Default.Add, contentDescription = null) },
+                text = { Text(stringResource(R.string.create_canvas), fontWeight = FontWeight.Bold) }
+            )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
         ) {
             if (selectedTabIndex == 0) {
                 // My Canvases Tab
@@ -312,10 +354,10 @@ fun HomeScreen(
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 180.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(vertical = 12.dp)
+                        columns = GridCells.Adaptive(minSize = 230.dp),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp, horizontal = 2.dp)
                     ) {
                         items(canvases, key = { it.id }) { canvas ->
                             CanvasCardItem(
@@ -620,9 +662,10 @@ fun CanvasCardItem(
     }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 5.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -635,8 +678,8 @@ fun CanvasCardItem(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.2f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .aspectRatio(1.6f)
+                    .background(Color(canvas.backgroundColor)),
                 contentAlignment = Alignment.Center
             ) {
                 if (!canvas.thumbnailPath.isNullOrEmpty() && File(canvas.thumbnailPath).exists()) {
@@ -644,36 +687,53 @@ fun CanvasCardItem(
                         model = File(canvas.thumbnailPath),
                         contentDescription = canvas.title,
                         contentScale = ContentScale.Crop,
+                        onError = { },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Box(
+                    Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceContainer),
-                        contentAlignment = Alignment.Center
+                            .background(Color(canvas.backgroundColor))
                     ) {
-                        // Drawing Grid Preview Graphic
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val gridStep = 24.dp.toPx()
-                            val lineColor = Color(0x1A000000)
-                            var x = 0f
-                            while (x < size.width) {
-                                drawLine(lineColor, start = Offset(x, 0f), end = Offset(x, size.height), strokeWidth = 1f)
-                                x += gridStep
-                            }
-                            var y = 0f
-                            while (y < size.height) {
-                                drawLine(lineColor, start = Offset(0f, y), end = Offset(size.width, y), strokeWidth = 1f)
-                                y += gridStep
-                            }
+                        val gridStep = 26.dp.toPx()
+                        val isDark = Color(canvas.backgroundColor).let {
+                            it.red * 0.299f + it.green * 0.587f + it.blue * 0.114f < 0.5f
                         }
-                        Icon(
-                            imageVector = Icons.Default.Create,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                            modifier = Modifier.size(36.dp)
-                        )
+                        val lineColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f)
+                        when (canvas.backgroundPattern) {
+                            BackgroundPattern.DOTTED, BackgroundPattern.DOT_GRID -> {
+                                var x = gridStep / 2f
+                                while (x < size.width) {
+                                    var y = gridStep / 2f
+                                    while (y < size.height) {
+                                        drawCircle(lineColor, radius = 1.4.dp.toPx(), center = Offset(x, y))
+                                        y += gridStep
+                                    }
+                                    x += gridStep
+                                }
+                            }
+                            BackgroundPattern.LINED -> {
+                                var y = gridStep
+                                while (y < size.height) {
+                                    drawLine(lineColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                                    y += gridStep
+                                }
+                            }
+                            BackgroundPattern.GRID_SQUARE, BackgroundPattern.GRAPH_MM -> {
+                                var x = 0f
+                                while (x < size.width) {
+                                    drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
+                                    x += gridStep
+                                }
+                                var y = 0f
+                                while (y < size.height) {
+                                    drawLine(lineColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                                    y += gridStep
+                                }
+                            }
+                            else -> Unit
+                        }
                     }
                 }
             }
@@ -682,7 +742,7 @@ fun CanvasCardItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -690,7 +750,7 @@ fun CanvasCardItem(
                     Text(
                         text = canvas.title,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 1
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -754,8 +814,9 @@ fun TemplateCardItem(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -764,8 +825,8 @@ fun TemplateCardItem(
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -773,7 +834,7 @@ fun TemplateCardItem(
                     imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))

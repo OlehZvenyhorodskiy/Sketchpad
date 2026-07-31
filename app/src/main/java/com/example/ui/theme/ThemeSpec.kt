@@ -40,8 +40,38 @@ object ThemeSpecs {
         return when (style) {
             AppThemeStyle.SYSTEM_DEFAULT -> ThemeSpec(
                 style = style,
-                colorScheme = if (isDark) darkColorScheme(primary = accentColor) else lightColorScheme(primary = accentColor),
-                cornerRadius = 16.dp,
+                colorScheme = if (isDark) {
+                    darkColorScheme(
+                        primary = accentColor,
+                        secondary = Color(0xFFB8C4FF),
+                        tertiary = Color(0xFF7ED8D4),
+                        background = Color(0xFF0D1117),
+                        surface = Color(0xFF111722),
+                        surfaceContainer = Color(0xFF171E2B),
+                        surfaceContainerHigh = Color(0xFF202938),
+                        surfaceContainerHighest = Color(0xFF293445),
+                        onBackground = Color(0xFFE6EAF2),
+                        onSurface = Color(0xFFE6EAF2),
+                        outline = Color(0xFF8490A3),
+                        outlineVariant = Color(0xFF3A4658)
+                    )
+                } else {
+                    lightColorScheme(
+                        primary = accentColor,
+                        secondary = Color(0xFF555BC2),
+                        tertiary = Color(0xFF006B68),
+                        background = Color(0xFFF6F7FB),
+                        surface = Color(0xFFFCFCFF),
+                        surfaceContainer = Color(0xFFF0F2F8),
+                        surfaceContainerHigh = Color(0xFFE9ECF4),
+                        surfaceContainerHighest = Color(0xFFE1E5EF),
+                        onBackground = Color(0xFF171B24),
+                        onSurface = Color(0xFF171B24),
+                        outline = Color(0xFF737B8C),
+                        outlineVariant = Color(0xFFC5CAD6)
+                    )
+                },
+                cornerRadius = 22.dp,
                 surfaceBlurEnabled = false,
                 surfaceBlurRadius = 0.dp,
                 elevationStyle = ElevationStyle.SOFT_SHADOW,

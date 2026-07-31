@@ -57,6 +57,15 @@ class HomeViewModel(
         viewModelScope.launch {
             userPrefsRepository.ensureLocalProfile()
         }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.allCanvases.collect { items ->
+                items.filter { canvas ->
+                    canvas.thumbnailPath.isNullOrBlank() || !File(canvas.thumbnailPath).exists()
+                }.forEach { canvas ->
+                    runCatching { repository.generateThumbnail(canvas.id) }
+                }
+            }
+        }
     }
 
     fun updateLocalProfile(name: String, avatar: String) {
