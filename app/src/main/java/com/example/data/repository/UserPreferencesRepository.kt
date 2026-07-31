@@ -15,9 +15,8 @@ private val Context.dataStore by preferencesDataStore(name = "user_preferences")
 
 class UserPreferencesRepository(private val context: Context) {
     companion object {
-        val KEY_IS_LOGGED_IN = booleanPreferencesKey("is_logged_in")
-        val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         val KEY_USER_NAME = stringPreferencesKey("user_name")
+        val KEY_USER_AVATAR = stringPreferencesKey("user_avatar")
         val KEY_LAST_TOOL = stringPreferencesKey("last_tool")
         val KEY_PEN_WIDTH = floatPreferencesKey("pen_width")
         val KEY_PEN_OPACITY = floatPreferencesKey("pen_opacity")
@@ -142,16 +141,12 @@ class UserPreferencesRepository(private val context: Context) {
         return com.example.ai.GeminiAssistantService.getApiKey(context)
     }
 
-    val isLoggedIn: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_IS_LOGGED_IN] ?: false
-    }
-
-    val userEmail: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[KEY_USER_EMAIL]
-    }
-
     val userName: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[KEY_USER_NAME]
+    }
+
+    val userAvatar: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_USER_AVATAR]
     }
 
     val drawWithFingers: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -170,11 +165,21 @@ class UserPreferencesRepository(private val context: Context) {
         prefs[KEY_LAST_TOOL]
     }
 
-    suspend fun setLoggedIn(loggedIn: Boolean, email: String? = null, name: String? = null) {
+    suspend fun ensureLocalProfile() {
         context.dataStore.edit { prefs ->
-            prefs[KEY_IS_LOGGED_IN] = loggedIn
-            if (email != null) prefs[KEY_USER_EMAIL] = email else prefs.remove(KEY_USER_EMAIL)
-            if (name != null) prefs[KEY_USER_NAME] = name else prefs.remove(KEY_USER_NAME)
+            if (prefs[KEY_USER_NAME].isNullOrBlank()) {
+                prefs[KEY_USER_NAME] = "Студент-${java.util.UUID.randomUUID().toString().take(4).uppercase()}"
+            }
+            if (prefs[KEY_USER_AVATAR].isNullOrBlank()) {
+                prefs[KEY_USER_AVATAR] = listOf("🎓", "📚", "🧠", "✏️", "🦉", "🚀").random()
+            }
+        }
+    }
+
+    suspend fun setLocalProfile(name: String, avatar: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_USER_NAME] = name.trim().ifBlank { "Студент" }
+            prefs[KEY_USER_AVATAR] = avatar.ifBlank { "🎓" }
         }
     }
 

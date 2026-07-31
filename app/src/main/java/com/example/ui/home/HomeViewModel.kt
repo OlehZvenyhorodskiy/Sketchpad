@@ -40,27 +40,27 @@ class HomeViewModel(
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
 
-    val userEmail: StateFlow<String?> = userPrefsRepository.userEmail.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
-
     val userName: StateFlow<String?> = userPrefsRepository.userName.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
+        initialValue = "Студент"
     )
 
-    val isLoggedIn: StateFlow<Boolean> = userPrefsRepository.isLoggedIn.stateIn(
+    val userAvatar: StateFlow<String?> = userPrefsRepository.userAvatar.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
+        initialValue = "🎓"
     )
 
-    fun logout() {
+    init {
         viewModelScope.launch {
-            userPrefsRepository.setLoggedIn(false)
+            userPrefsRepository.ensureLocalProfile()
+        }
+    }
+
+    fun updateLocalProfile(name: String, avatar: String) {
+        viewModelScope.launch {
+            userPrefsRepository.setLocalProfile(name, avatar)
         }
     }
 

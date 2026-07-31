@@ -97,14 +97,16 @@ fun HomeScreen(
     val canvases by viewModel.canvases.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSearchActive by viewModel.isSearchActive.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
     val userName by viewModel.userName.collectAsState()
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val userAvatar by viewModel.userAvatar.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Мої канви, 1: Шаблони
     var canvasToRename by remember { mutableStateOf<CanvasEntity?>(null) }
     var renameInputText by remember { mutableStateOf("") }
     var showAccountMenu by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var profileNameInput by remember { mutableStateOf("") }
+    var profileAvatarInput by remember { mutableStateOf("🎓") }
 
     var showCreateCanvasDialog by remember { mutableStateOf(false) }
     var newCanvasTitle by remember { mutableStateOf("Нова канва") }
@@ -120,6 +122,19 @@ fun HomeScreen(
             viewModel.importPdfOrImage(context, it) { canvasId ->
                 onCanvasClick(canvasId)
             }
+        }
+    }
+
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+                // Some document providers grant access without exposing a persistable permission.
+            }
+            profileAvatarInput = it.toString()
         }
     }
 
@@ -171,37 +186,14 @@ fun HomeScreen(
                             Text("Імпорт")
                         }
 
-                        // Account Profile Button
+                        // Local profile button
                         Box {
-                            val userInitials = remember(userName) {
-                                val name = userName?.trim()
-                                if (!name.isNullOrEmpty()) {
-                                    val parts = name.split("\\s+".toRegex())
-                                    if (parts.size >= 2) {
-                                        "${parts[0].first()}${parts[1].first()}".uppercase()
-                                    } else {
-                                        name.take(2).uppercase()
-                                    }
-                                } else {
-                                    "ГК"
-                                }
-                            }
-
                             IconButton(onClick = { showAccountMenu = true }) {
-                                androidx.compose.material3.Surface(
-                                    shape = androidx.compose.foundation.shape.CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                LocalProfileAvatar(
+                                    avatar = userAvatar,
+                                    name = userName,
                                     modifier = Modifier.size(34.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = userInitials,
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
+                                )
                             }
 
                             DropdownMenu(
@@ -212,27 +204,40 @@ fun HomeScreen(
                                     text = {
                                         Column {
                                             Text(userName ?: "Користувач", fontWeight = FontWeight.Bold)
-                                            Text(userEmail ?: "Автономний режим", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Локальний профіль", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     },
-                                    onClick = { showAccountMenu = false }
+                                    leadingIcon = {
+                                        LocalProfileAvatar(
+                                            avatar = userAvatar,
+                                            name = userName,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showAccountMenu = false
+                                        profileNameInput = userName.orEmpty()
+                                        profileAvatarInput = userAvatar ?: "🎓"
+                                        showProfileDialog = true
+                                    }
                                 )
                                 androidx.compose.material3.HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Редагувати локальний профіль") },
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                    onClick = {
+                                        showAccountMenu = false
+                                        profileNameInput = userName.orEmpty()
+                                        profileAvatarInput = userAvatar ?: "🎓"
+                                        showProfileDialog = true
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Тема й зовнішній вигляд") },
                                     leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) },
                                     onClick = {
                                         showAccountMenu = false
                                         onOpenThemeSettings()
-                                    }
-                                )
-                                androidx.compose.material3.HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Вийти з акаунту") },
-                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showAccountMenu = false
-                                        viewModel.logout()
                                     }
                                 )
                             }
@@ -366,6 +371,85 @@ fun HomeScreen(
         }
     }
 
+    if (showProfileDialog) {
+        val emojiOptions = listOf("🎓", "📚", "🧠", "✏️", "🦉", "🚀", "🔬", "🧪", "📐", "💻", "🌌", "☕")
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = { Text("Локальний профіль") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    LocalProfileAvatar(
+                        avatar = profileAvatarInput,
+                        name = profileNameInput,
+                        modifier = Modifier.size(80.dp)
+                    )
+                    OutlinedTextField(
+                        value = profileNameInput,
+                        onValueChange = { profileNameInput = it },
+                        label = { Text("Username") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Готовий аватар", style = MaterialTheme.typography.labelLarge)
+                    emojiOptions.chunked(6).forEach { rowOptions ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            rowOptions.forEach { emoji ->
+                                OutlinedButton(
+                                    onClick = { profileAvatarInput = emoji },
+                                    modifier = Modifier.size(44.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = if (profileAvatarInput == emoji) {
+                                        androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                                        )
+                                    } else {
+                                        androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
+                                    }
+                                ) {
+                                    Text(emoji, fontSize = 20.sp)
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { avatarPickerLauncher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Обрати фото з галереї")
+                    }
+                    Text(
+                        "Профіль зберігається лише на цьому пристрої.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateLocalProfile(profileNameInput, profileAvatarInput)
+                        showProfileDialog = false
+                    },
+                    enabled = profileNameInput.isNotBlank()
+                ) {
+                    Text("Зберегти")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfileDialog = false }) {
+                    Text("Скасувати")
+                }
+            }
+        )
+    }
+
     // Rename Dialog
     canvasToRename?.let { canvas ->
         AlertDialog(
@@ -483,6 +567,38 @@ fun HomeScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun LocalProfileAvatar(
+    avatar: String?,
+    name: String?,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (avatar?.startsWith("content://") == true || avatar?.startsWith("file://") == true) {
+                AsyncImage(
+                    model = avatar,
+                    contentDescription = "Аватар локального профілю",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape)
+                )
+            } else {
+                val fallback = name?.trim()?.take(2)?.uppercase().orEmpty().ifBlank { "🎓" }
+                Text(
+                    text = avatar?.ifBlank { fallback } ?: fallback,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
     }
 }
 

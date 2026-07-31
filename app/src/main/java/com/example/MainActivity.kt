@@ -19,7 +19,6 @@ import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import com.example.data.repository.CanvasRepository
 import com.example.data.repository.UserPreferencesRepository
-import com.example.ui.auth.LoginScreen
 import com.example.ui.editor.CanvasEditorScreen
 import com.example.ui.editor.CanvasEditorViewModel
 import com.example.ui.home.HomeScreen
@@ -63,7 +62,6 @@ fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { CanvasRepository(context) }
-    val isLoggedIn = userPrefsRepository.isLoggedIn.collectAsState(initial = false).value
     val homeViewModel = remember { HomeViewModel(repository, userPrefsRepository) }
 
     val themeStyleOrdinal = userPrefsRepository.themeStyle.collectAsState(initial = 0).value
@@ -72,25 +70,7 @@ fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    val startDestination = if (isLoggedIn) "home" else "login"
-
-    NavHost(navController = navController, startDestination = startDestination) {
-        composable("login") {
-            LoginScreen(
-                userPreferencesRepository = userPrefsRepository,
-                onLoginSuccess = {
-                    navController.navigate("home") {
-                        popUpTo("login") { inclusive = true }
-                    }
-                },
-                onSkip = {
-                    navController.navigate("home") {
-                        popUpTo("login") { inclusive = true }
-                    }
-                }
-            )
-        }
-
+    NavHost(navController = navController, startDestination = "home") {
         composable("home") {
             HomeScreen(
                 viewModel = homeViewModel,
