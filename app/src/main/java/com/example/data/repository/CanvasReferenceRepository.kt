@@ -153,6 +153,7 @@ class CanvasReferenceRepository private constructor(
                 addAll(layer.textBlocks.map { it.id })
                 addAll(layer.images.map { it.id })
                 addAll(layer.charts.map { it.id })
+                addAll(layer.codeBlocks.map { it.id })
             }
         }.toSet()
         val stale = referenceDao.getOutgoingFromPage(page.id).filter { reference ->

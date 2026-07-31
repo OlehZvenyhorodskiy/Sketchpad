@@ -270,10 +270,11 @@ data class LayerEntity(
     val shapes: List<ShapeEntity> = emptyList(),
     val textBlocks: List<TextBlockEntity> = emptyList(),
     val images: List<ImageElementEntity> = emptyList(),
-    val charts: List<ChartElementEntity> = emptyList()
+    val charts: List<ChartElementEntity> = emptyList(),
+    val codeBlocks: List<CodeBlockEntity> = emptyList()
 ) {
     val totalElements: Int
-        get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size + eraserMarks.size
+        get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size + codeBlocks.size + eraserMarks.size
 }
 
 @Entity(tableName = "pages")
@@ -344,6 +345,13 @@ data class PageEntity(
         val targetLayerId = activeLayerId ?: "default"
         return withUpdatedLayer(targetLayerId) { layer ->
             layer.copy(charts = layer.charts + chart)
+        }
+    }
+
+    fun withAddedCodeBlock(codeBlock: CodeBlockEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(codeBlocks = layer.codeBlocks + codeBlock)
         }
     }
 }

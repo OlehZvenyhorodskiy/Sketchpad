@@ -78,6 +78,10 @@ object ExportManager {
                 sb.appendLine("""    <text x="${text.x}" y="${text.y + text.fontSize}" font-size="${text.fontSize}" fill="${colorToHex(text.color)}">${escapeXml(text.text)}</text>""")
             }
 
+            layer.codeBlocks.forEach { codeBlock ->
+                appendCodeBlockSvg(sb, codeBlock)
+            }
+
             sb.appendLine("""  </g>""")
         }
 
@@ -194,6 +198,8 @@ object ExportManager {
                     staticLayout.draw(canvas)
                     canvas.restore()
                 }
+
+                renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
             }
 
             pdfDocument.finishPage(pdfPage)
@@ -322,6 +328,8 @@ object ExportManager {
                     paint.style = Paint.Style.STROKE
                     canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
                 }
+
+                renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
             }
 
             outputBitmap = if (cropRect != null) {
@@ -523,8 +531,116 @@ object ExportManager {
                 canvas.drawLine(cx, cy + ch / 2f, cx + cw, cy + ch / 2f, paint)
                 canvas.drawLine(cx + cw / 2f, cy, cx + cw / 2f, cy + ch, paint)
             }
+
+            renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
         }
         return bitmap
+    }
+
+    private fun renderCodeBlocks(
+        canvas: Canvas,
+        codeBlocks: List<CodeBlockEntity>,
+        layerAlpha: Int
+    ) {
+        codeBlocks.forEach { block ->
+            val rect = android.graphics.RectF(block.x, block.y, block.x + block.width, block.y + block.height)
+            val radius = 14f
+            val headerHeight = 38f.coerceAtMost(block.height)
+            val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = android.graphics.Color.rgb(17, 24, 39)
+                alpha = layerAlpha.coerceIn(0, 255)
+            }
+            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = when (block.language) {
+                    CodeLanguage.PYTHON -> android.graphics.Color.rgb(55, 118, 171)
+                    CodeLanguage.C -> android.graphics.Color.rgb(92, 107, 192)
+                    CodeLanguage.CPP -> android.graphics.Color.rgb(0, 89, 156)
+                }
+                alpha = layerAlpha.coerceIn(0, 255)
+            }
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.rgb(229, 231, 235)
+                textSize = 15f
+                typeface = android.graphics.Typeface.MONOSPACE
+                alpha = layerAlpha.coerceIn(0, 255)
+            }
+            val labelPaint = Paint(textPaint).apply {
+                color = android.graphics.Color.WHITE
+                textSize = 14f
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+            }
+
+            canvas.save()
+            canvas.clipRect(rect)
+            canvas.drawRoundRect(rect, radius, radius, backgroundPaint)
+            canvas.drawRect(block.x, block.y, block.x + block.width, block.y + headerHeight, headerPaint)
+            canvas.drawText(block.language.displayName, block.x + 12f, block.y + 25f, labelPaint)
+
+            val sourceTop = block.y + headerHeight + 20f
+            val outputReserved = if (block.consoleOutput.isNotBlank() || block.diagnostics.isNotEmpty()) 72f else 12f
+            val maximumSourceY = block.y + block.height - outputReserved
+            var lineY = sourceTop
+            block.source.lines().forEach { line ->
+                if (lineY > maximumSourceY) return@forEach
+                canvas.drawText(line.take(100), block.x + 12f, lineY, textPaint)
+                lineY += 19f
+            }
+
+            val consoleText = buildString {
+                append(block.consoleOutput)
+                if (block.diagnostics.isNotEmpty()) {
+                    if (isNotEmpty()) append('\n')
+                    append(block.diagnostics.joinToString(" | "))
+                }
+            }
+            if (consoleText.isNotBlank()) {
+                val consoleTop = (block.y + block.height - 62f).coerceAtLeast(sourceTop)
+                val consolePaint = Paint(backgroundPaint).apply { color = android.graphics.Color.rgb(11, 18, 32) }
+                canvas.drawRect(block.x, consoleTop, block.x + block.width, block.y + block.height, consolePaint)
+                val outputPaint = Paint(textPaint).apply {
+                    color = if (block.diagnostics.isEmpty()) {
+                        android.graphics.Color.rgb(134, 239, 172)
+                    } else {
+                        android.graphics.Color.rgb(253, 230, 138)
+                    }
+                    textSize = 13f
+                }
+                consoleText.lines().take(2).forEachIndexed { index, line ->
+                    canvas.drawText(line.take(110), block.x + 12f, consoleTop + 22f + index * 18f, outputPaint)
+                }
+            }
+            canvas.restore()
+        }
+    }
+
+    private fun appendCodeBlockSvg(sb: StringBuilder, block: CodeBlockEntity) {
+        val headerColor = when (block.language) {
+            CodeLanguage.PYTHON -> "#3776AB"
+            CodeLanguage.C -> "#5C6BC0"
+            CodeLanguage.CPP -> "#00599C"
+        }
+        sb.appendLine("""    <g class="sketchpad-code-block">""")
+        sb.appendLine("""      <rect x="${block.x}" y="${block.y}" width="${block.width}" height="${block.height}" rx="14" fill="#111827"/>""")
+        sb.appendLine("""      <path d="M ${block.x + 14} ${block.y} H ${block.x + block.width - 14} Q ${block.x + block.width} ${block.y} ${block.x + block.width} ${block.y + 14} V ${block.y + 38} H ${block.x} V ${block.y + 14} Q ${block.x} ${block.y} ${block.x + 14} ${block.y} Z" fill="$headerColor"/>""")
+        sb.appendLine("""      <text x="${block.x + 12}" y="${block.y + 25}" font-family="monospace" font-size="14" font-weight="bold" fill="#FFFFFF">${escapeXml(block.language.displayName)}</text>""")
+        var y = block.y + 58f
+        val maxY = block.y + block.height - if (block.consoleOutput.isNotBlank()) 65f else 10f
+        block.source.lines().forEach { line ->
+            if (y <= maxY) {
+                sb.appendLine("""      <text x="${block.x + 12}" y="$y" font-family="monospace" font-size="14" fill="#E5E7EB">${escapeXml(line.take(120))}</text>""")
+                y += 19f
+            }
+        }
+        if (block.consoleOutput.isNotBlank()) {
+            val consoleY = block.y + block.height - 58f
+            sb.appendLine("""      <rect x="${block.x}" y="$consoleY" width="${block.width}" height="58" fill="#0B1220"/>""")
+            block.consoleOutput.lines().take(2).forEachIndexed { index, line ->
+                sb.appendLine("""      <text x="${block.x + 12}" y="${consoleY + 21f + index * 18f}" font-family="monospace" font-size="12" fill="#86EFAC">${escapeXml(line.take(120))}</text>""")
+            }
+        }
+        sb.appendLine("""    </g>""")
     }
 
     suspend fun exportToObsidian(
