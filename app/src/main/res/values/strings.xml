@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Sketchpad</string>
+    <string name="google_web_client_id">YOUR_WEB_CLIENT_ID.apps.googleusercontent.com</string>
 </resources>
+

@@ -60,15 +60,16 @@ data class RulerState(
 
     fun projectOn(edge: Pair<Offset, Offset>, point: Offset): Offset = projectPointToSegment(point, edge.first, edge.second)
 
-    fun snapPointIfClose(point: Offset, thresholdDp: Float = 16f): Offset? {
+    fun snapPointIfClose(point: Offset, thresholdDp: Float = 16f, scale: Float = 1f): Offset? {
         if (!isVisible) return null
         val (top, bottom) = getEdgeLines()
+        val effectiveThreshold = thresholdDp / scale.coerceAtLeast(0.1f)
 
         val snapTop = projectPointToSegment(point, top.first, top.second)
-        if ((point - snapTop).getDistance() <= thresholdDp) return snapTop
+        if ((point - snapTop).getDistance() <= effectiveThreshold) return snapTop
 
         val snapBottom = projectPointToSegment(point, bottom.first, bottom.second)
-        if ((point - snapBottom).getDistance() <= thresholdDp) return snapBottom
+        if ((point - snapBottom).getDistance() <= effectiveThreshold) return snapBottom
 
         return null
     }
@@ -84,6 +85,27 @@ data class RulerState(
 }
 
 object DrawingEngine {
+
+    fun strokeRenderWidth(tool: ToolType, baseWidth: Float, scale: Float = 1f): Float {
+        val multiplier = when (tool) {
+            ToolType.PENCIL -> 0.9f
+            ToolType.FOUNTAIN_PEN -> 1.5f
+            ToolType.MARKER -> 3.5f
+            ToolType.INK_PEN -> 1.2f
+            ToolType.LASER -> 2.0f
+            else -> 1.0f
+        }
+        return baseWidth * scale * multiplier
+    }
+
+    fun strokeRenderAlpha(tool: ToolType, colorAlpha: Float = 1f, layerAlpha: Float = 1f): Float {
+        val toolAlpha = when (tool) {
+            ToolType.MARKER -> 0.38f
+            ToolType.PENCIL -> colorAlpha * 0.85f
+            else -> colorAlpha
+        }
+        return toolAlpha * layerAlpha
+    }
 
     fun createSmoothPath(points: List<StrokePoint>, scale: Float = 1f, panX: Float = 0f, panY: Float = 0f): Path {
         if (points.isEmpty()) return Path()

@@ -123,13 +123,19 @@ object ExportManager {
             page.visibleLayersBottomUp().forEach { layer ->
                 val layerAlpha = (layer.opacity * 255).toInt()
 
+                // Render layer images
+                renderLayerImages(context, canvas, layer.images, layerAlpha)
+
                 if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
                     val saveCount = canvas.saveLayer(null, null)
                     layer.strokes.forEach { stroke ->
                         val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                        paint.strokeWidth = stroke.baseWidth
+                        val sw = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth)
+                        val strokeAlpha = DrawingEngine.strokeRenderAlpha(stroke.tool, stroke.colorHsla.alpha, layer.opacity)
+                        paint.strokeWidth = sw
                         paint.color = stroke.colorHsla.toAndroidColor()
-                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                        paint.alpha = (strokeAlpha * 255).toInt().coerceIn(0, 255)
+                        paint.style = Paint.Style.STROKE
                         canvas.drawPath(path, paint)
                     }
                     if (layer.eraserMarks.isNotEmpty()) {
@@ -150,9 +156,16 @@ object ExportManager {
                 }
 
                 layer.shapes.forEach { shape ->
+                    if (shape.fillColor != 0) {
+                        paint.style = Paint.Style.FILL
+                        paint.color = shape.fillColor
+                        paint.alpha = layerAlpha
+                        canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
+                    }
                     paint.strokeWidth = shape.strokeWidth
                     paint.color = shape.strokeColor
                     paint.alpha = layerAlpha
+                    paint.style = Paint.Style.STROKE
                     canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
                 }
 
@@ -198,7 +211,8 @@ object ExportManager {
         cropRect: android.graphics.RectF? = null,
         pageWidth: Int = 1920,
         pageHeight: Int = 1080,
-        backgroundColor: Int = android.graphics.Color.WHITE
+        backgroundColor: Int = android.graphics.Color.WHITE,
+        context: Context? = null
     ) {
         val maxDimensionPx = 4096f
         val rawW = pageWidth * requestedScale
@@ -231,13 +245,19 @@ object ExportManager {
             page.visibleLayersBottomUp().forEach { layer ->
                 val layerAlpha = (layer.opacity * 255).toInt()
 
+                context?.let { ctx ->
+                    renderLayerImages(ctx, canvas, layer.images, layerAlpha)
+                }
+
                 if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
                     val saveCount = canvas.saveLayer(null, null)
                     layer.strokes.forEach { stroke ->
                         val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                        paint.strokeWidth = stroke.baseWidth
+                        val sw = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth)
+                        val strokeAlpha = DrawingEngine.strokeRenderAlpha(stroke.tool, stroke.colorHsla.alpha, layer.opacity)
+                        paint.strokeWidth = sw
                         paint.color = stroke.colorHsla.toAndroidColor()
-                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
+                        paint.alpha = (strokeAlpha * 255).toInt().coerceIn(0, 255)
                         paint.style = Paint.Style.STROKE
                         canvas.drawPath(path, paint)
                     }
@@ -259,6 +279,12 @@ object ExportManager {
                 }
 
                 layer.shapes.forEach { shape ->
+                    if (shape.fillColor != 0) {
+                        paint.style = Paint.Style.FILL
+                        paint.color = shape.fillColor
+                        paint.alpha = layerAlpha
+                        canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
+                    }
                     paint.strokeWidth = shape.strokeWidth
                     paint.color = shape.strokeColor
                     paint.alpha = layerAlpha
@@ -313,6 +339,40 @@ object ExportManager {
                 outputBitmap.recycle()
             }
             bitmap.recycle()
+        }
+    }
+
+    private fun renderLayerImages(context: Context, canvas: Canvas, images: List<ImageElementEntity>, layerAlpha: Int) {
+        images.forEach { img ->
+            val bitmap = try {
+                val uri = android.net.Uri.parse(img.sourceUri)
+                if (uri.scheme == "file") {
+                    android.graphics.BitmapFactory.decodeFile(uri.path)
+                } else {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        android.graphics.BitmapFactory.decodeStream(stream)
+                    }
+                }
+            } catch (e: Exception) {
+                null
+            }
+
+            if (bitmap != null) {
+                canvas.save()
+                val imgAlpha = (img.opacity * layerAlpha / 255f * 255).toInt().coerceIn(0, 255)
+                val imgPaint = Paint().apply {
+                    isAntiAlias = true
+                    alpha = imgAlpha
+                }
+                if (img.rotation != 0f) {
+                    canvas.rotate(img.rotation, img.x + img.width / 2f, img.y + img.height / 2f)
+                }
+                val srcRect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
+                val dstRect = android.graphics.RectF(img.x, img.y, img.x + img.width, img.y + img.height)
+                canvas.drawBitmap(bitmap, srcRect, dstRect, imgPaint)
+                canvas.restore()
+                bitmap.recycle()
+            }
         }
     }
 

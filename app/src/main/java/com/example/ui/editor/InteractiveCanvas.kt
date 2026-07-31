@@ -133,6 +133,19 @@ fun InteractiveCanvas(
     var cursorPos by remember { mutableStateOf<Offset?>(null) }
     var previewPulse by remember { mutableStateOf(false) }
 
+    var pendingCommittedStroke by remember { mutableStateOf<StrokeEntity?>(null) }
+
+    LaunchedEffect(pageEntity) {
+        pendingCommittedStroke?.let { pending ->
+            val exists = pageEntity?.getEffectiveLayers()?.any { layer ->
+                layer.strokes.any { it.id == pending.id }
+            } ?: false
+            if (exists) {
+                pendingCommittedStroke = null
+            }
+        }
+    }
+
     LaunchedEffect(strokeWidth, strokeOpacity, currentColor) {
         previewPulse = true
         kotlinx.coroutines.delay(600)
@@ -175,7 +188,7 @@ fun InteractiveCanvas(
                                 eraserTouchPos = null
                                 cursorPos = null
                                 val oldScale = currentScale
-                                val newScale = (oldScale * zoom).coerceIn(0.5f, 8.0f)
+                                val newScale = (oldScale * zoom).coerceIn(0.1f, 10.0f)
                                 val zoomFactor = newScale / oldScale
                                 panOffset = centroid - (centroid - panOffset) * zoomFactor + pan
                                 onPanOffsetChanged(panOffset)
@@ -246,7 +259,7 @@ fun InteractiveCanvas(
                                     rawPoint = g.first
                                 } else {
                                     rulerGuideEdge = null
-                                    rulerState.snapPointIfClose(rawPoint)?.let { snapped -> rawPoint = snapped }
+                                    rulerState.snapPointIfClose(rawPoint, thresholdDp = 16f, scale = safeScale)?.let { snapped -> rawPoint = snapped }
                                 }
                             } else {
                                 rulerGuideEdge = null
@@ -472,17 +485,13 @@ fun InteractiveCanvas(
                             ToolType.ERASER -> {
                                 cursorPos = rawPoint
                                 eraserTouchPos = rawPoint
-                                if (eraserMode == EraserMode.PIXEL) {
-                                    activeEraserPoints.add(StrokePoint(x = rawPoint.x, y = rawPoint.y, pressure = pressure, tilt = tilt, timestampMs = System.currentTimeMillis()))
-                                } else {
-                                    onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
-                                }
+                                onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
                             }
                             else -> {
                                 rulerGuideEdge?.let { edge ->
                                     rawPoint = rulerState.projectOn(edge, rawPoint)
                                 } ?: run {
-                                    rulerState.snapPointIfClose(rawPoint)?.let { snapped -> rawPoint = snapped }
+                                    rulerState.snapPointIfClose(rawPoint, thresholdDp = 16f, scale = safeScale)?.let { snapped -> rawPoint = snapped }
                                 }
                                 cursorPos = rawPoint
                                 activeStrokePoints.add(
@@ -505,14 +514,8 @@ fun InteractiveCanvas(
                                 baseWidth = strokeWidth,
                                 points = activeStrokePoints.toList()
                             )
+                            pendingCommittedStroke = newStroke
                             onStrokeAdded(newStroke)
-                        }
-                        if (currentTool == ToolType.ERASER && eraserMode == EraserMode.PIXEL && activeEraserPoints.isNotEmpty()) {
-                            val mark = com.example.data.models.EraserMark(
-                                points = activeEraserPoints.toList(),
-                                width = strokeWidth * 2.5f
-                            )
-                            onEraserMarkAdded(mark)
                         }
                         activeStrokePoints.clear()
                         activeEraserPoints.clear()
@@ -956,20 +959,8 @@ fun InteractiveCanvas(
                             layer.strokes.forEach { stroke ->
                                 val path = DrawingEngine.createSmoothPath(stroke.points, scale = currentScale, panX = panOffset.x, panY = panOffset.y)
 
-                                val sw = when (stroke.tool) {
-                                    ToolType.PENCIL -> stroke.baseWidth * currentScale * 0.9f
-                                    ToolType.FOUNTAIN_PEN -> stroke.baseWidth * currentScale * 1.5f
-                                    ToolType.MARKER -> stroke.baseWidth * currentScale * 3.5f
-                                    ToolType.INK_PEN -> stroke.baseWidth * currentScale * 1.2f
-                                    ToolType.LASER -> stroke.baseWidth * currentScale * 2.0f
-                                    else -> stroke.baseWidth * currentScale
-                                }
-
-                                val strokeAlpha = when (stroke.tool) {
-                                    ToolType.MARKER -> 0.38f * layerAlpha
-                                    ToolType.PENCIL -> stroke.colorHsla.alpha * 0.85f * layerAlpha
-                                    else -> stroke.colorHsla.alpha * layerAlpha
-                                }
+                                val sw = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth, currentScale)
+                                val strokeAlpha = DrawingEngine.strokeRenderAlpha(stroke.tool, stroke.colorHsla.alpha, layerAlpha)
 
                                 val drawColor = stroke.colorHsla.copy(alpha = strokeAlpha).toColor()
 
@@ -992,28 +983,21 @@ fun InteractiveCanvas(
                                 )
                             }
 
-                            // Render eraser marks with Clear blend mode
-                            val clearPaint = android.graphics.Paint().apply {
-                                isAntiAlias = true
-                                style = android.graphics.Paint.Style.STROKE
-                                strokeCap = android.graphics.Paint.Cap.ROUND
-                                strokeJoin = android.graphics.Paint.Join.ROUND
-                                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                            }
+                            // Render eraser marks with Clear blend mode (for legacy saved marks)
+                            if (layer.eraserMarks.isNotEmpty()) {
+                                val clearPaint = android.graphics.Paint().apply {
+                                    isAntiAlias = true
+                                    style = android.graphics.Paint.Style.STROKE
+                                    strokeCap = android.graphics.Paint.Cap.ROUND
+                                    strokeJoin = android.graphics.Paint.Join.ROUND
+                                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                                }
 
-                            val allEraserMarks = if (layer.id == targetLayerId && activeEraserPoints.isNotEmpty()) {
-                                layer.eraserMarks + com.example.data.models.EraserMark(
-                                    points = activeEraserPoints.toList(),
-                                    width = strokeWidth * 2.5f
-                                )
-                            } else {
-                                layer.eraserMarks
-                            }
-
-                            allEraserMarks.forEach { mark ->
-                                val path = DrawingEngine.createSmoothPath(mark.points, scale = currentScale, panX = panOffset.x, panY = panOffset.y).asAndroidPath()
-                                clearPaint.strokeWidth = mark.width * currentScale
-                                nativeCanvas.drawPath(path, clearPaint)
+                                layer.eraserMarks.forEach { mark ->
+                                    val path = DrawingEngine.createSmoothPath(mark.points, scale = currentScale, panX = panOffset.x, panY = panOffset.y).asAndroidPath()
+                                    clearPaint.strokeWidth = mark.width * currentScale
+                                    nativeCanvas.drawPath(path, clearPaint)
+                                }
                             }
 
                             nativeCanvas.restoreToCount(saveCount)
@@ -1022,31 +1006,24 @@ fun InteractiveCanvas(
                 }
             }
 
-            // 3. Render Active Drawing Stroke
-            if (activeStrokePoints.isNotEmpty()) {
-                val activePath = DrawingEngine.createSmoothPath(activeStrokePoints, scale = currentScale, panX = panOffset.x, panY = panOffset.y)
+            // 3. Render Active Drawing Stroke (double-buffered with pendingCommittedStroke to eliminate 1-frame disappearance)
+            val strokePointsToDraw = if (activeStrokePoints.isNotEmpty()) activeStrokePoints.toList() else pendingCommittedStroke?.points
+            val activeTool = if (activeStrokePoints.isNotEmpty()) currentTool else (pendingCommittedStroke?.tool ?: currentTool)
+            val activeBaseWidth = if (activeStrokePoints.isNotEmpty()) strokeWidth else (pendingCommittedStroke?.baseWidth ?: strokeWidth)
+            val activeOpacity = if (activeStrokePoints.isNotEmpty()) strokeOpacity else (pendingCommittedStroke?.colorHsla?.alpha ?: strokeOpacity)
+            val activeColor = if (activeStrokePoints.isNotEmpty()) currentColor else (pendingCommittedStroke?.colorHsla ?: currentColor)
 
-                val activeWidth = when (currentTool) {
-                    ToolType.PENCIL -> strokeWidth * currentScale * 0.9f
-                    ToolType.FOUNTAIN_PEN -> strokeWidth * currentScale * 1.5f
-                    ToolType.MARKER -> strokeWidth * currentScale * 3.5f
-                    ToolType.INK_PEN -> strokeWidth * currentScale * 1.2f
-                    ToolType.LASER -> strokeWidth * currentScale * 2.0f
-                    else -> strokeWidth * currentScale
-                }
-
-                val activeAlpha = when (currentTool) {
-                    ToolType.MARKER -> 0.38f
-                    ToolType.PENCIL -> strokeOpacity * 0.85f
-                    else -> strokeOpacity
-                }
+            if (!strokePointsToDraw.isNullOrEmpty()) {
+                val activePath = DrawingEngine.createSmoothPath(strokePointsToDraw, scale = currentScale, panX = panOffset.x, panY = panOffset.y)
+                val activeWidth = DrawingEngine.strokeRenderWidth(activeTool, activeBaseWidth, currentScale)
+                val activeAlpha = DrawingEngine.strokeRenderAlpha(activeTool, activeOpacity)
 
                 drawPath(
                     path = activePath,
-                    color = currentColor.copy(alpha = activeAlpha).toColor(),
+                    color = activeColor.copy(alpha = activeAlpha).toColor(),
                     style = Stroke(
                         width = activeWidth,
-                        cap = if (currentTool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
+                        cap = if (activeTool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
                         join = StrokeJoin.Round
                     )
                 )

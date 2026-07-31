@@ -443,11 +443,10 @@ class CanvasEditorViewModel(
                     }
                     layer.copy(strokes = updatedStrokes)
                 } else {
-                    val updatedEraserMarks = layer.eraserMarks + com.example.data.models.EraserMark(
-                        points = listOf(StrokePoint(point.x, point.y)),
-                        width = radius
-                    )
-                    layer.copy(eraserMarks = updatedEraserMarks)
+                    val updatedStrokes = layer.strokes.flatMap { stroke ->
+                        DrawingEngine.erasePixelMode(stroke, point, radius)
+                    }
+                    layer.copy(strokes = updatedStrokes)
                 }
             } else layer
         }
@@ -1473,6 +1472,19 @@ class CanvasEditorViewModel(
         }
     }
 
+    fun exportAllPagesPdf(onSuccess: (File) -> Unit) {
+        val allPages = _pages.value
+        if (allPages.isEmpty()) return
+        val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.cacheDir, "notebook_${System.currentTimeMillis()}.pdf")
+            ExportManager.exportPagesToPdf(allPages, file, context, backgroundColor = bgInt)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onSuccess(file)
+            }
+        }
+    }
+
     fun exportImage(onSuccess: (File) -> Unit) {
         val page = currentPage ?: return
         val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
@@ -1494,7 +1506,7 @@ class CanvasEditorViewModel(
         val bgInt = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val file = File(context.cacheDir, "export_${System.currentTimeMillis()}.png")
-            ExportManager.exportToPng(page, file, scale, cropRect, backgroundColor = bgInt)
+            ExportManager.exportToPng(page, file, scale, cropRect, backgroundColor = bgInt, context = context)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onSuccess(file)
             }

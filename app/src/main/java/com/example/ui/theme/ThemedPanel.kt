@@ -65,7 +65,50 @@ fun ThemedPanel(
             )
         }
 
+        AppThemeStyle.AMOLED_BLACK -> {
+            Surface(
+                modifier = modifier.border(1.dp, Color(0xFF262626), shape),
+                shape = shape,
+                color = Color.Black,
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp,
+                content = { Box(content = content) }
+            )
+        }
+
+        AppThemeStyle.CHALKBOARD -> {
+            Surface(
+                modifier = modifier.border(1.5.dp, Color(0xFF2D5A49), shape),
+                shape = shape,
+                color = Color(0xFF142B23),
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp,
+                content = { Box(content = content) }
+            )
+        }
+
+        AppThemeStyle.SEPIA_EINK -> {
+            Surface(
+                modifier = modifier.border(1.dp, Color(0xFFB8A88A), shape),
+                shape = shape,
+                color = Color(0xFFEDE4D3),
+                shadowElevation = 2.dp,
+                tonalElevation = 1.dp,
+                content = { Box(content = content) }
+            )
+        }
+
         else -> {
+            val effectiveShadow = when (spec.elevationStyle) {
+                ElevationStyle.FLAT -> 0.dp
+                ElevationStyle.SOFT_SHADOW -> shadowElevation
+                ElevationStyle.NEUMORPHIC_DOUBLE_SHADOW -> shadowElevation
+            }
+            val effectiveTonal = when (spec.elevationStyle) {
+                ElevationStyle.FLAT -> 0.dp
+                else -> tonalElevation
+            }
+
             val borderMod = when (spec.borderStyle) {
                 BorderStyle.THIN_LIGHT -> Modifier.border(
                     1.dp,
@@ -84,8 +127,8 @@ fun ThemedPanel(
                 modifier = modifier.then(borderMod),
                 shape = shape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = surfaceAlpha),
-                shadowElevation = shadowElevation,
-                tonalElevation = tonalElevation,
+                shadowElevation = effectiveShadow,
+                tonalElevation = effectiveTonal,
                 content = { Box(content = content) }
             )
         }

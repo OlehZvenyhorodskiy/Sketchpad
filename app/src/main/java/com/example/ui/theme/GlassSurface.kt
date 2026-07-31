@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -38,18 +39,28 @@ fun GlassSurface(
 ) {
     val shape = RoundedCornerShape(cornerRadius)
 
-    // Semi-transparent frosted background gradient
-    val glassBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color.White.copy(alpha = 0.28f),
-            Color.White.copy(alpha = 0.10f)
+    // Frosted background brush with improved contrast for light/white canvas backgrounds
+    val isDark = MaterialTheme.colorScheme.background.red < 0.5f
+    val glassBrush = if (isDark) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x661E293B),
+                Color(0x440F172A)
+            )
         )
-    )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xEEFFFFFF),
+                Color(0xCCF1F5F9)
+            )
+        )
+    }
 
-    // Top "glare" highlight — thin white-to-transparent stripe
+    // Top "glare" highlight — subtle light reflection stripe
     val glareBrush = Brush.verticalGradient(
         colors = listOf(
-            Color.White.copy(alpha = 0.22f),
+            Color.White.copy(alpha = if (isDark) 0.30f else 0.60f),
             Color.Transparent
         )
     )
@@ -63,23 +74,29 @@ fun GlassSurface(
 
     Box(
         modifier = modifier
-            .shadow(16.dp, shape = shape, spotColor = Color(0x40000000))
+            .shadow(
+                elevation = 12.dp,
+                shape = shape,
+                spotColor = Color(0x33000000),
+                ambientColor = Color(0x1A000000)
+            )
             .clip(shape)
     ) {
-        // Isolated background layer that receives the blur modifier
+        // Isolated backdrop/background layer that receives the blur modifier
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .then(blurModifier)
-                .background(Color.White.copy(alpha = 0.12f))
+                .background(if (isDark) Color(0x44000000) else Color(0x22000000))
                 .background(glassBrush)
         )
 
-        // Subtle border stroke overlay
+        // Contrast border stroke overlay
+        val borderColor = if (isDark) Color.White.copy(alpha = 0.25f) else Color(0xFFCBD5E1)
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .border(1.dp, Color.White.copy(alpha = 0.4f), shape)
+                .border(1.5.dp, borderColor, shape)
         )
 
         // Glare highlight at the very top of the panel
@@ -91,7 +108,7 @@ fun GlassSurface(
                 .background(glareBrush)
         )
 
-        // Crisp, unblurred content layer
+        // Crisp content layer
         content()
     }
 }

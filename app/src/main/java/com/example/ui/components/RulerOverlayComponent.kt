@@ -194,20 +194,18 @@ fun RulerOverlayComponent(
                 }
                 .size(40.dp)
                 .pointerInput(Unit) {
+                    var handleAccumulator = Offset.Zero
                     detectDragGestures(
                         onDragStart = {
                             isRightDragging = true
                             localAngleRad = rulerStateRef.value.angleRad
                             localLength = rulerStateRef.value.length
+                            handleAccumulator = handleRightPos
                         },
-                        onDrag = { change, _ ->
+                        onDrag = { change, dragAmount ->
                             change.consume()
-                            val halfHandlePx = 20.dp.toPx()
-                            val touchPos = Offset(
-                                handleRightPos.x - halfHandlePx + change.position.x,
-                                handleRightPos.y - halfHandlePx + change.position.y
-                            )
-                            val vec = touchPos - displayCenter
+                            handleAccumulator += dragAmount
+                            val vec = handleAccumulator - displayCenter
                             val newDist = vec.getDistance().coerceIn(200f, 1400f)
                             var newAngle = atan2(vec.y, vec.x)
 

@@ -175,6 +175,9 @@ fun CanvasEditorScreen(
     var chartXStepVal by remember { mutableStateOf("1.0") }
     var chartYStepVal by remember { mutableStateOf("5.0") }
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     // Viewport dimensions for centering spawned elements
     var viewportWidthPx by remember { mutableStateOf(0f) }
     var viewportHeightPx by remember { mutableStateOf(0f) }
@@ -443,6 +446,7 @@ fun CanvasEditorScreen(
                 onStrokeOpacityChange = { viewModel.setStrokeOpacity(it) },
                 onColorPickerClick = { showColorPickerSheet = true },
                 onToggleSliderOrientation = { viewModel.toggleSliderOrientation() },
+                isLandscape = isLandscape,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
@@ -878,14 +882,32 @@ fun CanvasEditorScreen(
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            title = { Text("Експорт конспекту") },
+            title = { Text("Експорт конспекту Sketchpad") },
             text = {
                 Column {
-                    Text("Виберіть формат експорту та збереження у папку 'MeCanvas Exports':")
+                    Text("Виберіть варіант для експорту поточного аркуша або всього блокнота:")
                 }
             },
             confirmButton = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            showExportDialog = false
+                            viewModel.exportAllPagesPdf { file ->
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися всім блокнотом (PDF)"))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Експортувати весь блокнот у PDF")
+                    }
+
                     Button(
                         onClick = {
                             showExportDialog = false
@@ -896,12 +918,12 @@ fun CanvasEditorScreen(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися PDF"))
+                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися сторінкою (PDF)"))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати в PDF")
+                        Text("Експортувати поточну сторінку в PDF")
                     }
 
                     Button(

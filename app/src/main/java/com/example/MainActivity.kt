@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MeCanvasApp(userPrefsRepository = userPrefsRepository)
+                    SketchpadApp(userPrefsRepository = userPrefsRepository)
                 }
             }
         }
@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MeCanvasApp(userPrefsRepository: UserPreferencesRepository) {
+fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { CanvasRepository(context) }

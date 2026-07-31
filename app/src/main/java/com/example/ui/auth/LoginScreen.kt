@@ -83,7 +83,7 @@ fun LoginScreen(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Create,
-                        contentDescription = "MeCanvas Logo",
+                        contentDescription = "Sketchpad Logo",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(48.dp)
                     )
@@ -93,7 +93,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "MeCanvas",
+                text = "Sketchpad",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -136,8 +136,7 @@ fun LoginScreen(
                             scope.launch {
                                 try {
                                     val credentialManager = CredentialManager.create(context)
-                                    // WEB_CLIENT_ID placeholder or string resource
-                                    val webClientId = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+                                    val webClientId = context.getString(com.example.R.string.google_web_client_id)
 
                                     val googleIdOption = GetGoogleIdOption.Builder()
                                         .setServerClientId(webClientId)
@@ -171,13 +170,20 @@ fun LoginScreen(
                                     }
                                 } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
                                     // User cancelled the sign-in flow
-                                } catch (e: Exception) {
-                                    android.util.Log.e("LoginScreen", "Google Sign-In failed", e)
+                                } catch (e: androidx.credentials.exceptions.NoCredentialException) {
                                     Toast.makeText(
                                         context,
-                                        "Google Sign-In: ${e.localizedMessage ?: "Помилка авторизації (перевірте Client ID)"}",
+                                        "У системі відсутній Google-акаунт. Будь ласка, додайте обліковий запис у налаштуваннях пристрою.",
                                         Toast.LENGTH_LONG
                                     ).show()
+                                } catch (e: Exception) {
+                                    android.util.Log.e("LoginScreen", "Google Sign-In failed", e)
+                                    val message = if (e.javaClass.simpleName.contains("NoCredential") || e.message?.contains("No credentials", ignoreCase = true) == true) {
+                                        "У системі відсутній Google-акаунт. Будь ласка, додайте обліковий запис у налаштуваннях пристрою."
+                                    } else {
+                                        "Google Sign-In: ${e.localizedMessage ?: "Помилка авторизації"}"
+                                    }
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                                 }
                             }
                         },
