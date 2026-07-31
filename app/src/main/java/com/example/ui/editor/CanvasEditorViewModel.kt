@@ -112,6 +112,7 @@ class CanvasEditorViewModel(
 
     private val _selectedElementIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedElementIds: StateFlow<Set<String>> = _selectedElementIds.asStateFlow()
+    private var clipboard: List<ClipboardElement> = emptyList()
 
     fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
         _selectionMode.value = mode
@@ -1512,6 +1513,56 @@ class CanvasEditorViewModel(
         _selectedElementIds.value = ids
     }
 
+    fun copySelectedElements() {
+        val ids = _selectedElementIds.value
+        if (ids.isEmpty()) return
+        clipboard = currentPage?.getEffectiveLayers()?.flatMap { layer ->
+            buildList {
+                layer.shapes.filter { it.id in ids }.forEach { add(ClipboardElement.Shape(it)) }
+                layer.images.filter { it.id in ids }.forEach { add(ClipboardElement.Image(it)) }
+                layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
+                layer.charts.filter { it.id in ids }.forEach { add(ClipboardElement.Chart(it)) }
+            }
+        }.orEmpty()
+    }
+
+    fun pasteElements(offsetX: Float = 20f, offsetY: Float = 20f) {
+        val page = currentPage ?: return
+        if (clipboard.isEmpty()) return
+        val migrated = ensureLayersExist(page)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id ?: return
+        val pastedIds = mutableSetOf<String>()
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id != targetLayerId) return@map layer
+            val pastedShapes = clipboard.filterIsInstance<ClipboardElement.Shape>().map {
+                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+                    .also { shape -> pastedIds.add(shape.id) }
+            }
+            val pastedImages = clipboard.filterIsInstance<ClipboardElement.Image>().map {
+                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+                    .also { image -> pastedIds.add(image.id) }
+            }
+            val pastedText = clipboard.filterIsInstance<ClipboardElement.Text>().map {
+                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+                    .also { text -> pastedIds.add(text.id) }
+            }
+            val pastedCharts = clipboard.filterIsInstance<ClipboardElement.Chart>().map {
+                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+                    .also { chart -> pastedIds.add(chart.id) }
+            }
+            layer.copy(
+                shapes = layer.shapes + pastedShapes,
+                images = layer.images + pastedImages,
+                textBlocks = layer.textBlocks + pastedText,
+                charts = layer.charts + pastedCharts
+            )
+        }
+        pushUndoState(migrated)
+        _selectedElementIds.value = pastedIds
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
     fun deleteSelectedElements() {
         val page = currentPage ?: return
         val ids = _selectedElementIds.value
@@ -1663,6 +1714,15 @@ class CanvasEditorViewModel(
         _isPagedCanvasActive.value = !_isPagedCanvasActive.value
         _academicStatusMessage.value = if (_isPagedCanvasActive.value) "Нескінченне полотно з Paging & BitmapPool активне!" else "Paging вимкнено"
     }
+}
+
+private sealed interface ClipboardElement {
+    val id: String
+
+    data class Shape(val value: ShapeEntity) : ClipboardElement { override val id: String = value.id }
+    data class Image(val value: ImageElementEntity) : ClipboardElement { override val id: String = value.id }
+    data class Text(val value: TextBlockEntity) : ClipboardElement { override val id: String = value.id }
+    data class Chart(val value: ChartElementEntity) : ClipboardElement { override val id: String = value.id }
 }
 
 internal fun doesRectIntersectPolygon(rect: Rect, polygon: List<Offset>): Boolean {

@@ -229,13 +229,20 @@ fun CanvasEditorScreen(
     Scaffold(
         containerColor = canvas?.backgroundColor?.let { Color(it) } ?: MaterialTheme.colorScheme.background,
         modifier = Modifier.onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed) {
+            if (event.type != KeyEventType.KeyDown) {
+                false
+            } else if (event.isCtrlPressed) {
                 when (event.key) {
                     Key.Z -> { viewModel.undo(); true }
                     Key.Y -> { viewModel.redo(); true }
                     Key.S -> { showExportDialog = true; true }
+                    Key.C -> { viewModel.copySelectedElements(); true }
+                    Key.V -> { viewModel.pasteElements(); true }
                     else -> false
                 }
+            } else if (event.key == Key.Delete || event.key == Key.Backspace) {
+                viewModel.deleteSelectedElements()
+                true
             } else false
         },
         topBar = {
