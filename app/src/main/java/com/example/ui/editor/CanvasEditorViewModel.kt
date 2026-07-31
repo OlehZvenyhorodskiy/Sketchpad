@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.ai.ChatMessage
 import com.example.ai.GeminiAssistantService
 import com.example.audio.AudioRecorderManager
@@ -16,6 +17,8 @@ import com.example.data.models.BackgroundPattern
 import com.example.data.models.BlendMode
 import com.example.data.models.CanvasEntity
 import com.example.data.models.ChartElementEntity
+import com.example.data.models.CodeBlockEntity
+import com.example.data.models.CodeLanguage
 import com.example.data.models.EraserMode
 import com.example.data.models.HslaColor
 import com.example.data.models.ImageElementEntity
@@ -134,26 +137,9 @@ class CanvasEditorViewModel(
     private val _canvasVersion = MutableStateFlow(0)
     val canvasVersion: StateFlow<Int> = _canvasVersion.asStateFlow()
 
-    // ═══════════════════════════════════════════════════════
-    // Academic Features State Flows (10 Cheat Codes)
-    // ═══════════════════════════════════════════════════════
+    // Useful study-tool output and transient feedback.
     private val _latexOutput = MutableStateFlow<String?>(null)
     val latexOutput: StateFlow<String?> = _latexOutput.asStateFlow()
-
-    private val _graphAnalysisResult = MutableStateFlow<com.example.academic.GraphAnalysisResult?>(null)
-    val graphAnalysisResult: StateFlow<com.example.academic.GraphAnalysisResult?> = _graphAnalysisResult.asStateFlow()
-
-    private val _isPhysicsActive = MutableStateFlow(false)
-    val isPhysicsActive: StateFlow<Boolean> = _isPhysicsActive.asStateFlow()
-
-    private val _isArOverlayActive = MutableStateFlow(false)
-    val isArOverlayActive: StateFlow<Boolean> = _isArOverlayActive.asStateFlow()
-
-    private val _isOilPaintShaderActive = MutableStateFlow(false)
-    val isOilPaintShaderActive: StateFlow<Boolean> = _isOilPaintShaderActive.asStateFlow()
-
-    private val _isPagedCanvasActive = MutableStateFlow(false)
-    val isPagedCanvasActive: StateFlow<Boolean> = _isPagedCanvasActive.asStateFlow()
 
     private val _academicStatusMessage = MutableStateFlow<String?>(null)
     val academicStatusMessage: StateFlow<String?> = _academicStatusMessage.asStateFlow()
@@ -326,7 +312,9 @@ class CanvasEditorViewModel(
 
         if (page.layers.isEmpty() || hasTopLevelElements) {
             val targetLayerId = _activeLayerId.value ?: page.activeLayerId ?: page.layers.firstOrNull()?.id ?: "default"
-            val baseLayers = if (page.layers.isEmpty()) listOf(LayerEntity(id = "default", name = "Шар 1")) else page.layers
+            val baseLayers = if (page.layers.isEmpty()) {
+                listOf(LayerEntity(id = "default", name = context.getString(R.string.layer_number, 1)))
+            } else page.layers
 
             val updatedLayers = baseLayers.map { layer ->
                 if (layer.id == targetLayerId) {
@@ -357,7 +345,7 @@ class CanvasEditorViewModel(
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
-        val newLayer = LayerEntity(name = "Шар ${migrated.layers.size + 1}")
+        val newLayer = LayerEntity(name = context.getString(R.string.layer_number, migrated.layers.size + 1))
         _activeLayerId.value = newLayer.id
         updateCurrentPage(migrated.copy(
             layers = migrated.layers + newLayer,
@@ -694,6 +682,87 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
+    fun insertCodeBlock(
+        language: CodeLanguage,
+        source: String,
+        result: com.example.academic.code.CodeRunResult,
+        viewportWidth: Float = 0f,
+        viewportHeight: Float = 0f,
+        panOffsetX: Float = 0f,
+        panOffsetY: Float = 0f,
+        scale: Float = 1f
+    ): String? {
+        val page = currentPage ?: return null
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val safeScale = scale.takeIf { it > 0.001f } ?: 1f
+        val safeViewportWidth = viewportWidth.takeIf { it > 0f } ?: 1080f
+        val safeViewportHeight = viewportHeight.takeIf { it > 0f } ?: 1920f
+        val width = 520f
+        val height = 320f
+        val codeBlock = CodeBlockEntity(
+            language = language,
+            source = source,
+            consoleOutput = result.output,
+            diagnostics = result.diagnostics.map { diagnostic ->
+                "line ${diagnostic.line}: ${diagnostic.message}"
+            },
+            x = (-panOffsetX + safeViewportWidth / 2f) / safeScale - width / 2f,
+            y = (-panOffsetY + safeViewportHeight / 2f) / safeScale - height / 2f,
+            width = width,
+            height = height,
+            lastRunAt = System.currentTimeMillis()
+        )
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(codeBlocks = layer.codeBlocks + codeBlock) else layer
+        }
+        _selectedElementIds.value = setOf(codeBlock.id)
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
+        return codeBlock.id
+    }
+
+    fun updateCodeBlock(
+        id: String,
+        language: CodeLanguage,
+        source: String,
+        result: com.example.academic.code.CodeRunResult
+    ) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        if (migrated.getEffectiveLayers().none { layer -> layer.codeBlocks.any { it.id == id } }) return
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(codeBlocks = layer.codeBlocks.map { block ->
+                if (block.id == id) {
+                    block.copy(
+                        language = language,
+                        source = source,
+                        consoleOutput = result.output,
+                        diagnostics = result.diagnostics.map { "line ${it.line}: ${it.message}" },
+                        lastRunAt = System.currentTimeMillis()
+                    )
+                } else block
+            })
+        }
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun runCodeBlock(id: String): com.example.academic.code.CodeRunResult? {
+        val block = getCodeBlock(id) ?: return null
+        val result = com.example.academic.code.LocalCodeAnalyzer.run(block.source, block.language)
+        updateCodeBlock(id, block.language, block.source, result)
+        return result
+    }
+
+    fun getCodeBlock(id: String): CodeBlockEntity? = currentPage
+        ?.getEffectiveLayers()
+        ?.asSequence()
+        ?.flatMap { it.codeBlocks.asSequence() }
+        ?.firstOrNull { it.id == id }
+
     fun insertMathFunctionChart(
         formula: String = "sin(x)",
         xMin: Float = -10f,
@@ -931,6 +1000,7 @@ class CanvasEditorViewModel(
                 "IMAGE" -> layer.copy(images = layer.images.filterNot { it.id == id })
                 "TEXT" -> layer.copy(textBlocks = layer.textBlocks.filterNot { it.id == id })
                 "CHART" -> layer.copy(charts = layer.charts.filterNot { it.id == id })
+                "CODE" -> layer.copy(codeBlocks = layer.codeBlocks.filterNot { it.id == id })
                 else -> layer
             }
         }
@@ -1161,6 +1231,18 @@ class CanvasEditorViewModel(
                     )
                 ) hitIds.add(chart.id)
             }
+            layer.codeBlocks.forEach { codeBlock ->
+                if (doesRectIntersectPolygon(
+                        Rect(
+                            codeBlock.x,
+                            codeBlock.y,
+                            codeBlock.x + codeBlock.width,
+                            codeBlock.y + codeBlock.height
+                        ),
+                        lassoWorldPoints
+                    )
+                ) hitIds.add(codeBlock.id)
+            }
         }
 
         _selectedElementIds.value = hitIds
@@ -1183,6 +1265,9 @@ class CanvasEditorViewModel(
                     if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
                 },
                 charts = layer.charts.map {
+                    if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+                },
+                codeBlocks = layer.codeBlocks.map {
                     if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
                 }
             )
@@ -1225,6 +1310,9 @@ class CanvasEditorViewModel(
                 centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
             }
             layer.charts.filter { it.id in ids }.forEach {
+                centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
+            }
+            layer.codeBlocks.filter { it.id in ids }.forEach {
                 centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
             }
         }
@@ -1284,6 +1372,22 @@ class CanvasEditorViewModel(
                             width = newW.coerceAtLeast(100f), height = newH.coerceAtLeast(100f)
                         )
                     } else ch
+                },
+                codeBlocks = layer.codeBlocks.map { codeBlock ->
+                    if (codeBlock.id in ids) {
+                        val newWidth = codeBlock.width * factor
+                        val newHeight = codeBlock.height * factor
+                        val centerX = codeBlock.x + codeBlock.width / 2f
+                        val centerY = codeBlock.y + codeBlock.height / 2f
+                        val newCenterX = centroid.x + (centerX - centroid.x) * factor
+                        val newCenterY = centroid.y + (centerY - centroid.y) * factor
+                        codeBlock.copy(
+                            x = newCenterX - newWidth / 2f,
+                            y = newCenterY - newHeight / 2f,
+                            width = newWidth.coerceAtLeast(240f),
+                            height = newHeight.coerceAtLeast(160f)
+                        )
+                    } else codeBlock
                 }
             )
         }
@@ -1294,6 +1398,13 @@ class CanvasEditorViewModel(
         if (index in 0 until _pages.value.size) {
             _currentPageIndex.value = index
         }
+    }
+
+    fun setCurrentPageById(pageId: String): Boolean {
+        val index = _pages.value.indexOfFirst { it.id == pageId }
+        if (index < 0) return false
+        _currentPageIndex.value = index
+        return true
     }
 
     fun addNewPage() {
@@ -1362,6 +1473,10 @@ class CanvasEditorViewModel(
         _isAiWindowVisible.value = !_isAiWindowVisible.value
     }
 
+    fun showAiWindow() {
+        _isAiWindowVisible.value = true
+    }
+
     fun hideAiWindow() {
         _isAiWindowVisible.value = false
     }
@@ -1405,10 +1520,10 @@ class CanvasEditorViewModel(
 
     private fun buildCanvasContextPrompt(userPrompt: String, pages: List<PageEntity>, canvasTitle: String): String {
         val contextBuilder = StringBuilder()
-        contextBuilder.append("Контекст поточного конспекту/канви: \"$canvasTitle\"\n\n")
+        contextBuilder.append("Current note/canvas context: \"$canvasTitle\"\n\n")
 
         pages.forEachIndexed { index, page ->
-            contextBuilder.append("--- Сторінка ${index + 1} ---\n")
+            contextBuilder.append("--- Page ${index + 1} ---\n")
             val layers = page.getEffectiveLayers()
             val textBlocks = layers.flatMap { it.textBlocks }
             val shapes = layers.flatMap { it.shapes }
@@ -1416,25 +1531,27 @@ class CanvasEditorViewModel(
             val strokes = layers.flatMap { it.strokes }
 
             if (textBlocks.isNotEmpty()) {
-                contextBuilder.append("Текстові блоки:\n")
+                contextBuilder.append("Text blocks:\n")
                 textBlocks.forEach { tb ->
                     contextBuilder.append("- ${tb.text}\n")
                 }
             }
             if (shapes.isNotEmpty()) {
-                contextBuilder.append("Фігури на сторінці: ${shapes.joinToString { it.shapeType.name }}\n")
+                contextBuilder.append("Shapes: ${shapes.joinToString { it.shapeType.name }}\n")
             }
             if (charts.isNotEmpty()) {
-                contextBuilder.append("Графіки: ${charts.joinToString { it.title }}\n")
+                contextBuilder.append("Charts: ${charts.joinToString { it.title }}\n")
             }
             if (strokes.isNotEmpty()) {
-                contextBuilder.append("Рукописних штрихів/ліній на сторінці: ${strokes.size}\n")
+                contextBuilder.append("Handwritten strokes/lines: ${strokes.size}\n")
             }
         }
 
-        val systemInstruction = "Ти — інтелектуальний помічник конспекту. Твоє завдання — допомагати користувачеві вивчати матеріали, відповідати на запитання, пояснювати формули та робити короткі підсумки ЛИШЕ на основі наданого контексту конспекту. Відповідай українською мовою, чітко, структуровано та приязно."
+        val responseLanguage = context.resources.configuration.locales[0]
+            .getDisplayLanguage(java.util.Locale.ENGLISH)
+        val systemInstruction = "You are a study-note assistant. Help the user learn, answer questions, explain formulas, and create concise summaries using only the supplied note context. Reply clearly, structurally, and helpfully in $responseLanguage."
 
-        return "$systemInstruction\n\n$contextBuilder\n\nЗапитання користувача: $userPrompt"
+        return "$systemInstruction\n\n$contextBuilder\n\nUser question: $userPrompt"
     }
 
     // AI Chat query with multi-provider routing
@@ -1452,12 +1569,15 @@ class CanvasEditorViewModel(
 
             if (apiKey.isBlank()) {
                 _isAiLoading.value = false
-                val aiMsg = ChatMessage(text = "Будь ласка, вкажіть API-ключ для провайдера ${provider.displayName}.", isUser = false)
+                val aiMsg = ChatMessage(
+                    text = context.getString(R.string.ai_api_key_required, provider.displayName),
+                    isUser = false
+                )
                 _chatMessages.value = _chatMessages.value + aiMsg
                 return@launch
             }
 
-            val title = _canvas.value?.title ?: "Конспект"
+            val title = _canvas.value?.title ?: context.getString(R.string.canvas_fallback)
             val currentVer = _canvasVersion.value
             val page = currentPage
 
@@ -1559,7 +1679,8 @@ class CanvasEditorViewModel(
     ) {
         val page = currentPage ?: return
         val shapes = page.getEffectiveLayers().flatMap { it.shapes }
-        val pageName = "${_canvas.value?.title ?: "Sketchpad"} — сторінка ${page.pageIndex + 1}"
+        val pageName = "${_canvas.value?.title ?: "Sketchpad"} — " +
+            context.getString(R.string.page_number, page.pageIndex + 1)
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = ExportManager.exportToObsidian(
                 page = page,
@@ -1609,11 +1730,16 @@ class CanvasEditorViewModel(
                 it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
                     .also { chart -> pastedIds.add(chart.id) }
             }
+            val pastedCodeBlocks = clipboard.filterIsInstance<ClipboardElement.CodeBlock>().map {
+                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+                    .also { codeBlock -> pastedIds.add(codeBlock.id) }
+            }
             layer.copy(
                 shapes = layer.shapes + pastedShapes,
                 images = layer.images + pastedImages,
                 textBlocks = layer.textBlocks + pastedText,
-                charts = layer.charts + pastedCharts
+                charts = layer.charts + pastedCharts,
+                codeBlocks = layer.codeBlocks + pastedCodeBlocks
             )
         }
         pushUndoState(migrated)
@@ -1671,9 +1797,13 @@ class CanvasEditorViewModel(
                 }
             }
             updateCurrentPage(migrated.copy(layers = updatedLayers))
-            _academicStatusMessage.value = "Розпізнано фігуру: ${recognized.type.name} (Точність ${(recognized.confidence * 100).toInt()}%)"
+            _academicStatusMessage.value = context.getString(
+                R.string.shape_recognized,
+                recognized.type.name,
+                (recognized.confidence * 100).toInt()
+            )
         } else {
-            _academicStatusMessage.value = "Фігуру не розпізнано. Спробуйте намалювати чіткіше коло чи прямокутник."
+            _academicStatusMessage.value = context.getString(R.string.shape_not_recognized)
         }
     }
 
@@ -1682,7 +1812,7 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         val strokes = migrated.getEffectiveLayers().flatMap { it.strokes }
         if (strokes.isEmpty()) {
-            _academicStatusMessage.value = "Немає штрихів для аналізу математичної функції."
+            _academicStatusMessage.value = context.getString(R.string.no_strokes_function)
             return
         }
         val allPoints = strokes.flatMap { it.points }
@@ -1703,9 +1833,13 @@ class CanvasEditorViewModel(
             }
             updateCurrentPage(migrated.copy(layers = updatedLayers))
             _latexOutput.value = result.latexFormula
-            _academicStatusMessage.value = "Побудовано графік: ${result.latexFormula} (R² = ${String.format("%.2f", result.rSquared)})"
+            _academicStatusMessage.value = context.getString(
+                R.string.graph_plotted,
+                result.latexFormula,
+                String.format(java.util.Locale.US, "%.2f", result.rSquared)
+            )
         } else {
-            _academicStatusMessage.value = "Не вдалося апроксимувати функцію з наявних штрихів."
+            _academicStatusMessage.value = context.getString(R.string.function_fit_failed)
         }
     }
 
@@ -1715,24 +1849,10 @@ class CanvasEditorViewModel(
         val strokes = page.getEffectiveLayers().flatMap { it.strokes }
         val latex = com.example.academic.HandwritingLatexConverter.convertStrokesToLatex(strokes)
         _latexOutput.value = latex
-        _academicStatusMessage.value = "Сгенеровано LaTeX: $latex"
+        _academicStatusMessage.value = context.getString(R.string.latex_generated, latex)
     }
 
-    // Feature 4: Object Tracker with AR Overlays
-    fun toggleArOverlay() {
-        _isArOverlayActive.value = !_isArOverlayActive.value
-        _academicStatusMessage.value = if (_isArOverlayActive.value) "AR-режим активний (CameraX AR Overlay)" else "AR-режим вимкнено"
-    }
-
-    // Feature 5: Graph Schema Analyzer
-    fun analyzeGraphSchema() {
-        val page = currentPage ?: return
-        val result = com.example.academic.GraphSchemaAnalyzer.analyzePageGraph(page)
-        _graphAnalysisResult.value = result
-        _academicStatusMessage.value = "Аналіз графа: ${result.nodes.size} вузлів, ${result.edges.size} ребер. Компонент: ${result.connectedComponentsCount}, Цикли: ${if (result.hasCycles) "Так" else "Ні"}"
-    }
-
-    // Feature 6: Smart Lecture Recorder & Timestamp Sync
+    // Smart lecture recorder and timestamp sync.
     fun seekAudioToStrokeTimestamp(strokeId: String) {
         val page = currentPage ?: return
         val stroke = page.getEffectiveLayers().flatMap { it.strokes }.find { it.id == strokeId } ?: return
@@ -1740,31 +1860,9 @@ class CanvasEditorViewModel(
         val recording = audioRecordings.value.firstOrNull() ?: return
         val relativeMs = (strokeTime - recording.recordedAt).coerceAtLeast(0L)
         playAudioRecording(recording.filePath, relativeMs)
-        _academicStatusMessage.value = "Перемотано аудіо до штриха: ${relativeMs / 1000} сек"
+        _academicStatusMessage.value = context.getString(R.string.audio_seek_seconds, relativeMs / 1000)
     }
 
-    // Feature 7: Physics-based Object Dynamics
-    fun togglePhysicsSimulation() {
-        _isPhysicsActive.value = !_isPhysicsActive.value
-        _academicStatusMessage.value = if (_isPhysicsActive.value) "Симуляцію фізики Box2D запущено!" else "Симуляцію фізики зупинено"
-    }
-
-    // Feature 8: Oil Paint Shader Effect
-    fun toggleOilPaintShader() {
-        _isOilPaintShaderActive.value = !_isOilPaintShaderActive.value
-        _academicStatusMessage.value = if (_isOilPaintShaderActive.value) "Олійний AGSL-шейдер увімкнено!" else "Олійний шейдер вимкнено"
-    }
-
-    // Feature 9: Watercolor Bleed Simulation
-    fun applyWatercolorBleedEffect() {
-        _academicStatusMessage.value = "Застосовано симуляцію розмиття фарби Watercolor Bleed (PDE solver)"
-    }
-
-    // Feature 10: Infinite Canvas with Virtual Memory Paging
-    fun togglePagedCanvas() {
-        _isPagedCanvasActive.value = !_isPagedCanvasActive.value
-        _academicStatusMessage.value = if (_isPagedCanvasActive.value) "Нескінченне полотно з Paging & BitmapPool активне!" else "Paging вимкнено"
-    }
 }
 
 internal sealed interface ClipboardElement {
@@ -1774,6 +1872,7 @@ internal sealed interface ClipboardElement {
     data class Image(val value: ImageElementEntity) : ClipboardElement { override val id: String = value.id }
     data class Text(val value: TextBlockEntity) : ClipboardElement { override val id: String = value.id }
     data class Chart(val value: ChartElementEntity) : ClipboardElement { override val id: String = value.id }
+    data class CodeBlock(val value: CodeBlockEntity) : ClipboardElement { override val id: String = value.id }
 }
 
 internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<ClipboardElement> =
@@ -1783,6 +1882,7 @@ internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<Clip
             layer.images.filter { it.id in ids }.forEach { add(ClipboardElement.Image(it)) }
             layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
             layer.charts.filter { it.id in ids }.forEach { add(ClipboardElement.Chart(it)) }
+            layer.codeBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.CodeBlock(it)) }
         }
     }
 
@@ -1792,7 +1892,8 @@ internal fun deleteElementsFromPage(page: PageEntity, ids: Set<String>): PageEnt
             shapes = layer.shapes.filterNot { it.id in ids },
             images = layer.images.filterNot { it.id in ids },
             textBlocks = layer.textBlocks.filterNot { it.id in ids },
-            charts = layer.charts.filterNot { it.id in ids }
+            charts = layer.charts.filterNot { it.id in ids },
+            codeBlocks = layer.codeBlocks.filterNot { it.id in ids }
         )
     }
 )

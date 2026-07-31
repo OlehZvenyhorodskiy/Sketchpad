@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,9 +33,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.models.ShapeType
+import com.example.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,11 +52,11 @@ fun InsertMenuBottomSheet(
     onRecognizeShapeClick: () -> Unit = {},
     onPlotFunctionClick: () -> Unit = {},
     onLatexConvertClick: () -> Unit = {},
-    onGraphAnalyzeClick: () -> Unit = {},
-    onPhysicsToggleClick: () -> Unit = {},
-    onShaderToggleClick: () -> Unit = {},
-    onArOverlayClick: () -> Unit = {},
-    onPagedCanvasClick: () -> Unit = {},
+    onInsertCodeClick: () -> Unit = {},
+    onStudyDeckClick: () -> Unit = {},
+    onSummarizeNotesClick: () -> Unit = {},
+    onCreateQuizClick: () -> Unit = {},
+    onSuggestLinksClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -62,10 +66,11 @@ fun InsertMenuBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "Вставка елементів",
+                text = stringResource(R.string.insert_elements),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -91,7 +96,7 @@ fun InsertMenuBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Insert image (Зображення)",
+                    text = stringResource(R.string.insert_image),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -115,7 +120,7 @@ fun InsertMenuBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Insert text (Текстовий блок)",
+                    text = stringResource(R.string.insert_text_block),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -139,7 +144,7 @@ fun InsertMenuBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Insert chart (Координатна сітка/графік)",
+                    text = stringResource(R.string.insert_chart_grid),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -161,7 +166,7 @@ fun InsertMenuBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Text(
-                        text = "Insert shape (Фігури):",
+                        text = stringResource(R.string.insert_shape),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -204,16 +209,16 @@ fun InsertMenuBottomSheet(
                                 )
                                 Text(
                                     text = when (shapeType) {
-                                        ShapeType.CIRCLE -> "Круг"
-                                        ShapeType.SQUARE -> "Квадрат"
-                                        ShapeType.TRIANGLE -> "Трикут"
-                                        ShapeType.ARROW -> "Стрілка"
-                                        ShapeType.STAR -> "Зірка"
-                                        ShapeType.BOLD_ARROW -> "Широка"
-                                        ShapeType.HEXAGON -> "Шестикут"
-                                        ShapeType.PENTAGON -> "П'ятикут"
-                                        ShapeType.CLOUD -> "Хмара"
-                                        ShapeType.SPEECH_BUBBLE -> "Бабл"
+                                        ShapeType.CIRCLE -> stringResource(R.string.shape_circle)
+                                        ShapeType.SQUARE -> stringResource(R.string.shape_square)
+                                        ShapeType.TRIANGLE -> stringResource(R.string.shape_triangle)
+                                        ShapeType.ARROW -> stringResource(R.string.shape_arrow)
+                                        ShapeType.STAR -> stringResource(R.string.shape_star)
+                                        ShapeType.BOLD_ARROW -> stringResource(R.string.shape_bold_arrow)
+                                        ShapeType.HEXAGON -> stringResource(R.string.shape_hexagon)
+                                        ShapeType.PENTAGON -> stringResource(R.string.shape_pentagon)
+                                        ShapeType.CLOUD -> stringResource(R.string.shape_cloud)
+                                        ShapeType.SPEECH_BUBBLE -> stringResource(R.string.shape_speech_bubble)
                                     },
                                     fontSize = 10.sp
                                 )
@@ -242,7 +247,7 @@ fun InsertMenuBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Вставити з буфера (Paste content)",
+                    text = stringResource(R.string.paste_content),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -250,7 +255,7 @@ fun InsertMenuBottomSheet(
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
             Text(
-                text = "⚡ Академічні Чіт-Коди (10 функцій)",
+                text = stringResource(R.string.study_tools),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.tertiary
@@ -261,65 +266,10 @@ fun InsertMenuBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    onClick = { onRecognizeShapeClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "📐 Vectorize",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onPlotFunctionClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "📈 Plot f(x)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onLatexConvertClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "∑ LaTeX",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onGraphAnalyzeClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "🕸 Graph BFS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
+                StudyToolButton(stringResource(R.string.vectorize), { onRecognizeShapeClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.plot_function), { onPlotFunctionClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.latex_tool), { onLatexConvertClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.code_lab_tool), { onInsertCodeClick(); onDismiss() }, Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -328,65 +278,10 @@ fun InsertMenuBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    onClick = { onPhysicsToggleClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "⚛ Physics",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onShaderToggleClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "🎨 Oil AGSL",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onArOverlayClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "📷 Camera AR",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                Surface(
-                    onClick = { onPagedCanvasClick(); onDismiss() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "♾ Infinite",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
+                StudyToolButton(stringResource(R.string.summary_tool), { onSummarizeNotesClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.quiz_tool), { onCreateQuizClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.find_links_tool), { onSuggestLinksClick(); onDismiss() }, Modifier.weight(1f))
+                StudyToolButton(stringResource(R.string.study_cards_tool), { onStudyDeckClick(); onDismiss() }, Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -398,7 +293,7 @@ fun InsertMenuBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "💡 Порада: Використовуйте кнопки Undo/Redo у верхньому барі для скасування дій.",
+                    text = stringResource(R.string.undo_redo_tip),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)
@@ -407,5 +302,27 @@ fun InsertMenuBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun StudyToolButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+            color = MaterialTheme.colorScheme.onTertiaryContainer
+        )
     }
 }

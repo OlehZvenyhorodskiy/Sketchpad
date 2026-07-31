@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.academic.code.CodeDiagnostic
+import com.example.R
 import com.example.academic.code.CodeRunResult
 import com.example.academic.code.LocalCodeAnalyzer
 import com.example.data.models.CodeLanguage
@@ -93,15 +95,15 @@ fun CodeLabDialog(
                     )
                     Spacer(Modifier.size(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Local code lab", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.local_code_lab), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(
-                            "Safe offline runner for basic study snippets",
+                            stringResource(R.string.code_lab_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
                     }
                 }
 
@@ -131,7 +133,7 @@ fun CodeLabDialog(
                         source = it
                         result = null
                     },
-                    label = { Text("Code") },
+                    label = { Text(stringResource(R.string.code)) },
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp,
@@ -156,7 +158,7 @@ fun CodeLabDialog(
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
-                        Text("Run")
+                        Text(stringResource(R.string.run))
                     }
 
                     if (onAddToCanvas != null) {
@@ -169,12 +171,12 @@ fun CodeLabDialog(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.size(6.dp))
-                            Text("Add to canvas")
+                            Text(stringResource(R.string.add_to_canvas))
                         }
                     }
 
                     Text(
-                        "No network · no file access · limited syntax",
+                        stringResource(R.string.code_sandbox_hint),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -207,7 +209,7 @@ private fun ConsolePanel(result: CodeRunResult?, modifier: Modifier = Modifier) 
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            "CONSOLE",
+            stringResource(R.string.console),
             color = Color(0xFF93C5FD),
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -217,7 +219,7 @@ private fun ConsolePanel(result: CodeRunResult?, modifier: Modifier = Modifier) 
 
         if (result == null) {
             Text(
-                "Press Run to check the snippet.",
+                stringResource(R.string.press_run_hint),
                 color = Color(0xFF9CA3AF),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp
@@ -236,7 +238,7 @@ private fun ConsolePanel(result: CodeRunResult?, modifier: Modifier = Modifier) 
                     )
                 } else if (result.diagnostics.isEmpty()) {
                     Text(
-                        "Program finished without output.",
+                        stringResource(R.string.program_no_output),
                         color = Color(0xFF9CA3AF),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp

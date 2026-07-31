@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.FormatPaint
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import com.example.ui.components.AudioManagementSheet
 import com.example.ui.components.LayersBottomSheet
@@ -89,22 +90,40 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.core.content.FileProvider
+import com.example.R
 import com.example.audio.RecordingStatus
 import com.example.data.models.EraserMode
+import com.example.data.models.CanvasReferenceCaptureSession
+import com.example.data.models.CanvasReferenceDestination
+import com.example.data.models.CanvasReferenceNavigationRequest
+import com.example.data.models.CanvasReferenceSource
+import com.example.data.models.CanvasViewport
+import com.example.data.models.FlashcardEntity
 import com.example.data.models.ToolType
+import com.example.data.repository.StudyDeckRepository
+import com.example.di.AppModule
 import com.example.ui.components.BottomLeftOverlay
+import com.example.ui.components.CanvasReferenceDestinationDialog
+import com.example.ui.components.CanvasReferenceListDialog
+import com.example.ui.components.CanvasReferenceListItem
+import com.example.ui.components.CanvasReferenceNavigationEffect
+import com.example.ui.components.CanvasReferenceTargetCaptureBar
+import com.example.ui.components.CanvasReferenceUiText
 import com.example.ui.components.CanvasTopMenuBottomSheet
+import com.example.ui.components.CodeLabDialog
 import com.example.ui.components.ColorPickerBottomSheet
 import com.example.ui.components.FloatingAiWindow
 import com.example.ui.components.GeminiChatBottomSheet
@@ -113,15 +132,53 @@ import com.example.ui.components.MiniSlidersOverlay
 import com.example.ui.components.PageStripBottomSheet
 import com.example.ui.components.RightSideToolPanel
 import com.example.ui.components.RulerOverlayComponent
+import com.example.ui.components.StudyDeckDialog
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanvasEditorScreen(
     viewModel: CanvasEditorViewModel,
     onBackClick: () -> Unit,
-    onOpenThemeSettings: () -> Unit = {}
+    onOpenThemeSettings: () -> Unit = {},
+    referenceCaptureSession: CanvasReferenceCaptureSession? = null,
+    referenceNavigationRequest: CanvasReferenceNavigationRequest? = null,
+    onReferenceCaptureStarted: (CanvasReferenceCaptureSession) -> Unit = {},
+    onReferenceCaptureFinished: () -> Unit = {},
+    onOpenCanvasReference: (CanvasReferenceNavigationRequest) -> Unit = {},
+    onReferenceNavigationConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val audioStartedText = stringResource(R.string.audio_started)
+    val audioPermissionText = stringResource(R.string.audio_permission_required)
+    val obsidianExportDoneText = stringResource(R.string.obsidian_export_done)
+    val obsidianExportFailedText = stringResource(R.string.obsidian_export_failed)
+    val obsidianFolderDeniedText = stringResource(R.string.obsidian_folder_denied)
+    val linkSavedText = stringResource(R.string.link_saved)
+    val linkSaveFailedText = stringResource(R.string.link_save_failed)
+    val referenceUiText = CanvasReferenceUiText(
+        addTitle = stringResource(R.string.link_to_note),
+        selectionLabel = { count -> context.getString(R.string.selected_items_count, count) },
+        searchHint = stringResource(R.string.search_sketchpads),
+        noDestinations = stringResource(R.string.no_matching_pages),
+        pageLabel = { index -> context.getString(R.string.page_number, index + 1) },
+        pageCountLabel = { count -> context.getString(R.string.pages_count, count) },
+        cancel = stringResource(R.string.cancel),
+        frameTarget = stringResource(R.string.frame_destination),
+        frameTargetHint = stringResource(R.string.frame_destination_hint),
+        saveLink = stringResource(R.string.save_link),
+        linksTitle = stringResource(R.string.linked_notes),
+        noLinks = stringResource(R.string.no_links),
+        open = stringResource(R.string.open),
+        delete = stringResource(R.string.delete)
+    )
+    val coroutineScope = rememberCoroutineScope()
+    val referenceRepository = remember(context) {
+        AppModule.provideCanvasReferenceRepository(context)
+    }
+    val studyDeckRepository = remember(context) { StudyDeckRepository(context) }
     val canvas by viewModel.canvas.collectAsState()
     val pages by viewModel.pages.collectAsState()
     val currentPageIndex by viewModel.currentPageIndex.collectAsState()
@@ -146,6 +203,7 @@ fun CanvasEditorScreen(
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isAiLoading by viewModel.isAiLoading.collectAsState()
     val isAiWindowVisible by viewModel.isAiWindowVisible.collectAsState()
+    val currentPage = pages.getOrNull(currentPageIndex)
 
     val showLayersPanel by viewModel.showLayersPanel.collectAsState()
     val activeLayerId by viewModel.activeLayerId.collectAsState()
@@ -174,6 +232,28 @@ fun CanvasEditorScreen(
     var chartWithSteps by remember { mutableStateOf(false) }
     var chartXStepVal by remember { mutableStateOf("1.0") }
     var chartYStepVal by remember { mutableStateOf("5.0") }
+    var showCodeLab by remember { mutableStateOf(false) }
+    var showStudyDeck by remember { mutableStateOf(false) }
+    var selectedStudyDeckId by remember { mutableStateOf<String?>(null) }
+    var editingCodeBlockId by remember { mutableStateOf<String?>(null) }
+    var showReferenceDestination by remember { mutableStateOf(false) }
+    var showReferenceList by remember { mutableStateOf(false) }
+    var referenceDestinations by remember { mutableStateOf<List<CanvasReferenceDestination>>(emptyList()) }
+    var referencesForSelection by remember {
+        mutableStateOf<List<com.example.data.models.CanvasReferenceEntity>>(emptyList())
+    }
+    val studyDeckSummaries by remember(studyDeckRepository) {
+        studyDeckRepository.observeDecks()
+    }.collectAsState(initial = emptyList())
+    val selectedStudyDeck by remember(selectedStudyDeckId, studyDeckRepository) {
+        selectedStudyDeckId?.let(studyDeckRepository::observeDeck) ?: flowOf(null)
+    }.collectAsState(initial = null)
+    val studyCards by remember(selectedStudyDeckId, studyDeckRepository) {
+        selectedStudyDeckId?.let(studyDeckRepository::observeCards) ?: flowOf(emptyList<FlashcardEntity>())
+    }.collectAsState(initial = emptyList())
+    val dueStudyCards by remember(selectedStudyDeckId, studyDeckRepository) {
+        selectedStudyDeckId?.let(studyDeckRepository::observeDueCards) ?: flowOf(emptyList<FlashcardEntity>())
+    }.collectAsState(initial = emptyList())
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -181,6 +261,33 @@ fun CanvasEditorScreen(
     // Viewport dimensions for centering spawned elements
     var viewportWidthPx by remember { mutableStateOf(0f) }
     var viewportHeightPx by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(currentPage?.id, selectedElementIds) {
+        val pageId = currentPage?.id
+        if (pageId == null || selectedElementIds.isEmpty()) {
+            referencesForSelection = emptyList()
+            return@LaunchedEffect
+        }
+        referenceRepository.observeOutgoingFromPage(pageId).collectLatest { references ->
+            referencesForSelection = references.filter {
+                it.hasExactSourceSelection(selectedElementIds)
+            }
+        }
+    }
+
+    LaunchedEffect(referenceCaptureSession, pages) {
+        val session = referenceCaptureSession ?: return@LaunchedEffect
+        if (session.destination.canvasId == canvas?.id) {
+            viewModel.setCurrentPageById(session.destination.pageId)
+        }
+    }
+
+    LaunchedEffect(referenceNavigationRequest, pages) {
+        val request = referenceNavigationRequest ?: return@LaunchedEffect
+        if (request.canvasId == canvas?.id) {
+            viewModel.setCurrentPageById(request.pageId)
+        }
+    }
 
     LaunchedEffect(audioRecordings) {
         if (audioRecordings.isNotEmpty()) {
@@ -220,9 +327,9 @@ fun CanvasEditorScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.startAudioRecording()
-            Toast.makeText(context, "Запис аудіо розпочато...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, audioStartedText, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Потрібен дозвіл на запис аудіо", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, audioPermissionText, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -242,12 +349,12 @@ fun CanvasEditorScreen(
             viewModel.exportToObsidian(uri) { result ->
                 Toast.makeText(
                     context,
-                    if (result.isSuccess) "Експорт для Obsidian завершено" else "Не вдалося експортувати в Obsidian",
+                    if (result.isSuccess) obsidianExportDoneText else obsidianExportFailedText,
                     Toast.LENGTH_SHORT
                 ).show()
             }
         } catch (_: SecurityException) {
-            Toast.makeText(context, "Немає доступу до папки Obsidian", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, obsidianFolderDeniedText, Toast.LENGTH_SHORT).show()
         }
     }
     val exportToObsidian = {
@@ -258,7 +365,7 @@ fun CanvasEditorScreen(
             viewModel.exportToObsidian(savedUri) { result ->
                 Toast.makeText(
                     context,
-                    if (result.isSuccess) "Експорт для Obsidian завершено" else "Не вдалося експортувати в Obsidian",
+                    if (result.isSuccess) obsidianExportDoneText else obsidianExportFailedText,
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -288,7 +395,7 @@ fun CanvasEditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = canvas?.title ?: "Канва",
+                        text = canvas?.title ?: stringResource(R.string.canvas_fallback),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -296,7 +403,7 @@ fun CanvasEditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
@@ -320,7 +427,7 @@ fun CanvasEditorScreen(
                         onClick = {
                             if (isRecording) {
                                 viewModel.stopAudioRecording()
-                                Toast.makeText(context, "Запис лекції збережено!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.lecture_recording_saved), Toast.LENGTH_SHORT).show()
                             } else {
                                 val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
                                     context,
@@ -329,7 +436,7 @@ fun CanvasEditorScreen(
 
                                 if (hasPermission) {
                                     viewModel.startAudioRecording()
-                                    Toast.makeText(context, "Запис аудіо розпочато...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, audioStartedText, Toast.LENGTH_SHORT).show()
                                 } else {
                                     audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 }
@@ -338,19 +445,19 @@ fun CanvasEditorScreen(
                     ) {
                         Icon(
                             imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                            contentDescription = "Запис аудіо",
+                            contentDescription = stringResource(R.string.record_audio),
                             tint = if (isRecording) Color.Red else MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     // Audio Recording List
                     IconButton(onClick = { showAudioSheet = true }) {
-                        Icon(imageVector = Icons.Default.GraphicEq, contentDescription = "Аудіонотатки")
+                        Icon(imageVector = Icons.Default.GraphicEq, contentDescription = stringResource(R.string.audio_notes))
                     }
 
                     // Layers Panel Button
                     IconButton(onClick = { viewModel.toggleLayersPanel() }) {
-                        Icon(imageVector = Icons.Default.Layers, contentDescription = "Шари")
+                        Icon(imageVector = Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
                     }
 
                     // Undo
@@ -365,12 +472,12 @@ fun CanvasEditorScreen(
 
                     // Export Share Button
                     IconButton(onClick = { showExportDialog = true }) {
-                        Icon(imageVector = Icons.Default.Share, contentDescription = "Експорт")
+                        Icon(imageVector = Icons.Default.Share, contentDescription = stringResource(R.string.export))
                     }
 
                     // Three Dots Top Menu
                     IconButton(onClick = { showTopMenuSheet = true }) {
-                        Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Налаштування сторінки")
+                        Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.canvas_page_settings))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -387,13 +494,13 @@ fun CanvasEditorScreen(
                     if (id.isBlank() || (id == "GEMINI" && !viewModel.hasExplicitProviderChoice()) || !hasKey) {
                         showProviderPicker = true
                     } else {
-                        showGeminiSheet = true
+                        viewModel.showAiWindow()
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
-                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = "AI-асистент")
+                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.ai_assistant))
             }
         }
     ) { padding ->
@@ -421,6 +528,7 @@ fun CanvasEditorScreen(
                 drawWithFingers = drawWithFingers,
                 rulerState = rulerState,
                 zoomScale = zoomScale,
+                viewportPanOffset = panOffset,
                 onZoomChanged = { viewModel.setZoomScale(it) },
                 onPanOffsetChanged = { viewModel.updatePanOffset(it) },
                 onStrokeAdded = { stroke -> viewModel.addStrokeToCurrentPage(stroke) },
@@ -454,7 +562,12 @@ fun CanvasEditorScreen(
                     viewModel.resizeAndMoveElement(id, type, w, h, x, y, anchor)
                 },
                 getCachedBitmap = { viewModel.getCachedBitmap(it) },
-                onPreloadImage = { viewModel.preloadImageBitmap(it) }
+                onPreloadImage = { viewModel.preloadImageBitmap(it) },
+                onEditCodeBlock = { id ->
+                    editingCodeBlockId = id
+                    showCodeLab = true
+                },
+                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) }
             )
             }
 
@@ -598,9 +711,9 @@ fun CanvasEditorScreen(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
                         ) {
-                            Icon(Icons.Default.Stop, "Зупинити", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Stop, stringResource(R.string.stop), modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Стоп", fontSize = 12.sp)
+                            Text(stringResource(R.string.stop), fontSize = 12.sp)
                         }
                     }
                 }
@@ -644,7 +757,7 @@ fun CanvasEditorScreen(
                         if (latestRecording != null) {
                             viewModel.deleteAudioRecording(latestRecording)
                             showAudioPill = false
-                            Toast.makeText(context, "Аудіозапис видалено", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.audio_deleted), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDismissClick = {
@@ -661,8 +774,8 @@ fun CanvasEditorScreen(
             // 5. Bottom 'Додати' Floating Button
             ExtendedFloatingActionButton(
                 onClick = { showInsertSheet = true },
-                icon = { Icon(imageVector = Icons.Default.Add, contentDescription = "Додати") },
-                text = { Text("Додати", fontWeight = FontWeight.Bold) },
+                icon = { Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.add)) },
+                text = { Text(stringResource(R.string.add), fontWeight = FontWeight.Bold) },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
@@ -689,10 +802,243 @@ fun CanvasEditorScreen(
                     .align(Alignment.BottomStart)
                     .padding(start = 16.dp, bottom = 16.dp)
             )
+
+            if (selectedElementIds.isNotEmpty() && referenceCaptureSession == null) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 84.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    referenceDestinations = referenceRepository.listDestinations()
+                                    showReferenceDestination = true
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.add_link))
+                        }
+                        if (referencesForSelection.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (referencesForSelection.size == 1) {
+                                        onOpenCanvasReference(referencesForSelection.first().toNavigationRequest())
+                                    } else {
+                                        coroutineScope.launch {
+                                            referenceDestinations = referenceRepository.listDestinations()
+                                            showReferenceList = true
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text(stringResource(R.string.open_links))
+                            }
+                        }
+                    }
+                }
+            }
+
+            val activeCaptureSession = referenceCaptureSession?.takeIf { session ->
+                session.destination.canvasId == canvas?.id && session.destination.pageId == currentPage?.id
+            }
+            if (activeCaptureSession != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
+                CanvasReferenceTargetCaptureBar(
+                    destination = activeCaptureSession.destination,
+                    currentViewport = CanvasViewport.fromCanvasTransform(
+                        panX = panOffset.x,
+                        panY = panOffset.y,
+                        zoom = zoomScale,
+                        viewportWidthPx = viewportWidthPx,
+                        viewportHeightPx = viewportHeightPx
+                    ),
+                    onConfirm = { viewport ->
+                        coroutineScope.launch {
+                            runCatching {
+                                referenceRepository.saveReference(
+                                    activeCaptureSession.createDraft(
+                                        viewport = viewport,
+                                        targetElementIds = selectedElementIds
+                                    )
+                                )
+                            }.onSuccess {
+                                Toast.makeText(context, linkSavedText, Toast.LENGTH_SHORT).show()
+                                viewModel.updateSelectedElementIds(emptySet())
+                                onReferenceCaptureFinished()
+                            }.onFailure { error ->
+                                Toast.makeText(context, error.message ?: linkSaveFailedText, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    onCancel = onReferenceCaptureFinished,
+                    text = referenceUiText,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 76.dp, start = 16.dp, end = 16.dp)
+                )
+            }
+
+            CanvasReferenceNavigationEffect(
+                request = referenceNavigationRequest?.takeIf {
+                    it.canvasId == canvas?.id && it.pageId == currentPage?.id
+                },
+                viewportWidthPx = viewportWidthPx,
+                viewportHeightPx = viewportHeightPx,
+                currentPan = panOffset,
+                currentZoom = zoomScale,
+                onTransform = { targetPan, targetZoom ->
+                    viewModel.updatePanOffset(targetPan)
+                    viewModel.setZoomScale(targetZoom)
+                },
+                onTargetReached = { request ->
+                    viewModel.updateSelectedElementIds(request.targetElementIds)
+                    onReferenceNavigationConsumed()
+                }
+            )
         }
     }
 
     // Bottom Sheets & Dialogs
+    if (showCodeLab) {
+        val editingBlock = editingCodeBlockId?.let(viewModel::getCodeBlock)
+        CodeLabDialog(
+            onDismiss = {
+                showCodeLab = false
+                editingCodeBlockId = null
+            },
+            onAddToCanvas = { language, source, result ->
+                if (editingBlock != null) {
+                    viewModel.updateCodeBlock(editingBlock.id, language, source, result)
+                } else {
+                    viewModel.insertCodeBlock(
+                        language = language,
+                        source = source,
+                        result = result,
+                        viewportWidth = viewportWidthPx,
+                        viewportHeight = viewportHeightPx,
+                        panOffsetX = panOffset.x,
+                        panOffsetY = panOffset.y,
+                        scale = zoomScale
+                    )
+                }
+                showCodeLab = false
+                editingCodeBlockId = null
+            },
+            initialLanguage = editingBlock?.language ?: com.example.data.models.CodeLanguage.PYTHON,
+            initialSource = editingBlock?.source ?: """
+                topic = "Thermodynamics"
+                temperature = 20 + 5
+                print(topic, temperature)
+            """.trimIndent()
+        )
+    }
+
+    if (showStudyDeck) {
+        StudyDeckDialog(
+            deckSummaries = studyDeckSummaries,
+            selectedDeck = selectedStudyDeck,
+            cards = studyCards,
+            dueCards = dueStudyCards,
+            onSelectDeck = { selectedStudyDeckId = it },
+            onCreateDeck = { title, description ->
+                coroutineScope.launch {
+                    runCatching {
+                        studyDeckRepository.createDeck(
+                            title = title,
+                            description = description,
+                            canvasId = canvas?.id,
+                            pageId = currentPage?.id
+                        )
+                    }.onSuccess { deck ->
+                        selectedStudyDeckId = deck.id
+                    }
+                }
+            },
+            onAddCard = { deckId, prompt, answer, hint ->
+                coroutineScope.launch {
+                    studyDeckRepository.addCard(
+                        deckId = deckId,
+                        prompt = prompt,
+                        answer = answer,
+                        hint = hint,
+                        sourceCanvasId = canvas?.id,
+                        sourcePageId = currentPage?.id,
+                        sourceElementIds = selectedElementIds.toList()
+                    )
+                }
+            },
+            onGradeCard = { card, grade ->
+                coroutineScope.launch { studyDeckRepository.reviewCard(card.id, grade) }
+            },
+            onDeleteCard = { card ->
+                coroutineScope.launch { studyDeckRepository.deleteCard(card) }
+            },
+            onDismiss = { showStudyDeck = false }
+        )
+    }
+
+    if (showReferenceDestination && currentPage != null && canvas != null && selectedElementIds.isNotEmpty()) {
+        CanvasReferenceDestinationDialog(
+            destinations = referenceDestinations,
+            sourceSelectionSize = selectedElementIds.size,
+            onDestinationSelected = { destination ->
+                val source = CanvasReferenceSource(
+                    canvasId = canvas!!.id,
+                    pageId = currentPage.id,
+                    elementIds = selectedElementIds
+                )
+                showReferenceDestination = false
+                viewModel.updateSelectedElementIds(emptySet())
+                onReferenceCaptureStarted(
+                    CanvasReferenceCaptureSession(
+                        source = source,
+                        destination = destination,
+                        label = canvas?.title.orEmpty()
+                    )
+                )
+            },
+            onDismiss = { showReferenceDestination = false },
+            text = referenceUiText
+        )
+    }
+
+    if (showReferenceList) {
+        val destinationPages = referenceDestinations
+            .flatMap { it.pages }
+            .associateBy { it.pageId }
+        CanvasReferenceListDialog(
+            references = referencesForSelection.map { reference ->
+                val destination = destinationPages[reference.targetPageId]
+                CanvasReferenceListItem(
+                    reference = reference,
+                    destinationCanvasTitle = destination?.canvasTitle ?: "Sketchpad",
+                    destinationPageIndex = destination?.pageIndex ?: 0
+                )
+            },
+            onOpen = { request ->
+                showReferenceList = false
+                onOpenCanvasReference(request)
+            },
+            onDelete = { referenceId ->
+                coroutineScope.launch {
+                    referenceRepository.deleteReference(referenceId)
+                }
+            },
+            onDismiss = { showReferenceList = false },
+            text = referenceUiText
+        )
+    }
+
     if (showTopMenuSheet) {
         CanvasTopMenuBottomSheet(
             currentBgColor = canvas?.backgroundColor ?: 0xFFFFFFFF.toInt(),
@@ -738,7 +1084,7 @@ fun CanvasEditorScreen(
             onInsertChartClick = { showChartDialog = true },
             onPasteContentClick = {
                 viewModel.insertText(
-                    text = "Вставлено з буфера",
+                    text = context.getString(R.string.pasted_from_clipboard),
                     viewportWidth = viewportWidthPx,
                     viewportHeight = viewportHeightPx,
                     panOffsetX = panOffset.x,
@@ -749,11 +1095,23 @@ fun CanvasEditorScreen(
             onRecognizeShapeClick = { viewModel.recognizeAndVectorizeLastStroke() },
             onPlotFunctionClick = { viewModel.plotFunctionFromStrokes() },
             onLatexConvertClick = { viewModel.convertHandwritingToLatex() },
-            onGraphAnalyzeClick = { viewModel.analyzeGraphSchema() },
-            onPhysicsToggleClick = { viewModel.togglePhysicsSimulation() },
-            onShaderToggleClick = { viewModel.toggleOilPaintShader() },
-            onArOverlayClick = { viewModel.toggleArOverlay() },
-            onPagedCanvasClick = { viewModel.togglePagedCanvas() },
+            onInsertCodeClick = {
+                editingCodeBlockId = null
+                showCodeLab = true
+            },
+            onSummarizeNotesClick = {
+                viewModel.showAiWindow()
+                viewModel.sendAiPrompt("Analyze the entire current note and give me a concise structured summary, key formulas, and unclear gaps.")
+            },
+            onCreateQuizClick = {
+                viewModel.showAiWindow()
+                viewModel.sendAiPrompt("Create five university-level self-test questions from the entire current note, then put the answers after a divider.")
+            },
+            onSuggestLinksClick = {
+                viewModel.showAiWindow()
+                viewModel.sendAiPrompt("Find concepts in this note that should link to related pages or exact canvas regions. Return suggested Obsidian-style links with short reasons.")
+            },
+            onStudyDeckClick = { showStudyDeck = true },
             onDismiss = { showInsertSheet = false }
         )
     }
@@ -803,7 +1161,7 @@ fun CanvasEditorScreen(
             onPick = { providerId, apiKey, endpoint, model ->
                 viewModel.selectAiProvider(providerId, apiKey, endpoint, model)
                 showProviderPicker = false
-                showGeminiSheet = true
+                viewModel.showAiWindow()
             },
             onDismiss = { showProviderPicker = false },
             currentProviderId = selectedProviderId,
@@ -821,20 +1179,20 @@ fun CanvasEditorScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.ShowChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Вставити графік функції")
+                    Text(stringResource(R.string.insert_function_chart))
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Введіть математичну формулу (наприклад: sin(x), cos(x)*2, x^2 - 4, 2*x + 1):",
+                        text = stringResource(R.string.function_formula_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = mathFormulaVal,
                         onValueChange = { mathFormulaVal = it },
-                        label = { Text("Формула y = f(x)") },
+                        label = { Text(stringResource(R.string.formula_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(
@@ -862,7 +1220,7 @@ fun CanvasEditorScreen(
                         showChartDialog = true
                         showMathFunctionDialog = false
                     }) {
-                        Text("Порожня сітка")
+                        Text(stringResource(R.string.empty_grid))
                     }
                     Button(onClick = {
                         val xMin = mathXMinVal.toFloatOrNull() ?: -10f
@@ -879,13 +1237,13 @@ fun CanvasEditorScreen(
                         )
                         showMathFunctionDialog = false
                     }) {
-                        Text("Побудувати графік")
+                        Text(stringResource(R.string.plot_graph))
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showMathFunctionDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -895,12 +1253,12 @@ fun CanvasEditorScreen(
     if (showTextInputDialog) {
         AlertDialog(
             onDismissRequest = { showTextInputDialog = false },
-            title = { Text("Вставити текст") },
+            title = { Text(stringResource(R.string.insert_text)) },
             text = {
                 OutlinedTextField(
                     value = textInputVal,
                     onValueChange = { textInputVal = it },
-                    label = { Text("Ваш текст") },
+                    label = { Text(stringResource(R.string.your_text)) },
                     modifier = Modifier.fillMaxWidth()
                 )
             },
@@ -919,12 +1277,12 @@ fun CanvasEditorScreen(
                     }
                     showTextInputDialog = false
                 }) {
-                    Text("Вставити")
+                    Text(stringResource(R.string.insert))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showTextInputDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -934,10 +1292,10 @@ fun CanvasEditorScreen(
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            title = { Text("Експорт конспекту Sketchpad") },
+            title = { Text(stringResource(R.string.export_note_title)) },
             text = {
                 Column {
-                    Text("Виберіть варіант для експорту поточного аркуша або всього блокнота:")
+                    Text(stringResource(R.string.export_note_hint))
                 }
             },
             confirmButton = {
@@ -952,12 +1310,12 @@ fun CanvasEditorScreen(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися всім блокнотом (PDF)"))
+                                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_notebook_pdf)))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати весь блокнот у PDF")
+                        Text(stringResource(R.string.export_all_pdf))
                     }
 
                     Button(
@@ -970,12 +1328,12 @@ fun CanvasEditorScreen(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися сторінкою (PDF)"))
+                                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_page_pdf)))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати поточну сторінку в PDF")
+                        Text(stringResource(R.string.export_page_pdf))
                     }
 
                     Button(
@@ -988,12 +1346,12 @@ fun CanvasEditorScreen(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися фото"))
+                                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_image)))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати в PNG (Фото)")
+                        Text(stringResource(R.string.export_png))
                     }
 
                     OutlinedButton(
@@ -1003,7 +1361,7 @@ fun CanvasEditorScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати в Obsidian")
+                        Text(stringResource(R.string.export_obsidian))
                     }
 
                     OutlinedButton(
@@ -1016,18 +1374,18 @@ fun CanvasEditorScreen(
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Поділитися SVG"))
+                                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_svg)))
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Експортувати в SVG (Вектор)")
+                        Text(stringResource(R.string.export_svg))
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showExportDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -1075,12 +1433,12 @@ fun CanvasEditorScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.ShowChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Вставити графік")
+                    Text(stringResource(R.string.insert_chart))
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Оберіть тип координатної сітки:", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.choose_grid_type), style = MaterialTheme.typography.bodyMedium)
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1088,7 +1446,7 @@ fun CanvasEditorScreen(
                     ) {
                         RadioButton(selected = !chartWithSteps, onClick = { chartWithSteps = false })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Пустий графік (без цифр)")
+                        Text(stringResource(R.string.empty_chart))
                     }
 
                     Row(
@@ -1097,7 +1455,7 @@ fun CanvasEditorScreen(
                     ) {
                         RadioButton(selected = chartWithSteps, onClick = { chartWithSteps = true })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Графік з кроками")
+                        Text(stringResource(R.string.chart_with_steps))
                     }
 
                     if (chartWithSteps) {
@@ -1105,13 +1463,13 @@ fun CanvasEditorScreen(
                             OutlinedTextField(
                                 value = chartXStepVal,
                                 onValueChange = { chartXStepVal = it },
-                                label = { Text("Крок X") },
+                                label = { Text(stringResource(R.string.x_step)) },
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
                                 value = chartYStepVal,
                                 onValueChange = { chartYStepVal = it },
-                                label = { Text("Крок Y") },
+                                label = { Text(stringResource(R.string.y_step)) },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -1134,12 +1492,12 @@ fun CanvasEditorScreen(
                     )
                     showChartDialog = false
                 }) {
-                    Text("Створити")
+                    Text(stringResource(R.string.create))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showChartDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )

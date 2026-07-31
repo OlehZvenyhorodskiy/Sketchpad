@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,10 +44,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.ai.ChatMessage
+import com.example.R
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -62,41 +65,51 @@ fun FloatingAiWindow(
     onChangeProvider: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
-    var offsetX by remember { mutableFloatStateOf(40f) }
-    var offsetY by remember { mutableFloatStateOf(200f) }
+    var isExpanded by rememberSaveable { mutableStateOf(true) }
+    var offsetX by rememberSaveable { mutableFloatStateOf(40f) }
+    var offsetY by rememberSaveable { mutableFloatStateOf(200f) }
 
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     val scope = rememberCoroutineScope()
+
+    val dragHandleModifier = Modifier.pointerInput(isExpanded, screenWidthPx, screenHeightPx) {
+        detectDragGestures(
+            onDragEnd = {
+                val windowWidthPx = with(density) { if (isExpanded) 360.dp.toPx() else 180.dp.toPx() }
+                val targetX = if (offsetX + windowWidthPx / 2f < screenWidthPx / 2f) {
+                    16f
+                } else {
+                    (screenWidthPx - windowWidthPx - 16f).coerceAtLeast(16f)
+                }
+                scope.launch {
+                    val anim = Animatable(offsetX)
+                    anim.animateTo(targetX, spring()) {
+                        offsetX = value
+                    }
+                }
+            },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                val windowWidthPx = with(density) { if (isExpanded) 360.dp.toPx() else 180.dp.toPx() }
+                val windowHeightPx = with(density) { if (isExpanded) 500.dp.toPx() else 52.dp.toPx() }
+                offsetX = (offsetX + dragAmount.x).coerceIn(
+                    0f,
+                    (screenWidthPx - windowWidthPx).coerceAtLeast(0f)
+                )
+                offsetY = (offsetY + dragAmount.y).coerceIn(
+                    0f,
+                    (screenHeightPx - windowHeightPx).coerceAtLeast(0f)
+                )
+            }
+        )
+    }
 
     Box(
         modifier = modifier
             .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragEnd = {
-                        val windowWidthPx = with(density) { if (isExpanded) 360.dp.toPx() else 180.dp.toPx() }
-                        val targetX = if (offsetX + windowWidthPx / 2f < screenWidthPx / 2f) {
-                            16f
-                        } else {
-                            (screenWidthPx - windowWidthPx - 16f).coerceAtLeast(16f)
-                        }
-                        scope.launch {
-                            val anim = Animatable(offsetX)
-                            anim.animateTo(targetX, spring()) {
-                                offsetX = value
-                            }
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        offsetX = (offsetX + dragAmount.x).coerceIn(0f, screenWidthPx - 100f)
-                        offsetY = (offsetY + dragAmount.y).coerceIn(100f, 2000f)
-                    }
-                )
-            }
             .imePadding()
     ) {
         Surface(
@@ -112,6 +125,7 @@ fun FloatingAiWindow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
+                        .then(dragHandleModifier)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -123,7 +137,7 @@ fun FloatingAiWindow(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "AI-асистент",
+                        text = stringResource(R.string.ai_assistant),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
@@ -134,7 +148,7 @@ fun FloatingAiWindow(
                     ) {
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.OpenInFull,
-                            contentDescription = if (isExpanded) "Згорнути" else "Розгорнути",
+                            contentDescription = if (isExpanded) stringResource(R.string.collapse) else stringResource(R.string.expand),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -144,7 +158,7 @@ fun FloatingAiWindow(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Закрити",
+                            contentDescription = stringResource(R.string.close),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -161,6 +175,7 @@ fun FloatingAiWindow(
                             initialApiKey = initialApiKey,
                             selectedProviderDisplayName = selectedProviderDisplayName,
                             onChangeProvider = onChangeProvider,
+                            autoFocusInput = true,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

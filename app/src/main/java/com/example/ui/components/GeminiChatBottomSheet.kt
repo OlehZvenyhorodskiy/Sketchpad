@@ -1,6 +1,10 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,11 +50,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ai.ChatMessage
+import com.example.R
+import kotlinx.coroutines.delay
 
 @Composable
 fun AiChatContent(
@@ -60,6 +72,7 @@ fun AiChatContent(
     initialApiKey: String = "",
     selectedProviderDisplayName: String = "Google Gemini",
     onChangeProvider: (() -> Unit)? = null,
+    autoFocusInput: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -67,6 +80,23 @@ fun AiChatContent(
     var apiKeyText by remember { mutableStateOf(initialApiKey) }
     var isKeyVisible by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val inputFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun submitInput() {
+        if (inputText.isNotBlank() && !isLoading) {
+            onSendMessage(inputText.trim())
+            inputText = ""
+        }
+    }
+
+    LaunchedEffect(autoFocusInput, showKeyDialog) {
+        if (autoFocusInput && !showKeyDialog) {
+            delay(220)
+            inputFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     LaunchedEffect(showKeyDialog) {
         if (showKeyDialog) {
@@ -107,7 +137,7 @@ fun AiChatContent(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "AI-асистент",
+                        text = stringResource(R.string.ai_assistant),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -129,7 +159,7 @@ fun AiChatContent(
                     }
                 }
                 Text(
-                    text = "Відповідає по вмісту вашої поточної канви",
+                    text = stringResource(R.string.ai_canvas_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -138,28 +168,57 @@ fun AiChatContent(
                 IconButton(onClick = { showKeyDialog = true }) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Налаштування API"
+                        contentDescription = stringResource(R.string.api_settings)
                     )
                 }
             }
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AssistChip(
+                onClick = {
+                    onSendMessage("Analyze the entire current note and give me a concise structured summary, key formulas, and unclear gaps.")
+                },
+                enabled = !isLoading,
+                label = { Text(stringResource(R.string.summarize_all)) }
+            )
+            AssistChip(
+                onClick = {
+                    onSendMessage("Find concepts in this note that should link to related pages or exact canvas regions. Return a short list of suggested Obsidian-style links with reasons.")
+                },
+                enabled = !isLoading,
+                label = { Text(stringResource(R.string.suggest_links)) }
+            )
+            AssistChip(
+                onClick = {
+                    onSendMessage("Create five university-level self-test questions from the entire current note, then put the answers after a divider.")
+                },
+                enabled = !isLoading,
+                label = { Text(stringResource(R.string.quiz_me)) }
+            )
+        }
+
         if (showKeyDialog && onSaveApiKey != null) {
             AlertDialog(
                 onDismissRequest = { showKeyDialog = false },
-                title = { Text("Налаштування API Key") },
+                title = { Text(stringResource(R.string.api_settings)) },
                 text = {
                     OutlinedTextField(
                         value = apiKeyText,
                         onValueChange = { apiKeyText = it },
-                        label = { Text("Введіть API Key") },
+                        label = { Text(stringResource(R.string.enter_api_key)) },
                         singleLine = true,
                         visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
                                 Icon(
                                     imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (isKeyVisible) "Сховати" else "Показати"
+                                    contentDescription = if (isKeyVisible) stringResource(R.string.hide) else stringResource(R.string.show)
                                 )
                             }
                         },
@@ -173,12 +232,12 @@ fun AiChatContent(
                         }
                         showKeyDialog = false
                     }) {
-                        Text("Зберегти")
+                        Text(stringResource(R.string.save))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showKeyDialog = false }) {
-                        Text("Скасувати")
+                        Text(stringResource(R.string.cancel))
                     }
                 }
             )
@@ -202,14 +261,14 @@ fun AiChatContent(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "💡 Приклади запитань:",
+                                text = stringResource(R.string.ai_examples),
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("• Поясни записані формули простішими словами", style = MaterialTheme.typography.bodySmall)
-                            Text("• Зроби короткий підсумок цієї лекції", style = MaterialTheme.typography.bodySmall)
-                            Text("• Склади 3 тест-питання за цим конспектом", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ai_example_formula), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ai_example_summary), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ai_example_quiz), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -248,7 +307,7 @@ fun AiChatContent(
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("AI аналізує ваш конспект...", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.ai_analyzing), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -266,18 +325,17 @@ fun AiChatContent(
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                placeholder = { Text("Запитайте по конспекту...") },
+                placeholder = { Text(stringResource(R.string.ask_about_notes)) },
                 shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.weight(1f)
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { submitInput() }),
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(inputFocusRequester)
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
-                onClick = {
-                    if (inputText.isNotBlank() && !isLoading) {
-                        onSendMessage(inputText.trim())
-                        inputText = ""
-                    }
-                },
+                onClick = { submitInput() },
                 enabled = inputText.isNotBlank() && !isLoading,
                 modifier = Modifier
                     .size(48.dp)
@@ -286,7 +344,7 @@ fun AiChatContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Send,
-                    contentDescription = "Надіслати",
+                    contentDescription = stringResource(R.string.send),
                     tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -318,6 +376,7 @@ fun GeminiChatBottomSheet(
             initialApiKey = initialApiKey,
             selectedProviderDisplayName = selectedProviderDisplayName,
             onChangeProvider = onChangeProvider,
+            autoFocusInput = true,
             modifier = Modifier.fillMaxHeight(0.75f)
         )
     }

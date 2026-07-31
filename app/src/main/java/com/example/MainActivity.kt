@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
@@ -20,6 +23,8 @@ import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import com.example.data.repository.CanvasRepository
 import com.example.data.repository.UserPreferencesRepository
+import com.example.data.models.CanvasReferenceCaptureSession
+import com.example.data.models.CanvasReferenceNavigationRequest
 import com.example.localization.AppLanguage
 import com.example.localization.AppLocaleManager
 import com.example.ui.editor.CanvasEditorScreen
@@ -95,6 +100,8 @@ fun SketchpadApp(
     val isLeftHanded = userPrefsRepository.leftHandedMode.collectAsState(initial = false).value
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingReferenceCapture by remember { mutableStateOf<CanvasReferenceCaptureSession?>(null) }
+    var pendingReferenceNavigation by remember { mutableStateOf<CanvasReferenceNavigationRequest?>(null) }
 
     NavHost(navController = navController, startDestination = "home") {
         composable("home") {
@@ -145,8 +152,38 @@ fun SketchpadApp(
             }
             CanvasEditorScreen(
                 viewModel = editorViewModel,
-                onBackClick = { navController.popBackStack() },
-                onOpenThemeSettings = { navController.navigate("theme_settings") }
+                onBackClick = {
+                    pendingReferenceCapture = null
+                    pendingReferenceNavigation = null
+                    navController.popBackStack()
+                },
+                onOpenThemeSettings = { navController.navigate("theme_settings") },
+                referenceCaptureSession = pendingReferenceCapture?.takeIf {
+                    it.destination.canvasId == canvasId
+                },
+                referenceNavigationRequest = pendingReferenceNavigation?.takeIf {
+                    it.canvasId == canvasId
+                },
+                onReferenceCaptureStarted = { session ->
+                    pendingReferenceNavigation = null
+                    pendingReferenceCapture = session
+                    if (session.destination.canvasId != canvasId) {
+                        navController.navigate("editor/${session.destination.canvasId}")
+                    }
+                },
+                onReferenceCaptureFinished = {
+                    pendingReferenceCapture = null
+                },
+                onOpenCanvasReference = { request ->
+                    pendingReferenceCapture = null
+                    pendingReferenceNavigation = request
+                    if (request.canvasId != canvasId) {
+                        navController.navigate("editor/${request.canvasId}")
+                    }
+                },
+                onReferenceNavigationConsumed = {
+                    pendingReferenceNavigation = null
+                }
             )
         }
     }

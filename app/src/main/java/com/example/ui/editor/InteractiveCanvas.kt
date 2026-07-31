@@ -49,9 +49,11 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.core.drawing.DrawingEngine
 import com.example.core.drawing.RulerState
 import com.example.data.models.BackgroundPattern
@@ -67,6 +69,7 @@ import com.example.data.models.StrokeEntity
 import com.example.data.models.StrokePoint
 import com.example.data.models.TextBlockEntity
 import com.example.data.models.ToolType
+import com.example.ui.components.CodeBlockCanvasCard
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -83,6 +86,7 @@ fun InteractiveCanvas(
     drawWithFingers: Boolean,
     rulerState: RulerState,
     zoomScale: Float,
+    viewportPanOffset: Offset = Offset.Zero,
     onZoomChanged: (Float) -> Unit,
     onPanOffsetChanged: (Offset) -> Unit = {},
     onStrokeAdded: (StrokeEntity) -> Unit,
@@ -108,6 +112,8 @@ fun InteractiveCanvas(
     onResizeAndMoveElement: (String, String, Float, Float, Float, Float, String) -> Unit = { _, _, _, _, _, _, _ -> },
     getCachedBitmap: (String) -> android.graphics.Bitmap? = { null },
     onPreloadImage: (String) -> Unit = {},
+    onEditCodeBlock: (String) -> Unit = {},
+    onRunCodeBlock: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -118,6 +124,12 @@ fun InteractiveCanvas(
     LaunchedEffect(zoomScale) {
         if (Math.abs(currentScale - zoomScale) > 0.05f) {
             currentScale = zoomScale
+        }
+    }
+
+    LaunchedEffect(viewportPanOffset) {
+        if ((panOffset - viewportPanOffset).getDistanceSquared() > 0.25f) {
+            panOffset = viewportPanOffset
         }
     }
 
@@ -1265,6 +1277,21 @@ fun InteractiveCanvas(
             }
         }
 
+        pageEntity?.visibleLayersBottomUp()?.forEach { layer ->
+            layer.codeBlocks.forEach { codeBlock ->
+                CodeBlockCanvasCard(
+                    codeBlock = codeBlock,
+                    scale = currentScale,
+                    panOffset = panOffset,
+                    onEdit = { onEditCodeBlock(codeBlock.id) },
+                    onRun = { onRunCodeBlock(codeBlock.id) },
+                    onDelete = { onDeleteElement(codeBlock.id, "CODE") },
+                    isSelected = codeBlock.id in selectedElementIds,
+                    isInteractive = currentTool == ToolType.SELECTOR
+                )
+            }
+        }
+
         // Floating Action Toolbar Overlay for Selected Element
         val selId = selectedElementId
         val selType = selectedElementType
@@ -1331,7 +1358,7 @@ fun InteractiveCanvas(
                                 val newH = elemSize!!.y * 1.25f
                                 onResizeElement(selId, selType, newW, newH, "BR")
                             }) {
-                                Icon(imageVector = Icons.Default.ZoomIn, contentDescription = "Збільшити", tint = MaterialTheme.colorScheme.primary)
+                                Icon(imageVector = Icons.Default.ZoomIn, contentDescription = stringResource(R.string.zoom_in), tint = MaterialTheme.colorScheme.primary)
                             }
 
                             // Resize smaller
@@ -1340,7 +1367,7 @@ fun InteractiveCanvas(
                                 val newH = (elemSize!!.y * 0.8f).coerceAtLeast(60f)
                                 onResizeElement(selId, selType, newW, newH, "BR")
                             }) {
-                                Icon(imageVector = Icons.Default.ZoomOut, contentDescription = "Зменшити", tint = MaterialTheme.colorScheme.primary)
+                                Icon(imageVector = Icons.Default.ZoomOut, contentDescription = stringResource(R.string.zoom_out), tint = MaterialTheme.colorScheme.primary)
                             }
 
                             // Image Opacity toggle
@@ -1353,7 +1380,7 @@ fun InteractiveCanvas(
                                     }
                                     onUpdateImageOpacity(selId, nextOpacity)
                                 }) {
-                                    Icon(imageVector = Icons.Default.Opacity, contentDescription = "Прозорість", tint = MaterialTheme.colorScheme.primary)
+                                    Icon(imageVector = Icons.Default.Opacity, contentDescription = stringResource(R.string.opacity), tint = MaterialTheme.colorScheme.primary)
                                 }
                                 Text("${(currentImgOpacity * 100).roundToInt()}%", fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             }
@@ -1362,7 +1389,7 @@ fun InteractiveCanvas(
                             IconButton(onClick = {
                                 onRotateElement(selId, selType)
                             }) {
-                                Icon(imageVector = Icons.Default.RotateRight, contentDescription = "Повернути", tint = MaterialTheme.colorScheme.primary)
+                                Icon(imageVector = Icons.Default.RotateRight, contentDescription = stringResource(R.string.rotate), tint = MaterialTheme.colorScheme.primary)
                             }
 
                             // Delete button
@@ -1371,7 +1398,7 @@ fun InteractiveCanvas(
                                 selectedElementId = null
                                 selectedElementType = null
                             }) {
-                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Видалити", tint = MaterialTheme.colorScheme.error)
+                                Icon(imageVector = Icons.Default.Delete, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -1531,6 +1558,7 @@ private fun PageEntity.selectionBounds(ids: Set<String>): Rect? {
             layer.images.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
             layer.textBlocks.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
             layer.charts.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
+            layer.codeBlocks.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
         }
     }
     if (bounds.isEmpty()) return null
