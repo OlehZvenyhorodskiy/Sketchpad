@@ -246,8 +246,18 @@ class UserPreferencesRepository(private val context: Context) {
 
     fun getCustomModel(providerId: String): String {
         return try {
-            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
-                .getString("custom_model_${providerId.lowercase()}", "") ?: ""
+            val preferences = context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            val key = "custom_model_${providerId.lowercase()}"
+            val saved = preferences.getString(key, "").orEmpty()
+            if (providerId.equals("GEMINI", ignoreCase = true) &&
+                saved.isNotBlank() && saved !in com.example.ai.AiModelDefaults.GEMINI_MODELS
+            ) {
+                com.example.ai.AiModelDefaults.GEMINI_DEFAULT.also { migrated ->
+                    preferences.edit().putString(key, migrated).apply()
+                }
+            } else {
+                saved
+            }
         } catch (_: Exception) { "" }
     }
 

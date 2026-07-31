@@ -68,17 +68,29 @@ fun FloatingAiWindow(
     var isExpanded by rememberSaveable { mutableStateOf(true) }
     var offsetX by rememberSaveable { mutableFloatStateOf(40f) }
     var offsetY by rememberSaveable { mutableFloatStateOf(200f) }
+    var expandedWidthDp by rememberSaveable { mutableFloatStateOf(420f) }
+    var expandedHeightDp by rememberSaveable { mutableFloatStateOf(560f) }
 
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     val scope = rememberCoroutineScope()
+    val windowWidthDp = if (isExpanded) expandedWidthDp else 200f
+    val windowHeightDp = if (isExpanded) expandedHeightDp else 52f
+    val windowWidthPx = with(density) { windowWidthDp.dp.toPx() }
+    val windowHeightPx = with(density) { windowHeightDp.dp.toPx() }
+
+    fun clampWindowPosition() {
+        val currentWidthPx = with(density) { (if (isExpanded) expandedWidthDp else 200f).dp.toPx() }
+        val currentHeightPx = with(density) { (if (isExpanded) expandedHeightDp else 52f).dp.toPx() }
+        offsetX = offsetX.coerceIn(0f, (screenWidthPx - currentWidthPx).coerceAtLeast(0f))
+        offsetY = offsetY.coerceIn(0f, (screenHeightPx - currentHeightPx).coerceAtLeast(0f))
+    }
 
     val dragHandleModifier = Modifier.pointerInput(isExpanded, screenWidthPx, screenHeightPx) {
         detectDragGestures(
             onDragEnd = {
-                val windowWidthPx = with(density) { if (isExpanded) 360.dp.toPx() else 180.dp.toPx() }
                 val targetX = if (offsetX + windowWidthPx / 2f < screenWidthPx / 2f) {
                     16f
                 } else {
@@ -93,8 +105,6 @@ fun FloatingAiWindow(
             },
             onDrag = { change, dragAmount ->
                 change.consume()
-                val windowWidthPx = with(density) { if (isExpanded) 360.dp.toPx() else 180.dp.toPx() }
-                val windowHeightPx = with(density) { if (isExpanded) 500.dp.toPx() else 52.dp.toPx() }
                 offsetX = (offsetX + dragAmount.x).coerceIn(
                     0f,
                     (screenWidthPx - windowWidthPx).coerceAtLeast(0f)
@@ -110,16 +120,18 @@ fun FloatingAiWindow(
     Box(
         modifier = modifier
             .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            .imePadding()
     ) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
             tonalElevation = 12.dp,
             shadowElevation = 8.dp,
-            modifier = Modifier.width(if (isExpanded) 360.dp else 180.dp)
+            modifier = Modifier
+                .width(windowWidthDp.dp)
+                .height(windowHeightDp.dp)
         ) {
-            Column {
+            Box {
+                Column {
                 // Header / Drag handle bar
                 Row(
                     modifier = Modifier
@@ -143,7 +155,10 @@ fun FloatingAiWindow(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
-                        onClick = { isExpanded = !isExpanded },
+                        onClick = {
+                            isExpanded = !isExpanded
+                            clampWindowPosition()
+                        },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
@@ -166,7 +181,7 @@ fun FloatingAiWindow(
 
                 // Window Body
                 AnimatedVisibility(visible = isExpanded) {
-                    Box(modifier = Modifier.height(440.dp)) {
+                    Box(modifier = Modifier.height((expandedHeightDp - 52f).coerceAtLeast(280f).dp)) {
                         AiChatContent(
                             messages = messages,
                             isLoading = isLoading,
@@ -175,10 +190,37 @@ fun FloatingAiWindow(
                             initialApiKey = initialApiKey,
                             selectedProviderDisplayName = selectedProviderDisplayName,
                             onChangeProvider = onChangeProvider,
-                            autoFocusInput = true,
+                            autoFocusInput = false,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                }
+                }
+
+                if (isExpanded) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInFull,
+                        contentDescription = stringResource(R.string.resize_window),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f))
+                            .padding(7.dp)
+                            .pointerInput(screenWidthPx, screenHeightPx) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val deltaWidthDp = with(density) { dragAmount.x.toDp().value }
+                                    val deltaHeightDp = with(density) { dragAmount.y.toDp().value }
+                                    val maximumWidthDp = (configuration.screenWidthDp - 24).coerceAtLeast(300).toFloat()
+                                    val maximumHeightDp = (configuration.screenHeightDp - 24).coerceAtLeast(340).toFloat()
+                                    expandedWidthDp = (expandedWidthDp + deltaWidthDp).coerceIn(300f, maximumWidthDp)
+                                    expandedHeightDp = (expandedHeightDp + deltaHeightDp).coerceIn(340f, maximumHeightDp)
+                                    clampWindowPosition()
+                                }
+                            }
+                    )
                 }
             }
         }

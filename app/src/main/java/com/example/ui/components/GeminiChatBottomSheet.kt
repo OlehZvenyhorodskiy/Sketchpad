@@ -376,7 +376,7 @@ fun GeminiChatBottomSheet(
             initialApiKey = initialApiKey,
             selectedProviderDisplayName = selectedProviderDisplayName,
             onChangeProvider = onChangeProvider,
-            autoFocusInput = true,
+            autoFocusInput = false,
             modifier = Modifier.fillMaxHeight(0.75f)
         )
     }
