@@ -6,6 +6,7 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.AudioDao
 import com.example.data.db.CanvasDao
 import com.example.data.repository.CanvasRepository
+import com.example.data.repository.CanvasReferenceRepository
 import com.example.data.repository.CollaborationRepository
 
 /**
@@ -24,6 +25,9 @@ object AppModule {
 
     @Volatile
     private var collaborationRepository: CollaborationRepository? = null
+
+    @Volatile
+    private var canvasReferenceRepository: CanvasReferenceRepository? = null
 
     fun provideDatabase(context: Context): AppDatabase {
         return database ?: synchronized(this) {
@@ -44,6 +48,15 @@ object AppModule {
     fun provideCanvasRepository(context: Context): CanvasRepository {
         return canvasRepository ?: synchronized(this) {
             canvasRepository ?: CanvasRepository(context.applicationContext).also { canvasRepository = it }
+        }
+    }
+
+    fun provideCanvasReferenceRepository(context: Context): CanvasReferenceRepository {
+        return canvasReferenceRepository ?: synchronized(this) {
+            canvasReferenceRepository
+                ?: CanvasReferenceRepository(context.applicationContext).also {
+                    canvasReferenceRepository = it
+                }
         }
     }
 

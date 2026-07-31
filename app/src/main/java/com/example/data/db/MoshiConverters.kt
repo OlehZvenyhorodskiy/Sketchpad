@@ -35,6 +35,9 @@ class MoshiConverters {
     private val syncMarkerListType = Types.newParameterizedType(List::class.java, SyncMarker::class.java)
     private val syncMarkerAdapter = moshi.adapter<List<SyncMarker>>(syncMarkerListType)
 
+    private val stringListType = Types.newParameterizedType(List::class.java, String::class.java)
+    private val stringListAdapter = moshi.adapter<List<String>>(stringListType)
+
     @TypeConverter
     fun strokeListToString(list: List<StrokeEntity>?): String {
         return strokeAdapter.toJson(list ?: emptyList())
@@ -120,6 +123,21 @@ class MoshiConverters {
         if (json.isNullOrEmpty()) return emptyList()
         return try {
             syncMarkerAdapter.fromJson(json) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun stringListToString(list: List<String>?): String {
+        return stringListAdapter.toJson(list ?: emptyList())
+    }
+
+    @TypeConverter
+    fun stringToStringList(json: String?): List<String> {
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            stringListAdapter.fromJson(json) ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }

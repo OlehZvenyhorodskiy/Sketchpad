@@ -15,6 +15,9 @@ interface CanvasDao {
     @Query("SELECT * FROM canvases ORDER BY updatedAt DESC")
     fun getAllCanvases(): Flow<List<CanvasEntity>>
 
+    @Query("SELECT * FROM canvases ORDER BY updatedAt DESC")
+    suspend fun getAllCanvasesSync(): List<CanvasEntity>
+
     @Query("SELECT * FROM canvases WHERE id = :id")
     fun getCanvasById(id: String): Flow<CanvasEntity?>
 
