@@ -406,7 +406,9 @@ fun CanvasEditorScreen(
                 selectionMode = selectionMode,
                 selectedElementIds = selectedElementIds,
                 onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) },
+                onBeginMoveSelectedGroup = { viewModel.beginMoveSelectedElements() },
                 onMoveSelectedGroup = { dx, dy -> viewModel.moveSelectedElements(dx, dy) },
+                onEndMoveSelectedGroup = { viewModel.endMoveSelectedElements() },
                 onResizeAndMoveElement = { id, type, w, h, x, y, anchor ->
                     viewModel.resizeAndMoveElement(id, type, w, h, x, y, anchor)
                 },

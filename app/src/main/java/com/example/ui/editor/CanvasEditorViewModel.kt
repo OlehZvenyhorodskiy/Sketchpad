@@ -113,6 +113,7 @@ class CanvasEditorViewModel(
     private val _selectedElementIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedElementIds: StateFlow<Set<String>> = _selectedElementIds.asStateFlow()
     private var clipboard: List<ClipboardElement> = emptyList()
+    private var groupMoveUndoPushed = false
 
     fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
         _selectionMode.value = mode
@@ -1164,11 +1165,23 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun beginMoveSelectedElements() {
+        val page = currentPage ?: return
+        if (_selectedElementIds.value.isEmpty() || groupMoveUndoPushed) return
+        pushUndoState(ensureLayersExist(page))
+        groupMoveUndoPushed = true
+    }
+
+    fun endMoveSelectedElements() {
+        groupMoveUndoPushed = false
+    }
+
     fun scaleSelectedElements(factor: Float) {
         val page = currentPage ?: return
         val ids = _selectedElementIds.value
         if (ids.isEmpty()) return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
 
         val centers = mutableListOf<Offset>()
         migrated.getEffectiveLayers().forEach { layer ->
@@ -1422,7 +1435,7 @@ class CanvasEditorViewModel(
                 if (currentVer != lastScreenshotVersion || cachedBase64Image == null) {
                     try {
                         val effectiveBgColor = _canvas.value?.backgroundColor ?: 0xFFFFFFFF.toInt()
-                        val bitmap = ExportManager.captureCanvasHighRes(page, scale = 2.0f, backgroundColor = effectiveBgColor)
+                        val bitmap = ExportManager.captureCanvasHighRes(page, context, scale = 2.0f, backgroundColor = effectiveBgColor)
                         val baos = java.io.ByteArrayOutputStream()
                         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, baos)
                         bitmap.recycle()

@@ -1,6 +1,5 @@
 package com.example.ui.editor
 
-import android.view.MotionEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -47,7 +46,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -101,7 +99,9 @@ fun InteractiveCanvas(
     selectionMode: com.example.data.models.SelectionMode = com.example.data.models.SelectionMode.SINGLE,
     selectedElementIds: Set<String> = emptySet(),
     onLassoComplete: (List<Offset>) -> Unit = {},
+    onBeginMoveSelectedGroup: () -> Unit = {},
     onMoveSelectedGroup: (Float, Float) -> Unit = { _, _ -> },
+    onEndMoveSelectedGroup: () -> Unit = {},
     onResizeAndMoveElement: (String, String, Float, Float, Float, Float, String) -> Unit = { _, _, _, _, _, _, _ -> },
     getCachedBitmap: (String) -> android.graphics.Bitmap? = { null },
     onPreloadImage: (String) -> Unit = {},
@@ -206,54 +206,65 @@ fun InteractiveCanvas(
                     }
                 }
             }
-            .pointerInteropFilter { motionEvent ->
+            .pointerInput(
+                currentTool,
+                eraserMode,
+                strokeWidth,
+                strokeOpacity,
+                currentColor,
+                currentScale,
+                pageEntity,
+                selectedElementIds,
+                rulerState,
+                panOffset
+            ) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val pointerEvent = awaitPointerEvent()
+                        val change = pointerEvent.changes.firstOrNull() ?: continue
+                        val action = when {
+                            !change.previousPressed && change.pressed -> PointerAction.DOWN
+                            change.previousPressed && !change.pressed -> PointerAction.UP
+                            change.pressed -> PointerAction.MOVE
+                            else -> continue
+                        }
+                        val screenPoint = change.position
                 // ═══════════════════════════════════════════════════════
                 // 0a. Перевірка касання у верхній зоні тулбара (TopFloatingToolbar)
                 // ═══════════════════════════════════════════════════════
                 val topToolbarHeightPx = with(density) { 90.dp.toPx() }
-                if (motionEvent.y <= topToolbarHeightPx && selectedElementId == null) {
-                    return@pointerInteropFilter false
+                if (screenPoint.y <= topToolbarHeightPx && selectedElementId == null) {
+                    continue
                 }
 
                 // ═══════════════════════════════════════════════════════
                 // 0b. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
                 // ═══════════════════════════════════════════════════════
-                if (rulerState.isVisible && isTouchInsideRuler(motionEvent, rulerState)) {
-                    return@pointerInteropFilter false
+                if (rulerState.isVisible && isTouchInsideRuler(screenPoint, rulerState)) {
+                    continue
                 }
 
                 // ═══════════════════════════════════════════════════════
                 // 1. Мультитач (2+ пальці) — скасовуємо штрих, даємо зуму працювати
                 // ═══════════════════════════════════════════════════════
-                if (motionEvent.pointerCount > 1) {
+                if (pointerEvent.changes.count { it.pressed } > 1) {
                     activeStrokePoints.clear()
                     activeEraserPoints.clear()
                     eraserTouchPos = null
                     cursorPos = null
-                    return@pointerInteropFilter false
-                }
-
-                // ═══════════════════════════════════════════════════════
-                // 2. SMART PALM REJECTION (для неофіційних/пасивних стилусів Xiaomi та пальця)
-                // ═══════════════════════════════════════════════════════
-                if (com.example.core.gesture.PalmRejectionFilter.shouldRejectEvent(motionEvent)) {
-                    if (motionEvent.action == MotionEvent.ACTION_DOWN) {
-                        activeStrokePoints.clear()
-                        eraserTouchPos = null
-                    }
-                    return@pointerInteropFilter true  // Відхиляємо тільки велику долоню (area > 900px² або major > 55px)
+                    continue
                 }
 
                 val safeScale = currentScale.coerceIn(0.1f, 10.0f)
-                val x = (motionEvent.x - panOffset.x) / safeScale
-                val y = (motionEvent.y - panOffset.y) / safeScale
+                val x = (screenPoint.x - panOffset.x) / safeScale
+                val y = (screenPoint.y - panOffset.y) / safeScale
                 var rawPoint = Offset(x, y)
 
-                val pressure = if (motionEvent.pressure > 0f) motionEvent.pressure else 0.5f
-                val tilt = motionEvent.getAxisValue(MotionEvent.AXIS_TILT)
+                val pressure = if (change.pressure > 0f) change.pressure else 0.5f
+                val tilt = 0f
 
-                when (motionEvent.action) {
-                    MotionEvent.ACTION_DOWN -> {
+                when (action) {
+                    PointerAction.DOWN -> {
                         activeStrokePoints.clear()
                         if (currentTool != ToolType.SELECTOR && currentTool != ToolType.ERASER) {
                             if (rulerState.isVisible) {
@@ -283,6 +294,7 @@ fun InteractiveCanvas(
                             if (isDraggingGroup) {
                                 selectedElementId = null
                                 selectedElementType = null
+                                onBeginMoveSelectedGroup()
                             } else {
                             // Check corner resize touch for active selection (ALL 4 CORNERS)
                             val selId = selectedElementId
@@ -429,7 +441,7 @@ fun InteractiveCanvas(
                             )
                         }
                     }
-                    MotionEvent.ACTION_MOVE -> {
+                    PointerAction.MOVE -> {
                         when (currentTool) {
                             ToolType.SELECTOR -> {
                                 if (isDraggingGroup) {
@@ -525,7 +537,7 @@ fun InteractiveCanvas(
                             }
                         }
                     }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    PointerAction.UP -> {
                         if (currentTool != ToolType.ERASER && currentTool != ToolType.SELECTOR && activeStrokePoints.isNotEmpty()) {
                             val newStroke = StrokeEntity(
                                 tool = currentTool,
@@ -540,12 +552,15 @@ fun InteractiveCanvas(
                         activeEraserPoints.clear()
                         eraserTouchPos = null
                         resizingCorner = null
+                        if (isDraggingGroup) onEndMoveSelectedGroup()
                         isDraggingGroup = false
                         rulerGuideEdge = null
                         cursorPos = null
                     }
                 }
-                true
+                        change.consume()
+                    }
+                }
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1297,9 +1312,11 @@ fun InteractiveCanvas(
     }
 }
 
-private fun isTouchInsideRuler(event: MotionEvent, ruler: RulerState): Boolean {
-    val touchX = event.x
-    val touchY = event.y
+private enum class PointerAction { DOWN, MOVE, UP }
+
+private fun isTouchInsideRuler(point: Offset, ruler: RulerState): Boolean {
+    val touchX = point.x
+    val touchY = point.y
 
     val centerDist = Math.hypot(
         (touchX - ruler.center.x).toDouble(),

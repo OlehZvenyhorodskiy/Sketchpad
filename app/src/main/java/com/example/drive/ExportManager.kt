@@ -55,13 +55,13 @@ object ExportManager {
                         sb.appendLine("""    <rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" $fill stroke="${colorToHex(shape.strokeColor)}" stroke-width="${shape.strokeWidth}"/>""")
                     }
                     ShapeType.CIRCLE -> {
-                        val cx = shape.x + shape.width / 2
-                        val cy = shape.y + shape.height / 2
-                        sb.appendLine("""    <ellipse cx="$cx" cy="$cy" rx="${shape.width / 2}" ry="${shape.height / 2}" fill="none" stroke="${colorToHex(shape.strokeColor)}" stroke-width="${shape.strokeWidth}"/>""")
+                        val cx = shape.x + shape.width / 2f
+                        val cy = shape.y + shape.height / 2f
+                        sb.appendLine("""    <ellipse cx="$cx" cy="$cy" rx="${shape.width / 2f}" ry="${shape.height / 2f}" fill="none" stroke="${colorToHex(shape.strokeColor)}" stroke-width="${shape.strokeWidth}"/>""")
                     }
                     else -> {
-                        val cx = shape.x + shape.width / 2
-                        val cy = shape.y + shape.height / 2
+                        val cx = shape.x + shape.width / 2f
+                        val cy = shape.y + shape.height / 2f
                         sb.appendLine("""    <rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="none" stroke="${colorToHex(shape.strokeColor)}" stroke-width="${shape.strokeWidth}"/>""")
                     }
                 }
@@ -192,9 +192,6 @@ object ExportManager {
 
             pdfDocument.finishPage(pdfPage)
 
-            if ((index + 1) % 10 == 0) {
-                System.gc()
-            }
         }
 
         FileOutputStream(outputFile).use { pdfDocument.writeTo(it) }
@@ -409,6 +406,7 @@ object ExportManager {
      */
     fun captureCanvasHighRes(
         page: PageEntity,
+        context: Context,
         scale: Float = 3.0f,
         pageWidth: Int = 1920,
         pageHeight: Int = 1080,
@@ -441,6 +439,8 @@ object ExportManager {
 
         page.visibleLayersBottomUp().forEach { layer ->
             val layerAlpha = (layer.opacity * 255).toInt()
+
+            renderLayerImages(context, canvas, layer.images, layerAlpha)
 
                 if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
                     val saveCount = canvas.saveLayer(null, null)

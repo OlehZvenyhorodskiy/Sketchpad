@@ -24,11 +24,13 @@ fun LassoSelectionOverlay(
     if (!isActive) return
 
     var screenPoints by remember { mutableStateOf(emptyList<Offset>()) }
+    val currentScale by rememberUpdatedState(scale)
+    val currentPanOffset by rememberUpdatedState(panOffset)
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(isActive) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     screenPoints = listOf(down.position)
@@ -44,8 +46,8 @@ fun LassoSelectionOverlay(
                     if (screenPoints.size > 3) {
                         val worldPoints = screenPoints.map { sp ->
                             Offset(
-                                (sp.x - panOffset.x) / scale,
-                                (sp.y - panOffset.y) / scale
+                                (sp.x - currentPanOffset.x) / currentScale,
+                                (sp.y - currentPanOffset.y) / currentScale
                             )
                         }
                         onLassoComplete(worldPoints)
