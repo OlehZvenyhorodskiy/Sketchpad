@@ -7,7 +7,7 @@ import kotlin.math.hypot
 object HandwritingLatexConverter {
 
     fun convertStrokesToLatex(strokes: List<StrokeEntity>): String {
-        if (strokes.isEmpty()) return "\\text{порожньо}"
+        if (strokes.isEmpty()) return "\\text{empty}"
 
         // Feature 3 math handwriting recognition pipeline
         val totalPoints = strokes.sumOf { it.points.size }

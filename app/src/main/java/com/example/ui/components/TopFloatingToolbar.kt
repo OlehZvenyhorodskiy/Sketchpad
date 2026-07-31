@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import com.example.ui.theme.ThemedPanel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.models.EraserMode
 import com.example.data.models.HslaColor
 import com.example.data.models.ToolType
+import com.example.R
 
 @Composable
 fun TopFloatingToolbar(
@@ -72,7 +74,7 @@ fun TopFloatingToolbar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.WidthNormal,
-                        contentDescription = "Товщина",
+                        contentDescription = stringResource(R.string.thickness),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -139,32 +141,32 @@ fun TopFloatingToolbar(
             ) {
                 ToolIconButton(
                     icon = Icons.Default.Create,
-                    label = "Ручка",
+                    label = stringResource(R.string.pen),
                     isSelected = currentTool == ToolType.PEN,
                     onClick = { onToolSelect(ToolType.PEN) }
                 )
                 ToolIconButton(
                     icon = Icons.Default.Brush,
-                    label = "Олівець",
+                    label = stringResource(R.string.pencil),
                     isSelected = currentTool == ToolType.PENCIL,
                     onClick = { onToolSelect(ToolType.PENCIL) }
                 )
                 ToolIconButton(
                     icon = Icons.Default.FormatPaint,
-                    label = "Перо",
+                    label = stringResource(R.string.ink_pen),
                     isSelected = currentTool == ToolType.INK_PEN || currentTool == ToolType.FOUNTAIN_PEN,
                     onClick = { onToolSelect(ToolType.INK_PEN) }
                 )
                 ToolIconButton(
                     icon = Icons.Default.Highlight,
-                    label = "Маркер",
+                    label = stringResource(R.string.marker),
                     isSelected = currentTool == ToolType.MARKER,
                     onClick = { onToolSelect(ToolType.MARKER) }
                 )
                 val selectorIcon = if (selectionMode == com.example.data.models.SelectionMode.LASSO) Icons.Default.HighlightAlt else Icons.Default.CropSquare
                 ToolIconButton(
                     icon = selectorIcon,
-                    label = if (selectionMode == com.example.data.models.SelectionMode.LASSO) "Виділення (Ласо)" else "Виділення (Одиночне)",
+                    label = if (selectionMode == com.example.data.models.SelectionMode.LASSO) stringResource(R.string.selection_lasso) else stringResource(R.string.selection_single),
                     isSelected = currentTool == ToolType.SELECTOR,
                     onClick = {
                         if (currentTool == ToolType.SELECTOR) onSelectionModeToggle()
@@ -174,7 +176,7 @@ fun TopFloatingToolbar(
                 val eraserIcon = if (eraserMode == EraserMode.PIXEL) Icons.Default.Circle else Icons.Default.CropSquare
                 ToolIconButton(
                     icon = eraserIcon,
-                    label = if (eraserMode == EraserMode.OBJECT) "Стерка (Об'єкт)" else "Стерка (Піксель)",
+                    label = if (eraserMode == EraserMode.OBJECT) stringResource(R.string.eraser_object) else stringResource(R.string.eraser_pixel),
                     isSelected = currentTool == ToolType.ERASER,
                     onClick = {
                         if (currentTool == ToolType.ERASER) onEraserModeToggle()
@@ -183,7 +185,7 @@ fun TopFloatingToolbar(
                 )
                 ToolIconButton(
                     icon = Icons.Default.Straighten,
-                    label = "Лінійка",
+                    label = stringResource(R.string.ruler),
                     isSelected = rulerVisible,
                     onClick = { onToolSelect(ToolType.RULER) }
                 )
@@ -205,7 +207,7 @@ fun TopFloatingToolbar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.ScreenRotation,
-                        contentDescription = "Орієнтація слайдерів",
+                        contentDescription = stringResource(R.string.slider_orientation),
                         tint = if (isSlidersVertical)
                             MaterialTheme.colorScheme.primary
                         else
@@ -233,7 +235,7 @@ fun TopFloatingToolbar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Opacity,
-                        contentDescription = "Прозорість",
+                        contentDescription = stringResource(R.string.opacity_percent, (strokeOpacity * 100).toInt()),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )

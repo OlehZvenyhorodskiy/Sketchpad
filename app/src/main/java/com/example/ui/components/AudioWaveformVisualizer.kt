@@ -32,9 +32,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import java.util.Locale
 
 fun formatDurationMs(durationMs: Long): String {
@@ -154,7 +156,7 @@ fun AudioPlayerPill(
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Пауза" else "Відтворити",
+                    contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -201,7 +203,7 @@ fun AudioPlayerPill(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Видалити аудіо",
+                    contentDescription = stringResource(R.string.delete_audio),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(18.dp)
                 )
@@ -214,7 +216,7 @@ fun AudioPlayerPill(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Сховати",
+                    contentDescription = stringResource(R.string.hide),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )

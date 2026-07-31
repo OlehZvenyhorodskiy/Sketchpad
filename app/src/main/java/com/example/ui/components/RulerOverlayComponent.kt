@@ -38,10 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.core.drawing.RulerState
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -169,7 +171,7 @@ fun RulerOverlayComponent(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.OpenWith,
-                    contentDescription = "Перемістити лінійку",
+                    contentDescription = stringResource(R.string.move_ruler),
                     tint = Color.White,
                     modifier = Modifier.size(26.dp)
                 )
@@ -234,7 +236,7 @@ fun RulerOverlayComponent(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.RotateRight,
-                    contentDescription = "Обертати та маштабувати лінійку",
+                    contentDescription = stringResource(R.string.rotate_scale_ruler),
                     tint = Color.Black,
                     modifier = Modifier.size(22.dp)
                 )
@@ -323,7 +325,7 @@ fun RulerOverlayComponent(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Сховати лінійку",
+                            contentDescription = stringResource(R.string.hide_ruler),
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)
                         )

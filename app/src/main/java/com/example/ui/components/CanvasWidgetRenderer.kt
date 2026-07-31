@@ -32,10 +32,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.academic.MathExpressionEvaluator
 import com.example.data.models.CanvasWidgetEntity
 import com.example.data.models.WidgetType
@@ -73,7 +75,7 @@ fun CanvasWidgetRenderer(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Видалити віджет",
+                    contentDescription = stringResource(R.string.delete),
                     tint = Color.Gray,
                     modifier = Modifier.size(16.dp)
                 )
@@ -83,7 +85,7 @@ fun CanvasWidgetRenderer(
                 WidgetType.STICKY_NOTE -> {
                     var textState by remember { mutableStateOf(widget.content) }
                     Column {
-                        Text("📌 Стікер", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF854D0E))
+                        Text("📌 ${stringResource(R.string.sticker)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF854D0E))
                         Spacer(Modifier.height(6.dp))
                         BasicTextField(
                             value = textState,
@@ -109,7 +111,7 @@ fun CanvasWidgetRenderer(
                     }
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⏱️ Таймер", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("⏱️ ${stringResource(R.string.timer)}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
                         Text(
                             text = String.format("%02d:%02d", secondsLeft / 60, secondsLeft % 60),
@@ -123,7 +125,7 @@ fun CanvasWidgetRenderer(
                                 onClick = { isRunning = !isRunning },
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                Text(if (isRunning) "Пауза" else "Старт")
+                                Text(stringResource(if (isRunning) R.string.pause else R.string.start))
                             }
                             Spacer(Modifier.width(8.dp))
                             Button(
@@ -133,7 +135,7 @@ fun CanvasWidgetRenderer(
                                 },
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                Text("Скинути")
+                                Text(stringResource(R.string.reset))
                             }
                         }
                     }
@@ -143,7 +145,7 @@ fun CanvasWidgetRenderer(
                     var resultText by remember { mutableStateOf("") }
 
                     Column {
-                        Text("🧮 Калькулятор", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("🧮 ${stringResource(R.string.calculator)}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         BasicTextField(
                             value = expression,

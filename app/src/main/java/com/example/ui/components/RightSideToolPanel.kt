@@ -38,9 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.models.HslaColor
+import com.example.R
 import com.example.ui.theme.ThemedPanel
 
 @Composable
@@ -87,7 +89,7 @@ fun RightSideToolPanel(
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.AutoMirrored.Filled.ArrowForward else Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Панель інструментів",
+                    contentDescription = stringResource(R.string.tool_panel),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -123,7 +125,7 @@ fun RightSideToolPanel(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Налаштування пензля",
+                                text = stringResource(R.string.brush_settings),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -150,7 +152,7 @@ fun RightSideToolPanel(
 
                     // 1. Thickness Slider
                     Text(
-                        text = "Товщина лінії: ${strokeWidth.toInt()} px",
+                        text = stringResource(R.string.line_thickness_px, strokeWidth.toInt()),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -192,7 +194,7 @@ fun RightSideToolPanel(
 
                     // 2. Opacity / Transparency Slider
                     Text(
-                        text = "Прозорість: ${(strokeOpacity * 100).toInt()}%",
+                        text = stringResource(R.string.opacity_percent, (strokeOpacity * 100).toInt()),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -234,7 +236,7 @@ fun RightSideToolPanel(
 
                     // 3. Quick Color Swatches
                     Text(
-                        text = "Палітра кольорів",
+                        text = stringResource(R.string.color_palette),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -273,7 +275,7 @@ fun RightSideToolPanel(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Palette,
-                                contentDescription = "Палітра",
+                                contentDescription = stringResource(R.string.palette),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )

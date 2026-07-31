@@ -111,4 +111,142 @@
     <string name="preset_colors">Vooraf ingestelde kleuren</string>
     <string name="recent_colors">Recente kleuren</string>
     <string name="opacity_percent">Dekking: %1$d%%</string>
+    <string name="tool_panel">Werkbalk</string>
+    <string name="brush_settings">Penseelinstellingen</string>
+    <string name="line_thickness_px">Lijndikte: %1$d px</string>
+    <string name="color_palette">Kleurenpalet</string>
+    <string name="palette">Palet</string>
+    <string name="thickness">Dikte</string>
+    <string name="pen">Pen</string>
+    <string name="pencil">Potlood</string>
+    <string name="ink_pen">Inktpen</string>
+    <string name="marker">Markeerstift</string>
+    <string name="selection_lasso">Selectie (lasso)</string>
+    <string name="selection_single">Selectie (enkel)</string>
+    <string name="eraser_object">Gum (object)</string>
+    <string name="eraser_pixel">Gum (pixel)</string>
+    <string name="ruler">Liniaal</string>
+    <string name="slider_orientation">Oriëntatie van schuifregelaars</string>
+    <string name="canvas_background">Canvasachtergrond</string>
+    <string name="background_none">Geen achtergrond</string>
+    <string name="background_lined">Gelijnd papier</string>
+    <string name="background_square_grid">Vierkant raster</string>
+    <string name="background_isometric">Isometrisch raster</string>
+    <string name="background_protractor">Gradenboog</string>
+    <string name="background_music_staff">Notenbalk</string>
+    <string name="background_millimeter">Millimeterpapier</string>
+    <string name="background_dot_paper">Stippenpapier</string>
+    <string name="background_cornell">Cornell-notities</string>
+    <string name="background_kanban">Kanban-bord</string>
+    <string name="background_3d_sketch">3D-schets</string>
+    <string name="move_ruler">Liniaal verplaatsen</string>
+    <string name="rotate_scale_ruler">Liniaal draaien en schalen</string>
+    <string name="hide_ruler">Liniaal verbergen</string>
+    <string name="close_compass">Passer sluiten</string>
+    <string name="close_protractor">Gradenboog sluiten</string>
+    <string name="brush_editor">Penseeleditor</string>
+    <string name="custom_brush">Aangepast penseel</string>
+    <string name="preview">Voorbeeld:</string>
+    <string name="brush_name">Penseelnaam</string>
+    <string name="base_width_px">Basisbreedte: %1$d px</string>
+    <string name="pressure_sensitivity_percent">Drukgevoeligheid: %1$d%%</string>
+    <string name="tilt_sensitivity_percent">Kantelgevoeligheid: %1$d%%</string>
+    <string name="brush_opacity_percent">Dekking: %1$d%%</string>
+    <string name="paint_flow_percent">Verfstroom: %1$d%%</string>
+    <string name="smoothing_percent">Vloeiend maken: %1$d%%</string>
+    <string name="pressure_curve">Drukcurve:</string>
+    <string name="pressure_curve_linear">Lineair</string>
+    <string name="pressure_curve_ease_in">Geleidelijke start</string>
+    <string name="pressure_curve_ease_out">Geleidelijk einde</string>
+    <string name="pressure_curve_ease_in_out">Geleidelijke start/einde</string>
+    <string name="dashed_stroke">Gestreepte lijn</string>
+    <string name="save_brush">Penseel opslaan</string>
+    <string name="ai_provider_title">AI-provider kiezen</string>
+    <string name="ai_provider_subtitle">Kies het model voor de notitie-assistent</string>
+    <string name="vision_capability">Beeldherkenning</string>
+    <string name="api_key_saved">Sleutel opgeslagen</string>
+    <string name="api_key_settings">Sleutelinstellingen (%1$s)</string>
+    <string name="api_key_label">API-sleutel (%1$s)</string>
+    <string name="hide">Verbergen</string>
+    <string name="show">Tonen</string>
+    <string name="model_label">Model (%1$s)</string>
+    <string name="model_name_optional">Modelnaam (optioneel)</string>
+    <string name="custom_endpoint_optional">Aangepast eindpunt (optioneel)</string>
+    <string name="save_and_select">Opslaan en selecteren</string>
+    <string name="api_key_help_gemini">Maak een sleutel op aistudio.google.com/apikey</string>
+    <string name="api_key_help_openai">Maak een sleutel op platform.openai.com/api-keys</string>
+    <string name="api_key_help_anthropic">Maak een sleutel op console.anthropic.com</string>
+    <string name="api_key_help_deepseek">Maak een sleutel op platform.deepseek.com</string>
+    <string name="api_key_help_custom">Voer de URL en sleutel van je OpenAI-compatibele provider in</string>
+    <string name="close">Sluiten</string><string name="add">Toevoegen</string><string name="insert">Invoegen</string>
+    <string name="ai_assistant">AI-assistent</string><string name="collapse">Inklappen</string><string name="expand">Uitklappen</string><string name="send">Verzenden</string>
+    <string name="api_settings">API-instellingen</string><string name="enter_api_key">Voer API-sleutel in</string>
+    <string name="summarize_all">Alles samenvatten</string><string name="suggest_links">Links voorstellen</string><string name="quiz_me">Overhoor mij</string>
+    <string name="ai_canvas_subtitle">Antwoordt met de huidige canvas als context</string>
+    <string name="ai_examples">💡 Voorbeeldvragen:</string><string name="ai_example_formula">• Leg de geschreven formules eenvoudiger uit</string><string name="ai_example_summary">• Maak een korte samenvatting van dit college</string><string name="ai_example_quiz">• Maak 3 vragen over deze notities</string>
+    <string name="ai_analyzing">AI analyseert je notities…</string><string name="ask_about_notes">Vraag iets over je notities…</string>
+    <string name="insert_elements">Elementen invoegen</string><string name="insert_image">Afbeelding invoegen</string><string name="insert_text_block">Tekstblok invoegen</string><string name="insert_chart_grid">Grafiek / assenstelsel invoegen</string><string name="insert_shape">Vorm invoegen</string><string name="paste_content">Inhoud plakken</string>
+    <string name="study_tools">Studiehulpmiddelen</string><string name="vectorize">📐 Vectoriseren</string><string name="plot_function">📈 f(x) tekenen</string><string name="latex_tool">∑ LaTeX</string><string name="code_lab_tool">⌨ Codelab</string><string name="summary_tool">📝 Samenvatting</string><string name="quiz_tool">🎓 Quiz</string><string name="find_links_tool">🔗 Links zoeken</string><string name="study_cards_tool">🗂 Kaarten</string>
+    <string name="undo_redo_tip">💡 Tip: gebruik Ongedaan maken/Opnieuw in de bovenbalk.</string>
+    <string name="local_code_lab">Lokaal codelab</string><string name="code_lab_subtitle">Veilige offline runner voor eenvoudige studiefragmenten</string><string name="code">Code</string><string name="run">Uitvoeren</string><string name="add_to_canvas">Aan canvas toevoegen</string><string name="code_sandbox_hint">Geen netwerk · geen bestandstoegang · beperkte syntaxis</string><string name="console">CONSOLE</string><string name="press_run_hint">Druk op Uitvoeren om de code te controleren.</string><string name="program_no_output">Programma beëindigd zonder uitvoer.</string>
+    <string name="study_decks">Studiekaartensets</string><string name="study_deck">Studiekaartenset</string><string name="review">Herhalen</string><string name="create_first_deck">Maak je eerste set</string><string name="review_daily">Herhaal elke dag een beetje</string><string name="new_deck">Nieuwe set</string><string name="deck_title">Titel van set</string><string name="description_optional">Beschrijving (optioneel)</string><string name="cards_count">%1$d kaarten</string><string name="select_deck_continue">Selecteer een set om door te gaan</string><string name="review_due">%1$d te herhalen</string><string name="nothing_due">Niets te herhalen</string><string name="add_card">Kaart toevoegen</string><string name="question_prompt">Vraag of opdracht</string><string name="answer">Antwoord</string><string name="hint_optional">Hint (optioneel)</string><string name="no_cards">Nog geen kaarten. Voeg een vraag en antwoord toe.</string><string name="delete_card">Kaart verwijderen</string><string name="review_complete">Herhaling voltooid</string><string name="review_complete_hint">Goed gedaan — je volgende herhalingen zijn offline gepland.</string><string name="back_to_deck">Terug naar set</string><string name="hint_value">Hint: %1$s</string><string name="show_hint">Hint tonen</string><string name="show_answer">Antwoord tonen</string>
+    <string name="remaining_count">%1$d resterend</string><string name="again">Opnieuw</string><string name="hard">Moeilijk</string><string name="good">Goed</string><string name="easy">Makkelijk</string><string name="due_count">%1$d te doen</string><string name="up_to_date">Bijgewerkt</string>
+    <string name="canvas_fallback">Canvas</string>
+    <string name="audio_started">Audio-opname gestart…</string>
+    <string name="audio_permission_required">Microfoontoegang is vereist</string>
+    <string name="obsidian_export_done">Obsidian-export voltooid</string>
+    <string name="obsidian_export_failed">Exporteren naar Obsidian mislukt</string>
+    <string name="obsidian_folder_denied">Geen toegang tot de Obsidian-map</string>
+    <string name="lecture_recording_saved">College-opname opgeslagen</string>
+    <string name="record_audio">Audio opnemen</string>
+    <string name="audio_notes">Audionotities</string>
+    <string name="layers">Lagen</string>
+    <string name="export">Exporteren</string>
+    <string name="stop">Stop</string>
+    <string name="audio_deleted">Audio-opname verwijderd</string>
+    <string name="add_link">Link toevoegen</string>
+    <string name="open_links">Link(s) openen</string>
+    <string name="link_saved">Link opgeslagen</string>
+    <string name="link_save_failed">Link opslaan mislukt</string>
+    <string name="link_to_note">Naar een notitie linken</string>
+    <string name="selected_items_count">%1$d item(s) geselecteerd</string>
+    <string name="search_sketchpads">Sketchpads zoeken</string>
+    <string name="no_matching_pages">Geen overeenkomende pagina’s</string>
+    <string name="page_number">Pagina %1$d</string>
+    <string name="pages_count">%1$d pagina(’s)</string>
+    <string name="frame_destination">Kader de bestemming</string>
+    <string name="frame_destination_hint">Pan en zoom naar de exacte plek die deze link moet openen.</string>
+    <string name="save_link">Link opslaan</string>
+    <string name="linked_notes">Gekoppelde notities</string>
+    <string name="no_links">Deze selectie heeft nog geen links.</string>
+    <string name="open">Openen</string>
+    <string name="insert_function_chart">Functiegrafiek invoegen</string>
+    <string name="function_formula_hint">Voer een formule in, zoals sin(x), cos(x)*2, x^2 - 4 of 2*x + 1.</string>
+    <string name="formula_label">Formule y = f(x)</string>
+    <string name="empty_grid">Leeg raster</string>
+    <string name="plot_graph">Grafiek tekenen</string>
+    <string name="insert_text">Tekst invoegen</string>
+    <string name="your_text">Je tekst</string>
+    <string name="export_note_title">Sketchpad-notities exporteren</string>
+    <string name="export_note_hint">Kies de huidige pagina of het hele notitieboek.</string>
+    <string name="export_all_pdf">Hele notitieboek als PDF exporteren</string>
+    <string name="export_page_pdf">Huidige pagina als PDF exporteren</string>
+    <string name="export_png">Als PNG-afbeelding exporteren</string>
+    <string name="export_obsidian">Naar Obsidian exporteren</string>
+    <string name="export_svg">Als SVG-vector exporteren</string>
+    <string name="share_notebook_pdf">PDF-notitieboek delen</string>
+    <string name="share_page_pdf">PDF-pagina delen</string>
+    <string name="share_image">Afbeelding delen</string>
+    <string name="share_svg">SVG delen</string>
+    <string name="insert_chart">Grafiek invoegen</string>
+    <string name="choose_grid_type">Kies het type coördinatenraster:</string>
+    <string name="empty_chart">Lege grafiek (zonder cijfers)</string>
+    <string name="chart_with_steps">Grafiek met stappen</string>
+    <string name="x_step">X-stap</string>
+    <string name="y_step">Y-stap</string>
+    <string name="pasted_from_clipboard">Geplakt van het klembord</string>
+    <string name="shape_circle">Cirkel</string><string name="shape_square">Vierkant</string><string name="shape_triangle">Driehoek</string><string name="shape_arrow">Pijl</string><string name="shape_star">Ster</string><string name="shape_bold_arrow">Brede pijl</string><string name="shape_hexagon">Zeshoek</string><string name="shape_pentagon">Vijfhoek</string><string name="shape_cloud">Wolk</string><string name="shape_speech_bubble">Tekstballon</string>
+    <string name="pause">Pauze</string><string name="delete_audio">Audio verwijderen</string><string name="zoom_in">Inzoomen</string><string name="zoom_out">Uitzoomen</string><string name="rotate">Draaien</string><string name="sticker">Sticker</string><string name="timer">Timer</string><string name="start">Start</string><string name="calculator">Rekenmachine</string><string name="stroke_width_value">Dikte: %1$d</string>
+    <string name="opacity">Dekking</string>
+    <string name="layer_number">Laag %1$d</string><string name="ai_api_key_required">Voeg een API-sleutel toe voor %1$s.</string><string name="shape_recognized">Vorm herkend: %1$s (%2$d%% zekerheid)</string><string name="shape_not_recognized">Vorm niet herkend. Teken een duidelijkere cirkel of rechthoek.</string><string name="no_strokes_function">Er zijn geen lijnen om als functie te analyseren.</string><string name="graph_plotted">Grafiek getekend: %1$s (R² = %2$s)</string><string name="function_fit_failed">Kon geen functie aan de huidige lijnen aanpassen.</string><string name="latex_generated">LaTeX gegenereerd: %1$s</string><string name="audio_seek_seconds">Audio verplaatst naar de lijn: %1$d s</string>
 </resources>

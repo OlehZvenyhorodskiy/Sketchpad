@@ -27,8 +27,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.example.R
 import kotlin.math.roundToInt
 
 @Composable
@@ -116,7 +118,7 @@ fun ProtractorOverlayComponent(
                 .offset { IntOffset(centerOffset.x.roundToInt() - 20, centerOffset.y.roundToInt() - 160) }
         ) {
             IconButton(onClick = onCloseClick, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрити транспортир", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_protractor), tint = MaterialTheme.colorScheme.error)
             }
         }
     }

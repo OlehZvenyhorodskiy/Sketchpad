@@ -27,10 +27,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -109,7 +111,7 @@ fun CompassOverlayComponent(
             }
         ) {
             IconButton(onClick = onCloseClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрити циркуль", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_compass), tint = MaterialTheme.colorScheme.error)
             }
         }
     }

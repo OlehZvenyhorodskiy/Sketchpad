@@ -111,4 +111,142 @@
     <string name="preset_colors">Vorgefertigte Farben</string>
     <string name="recent_colors">Zuletzt verwendete Farben</string>
     <string name="opacity_percent">Deckkraft: %1$d%%</string>
+    <string name="tool_panel">Werkzeugleiste</string>
+    <string name="brush_settings">Pinseleinstellungen</string>
+    <string name="line_thickness_px">Linienstärke: %1$d px</string>
+    <string name="color_palette">Farbpalette</string>
+    <string name="palette">Palette</string>
+    <string name="thickness">Stärke</string>
+    <string name="pen">Stift</string>
+    <string name="pencil">Bleistift</string>
+    <string name="ink_pen">Tintenstift</string>
+    <string name="marker">Textmarker</string>
+    <string name="selection_lasso">Auswahl (Lasso)</string>
+    <string name="selection_single">Auswahl (einzeln)</string>
+    <string name="eraser_object">Radierer (Objekt)</string>
+    <string name="eraser_pixel">Radierer (Pixel)</string>
+    <string name="ruler">Lineal</string>
+    <string name="slider_orientation">Ausrichtung der Regler</string>
+    <string name="canvas_background">Leinwandhintergrund</string>
+    <string name="background_none">Kein Hintergrund</string>
+    <string name="background_lined">Liniertes Papier</string>
+    <string name="background_square_grid">Quadratraster</string>
+    <string name="background_isometric">Isometrisches Raster</string>
+    <string name="background_protractor">Winkelmesser</string>
+    <string name="background_music_staff">Notensystem</string>
+    <string name="background_millimeter">Millimeterpapier</string>
+    <string name="background_dot_paper">Punktraster</string>
+    <string name="background_cornell">Cornell-Notizen</string>
+    <string name="background_kanban">Kanban-Tafel</string>
+    <string name="background_3d_sketch">3D-Skizze</string>
+    <string name="move_ruler">Lineal verschieben</string>
+    <string name="rotate_scale_ruler">Lineal drehen und skalieren</string>
+    <string name="hide_ruler">Lineal ausblenden</string>
+    <string name="close_compass">Zirkel schließen</string>
+    <string name="close_protractor">Winkelmesser schließen</string>
+    <string name="brush_editor">Pinseleditor</string>
+    <string name="custom_brush">Eigener Pinsel</string>
+    <string name="preview">Vorschau:</string>
+    <string name="brush_name">Pinselname</string>
+    <string name="base_width_px">Grundbreite: %1$d px</string>
+    <string name="pressure_sensitivity_percent">Druckempfindlichkeit: %1$d%%</string>
+    <string name="tilt_sensitivity_percent">Neigungsempfindlichkeit: %1$d%%</string>
+    <string name="brush_opacity_percent">Deckkraft: %1$d%%</string>
+    <string name="paint_flow_percent">Farbfluss: %1$d%%</string>
+    <string name="smoothing_percent">Glättung: %1$d%%</string>
+    <string name="pressure_curve">Druckkurve:</string>
+    <string name="pressure_curve_linear">Linear</string>
+    <string name="pressure_curve_ease_in">Sanfter Anfang</string>
+    <string name="pressure_curve_ease_out">Sanftes Ende</string>
+    <string name="pressure_curve_ease_in_out">Sanfter Anfang/Ende</string>
+    <string name="dashed_stroke">Gestrichelter Strich</string>
+    <string name="save_brush">Pinsel speichern</string>
+    <string name="ai_provider_title">KI-Anbieter wählen</string>
+    <string name="ai_provider_subtitle">Modell für den Notizassistenten auswählen</string>
+    <string name="vision_capability">Bilderkennung</string>
+    <string name="api_key_saved">Schlüssel gespeichert</string>
+    <string name="api_key_settings">Schlüsseleinstellungen (%1$s)</string>
+    <string name="api_key_label">API-Schlüssel (%1$s)</string>
+    <string name="hide">Ausblenden</string>
+    <string name="show">Anzeigen</string>
+    <string name="model_label">Modell (%1$s)</string>
+    <string name="model_name_optional">Modellname (optional)</string>
+    <string name="custom_endpoint_optional">Eigener Endpunkt (optional)</string>
+    <string name="save_and_select">Speichern und auswählen</string>
+    <string name="api_key_help_gemini">Schlüssel auf aistudio.google.com/apikey erstellen</string>
+    <string name="api_key_help_openai">Schlüssel auf platform.openai.com/api-keys erstellen</string>
+    <string name="api_key_help_anthropic">Schlüssel auf console.anthropic.com erstellen</string>
+    <string name="api_key_help_deepseek">Schlüssel auf platform.deepseek.com erstellen</string>
+    <string name="api_key_help_custom">URL und Schlüssel des OpenAI-kompatiblen Anbieters eingeben</string>
+    <string name="close">Schließen</string><string name="add">Hinzufügen</string><string name="insert">Einfügen</string>
+    <string name="ai_assistant">KI-Assistent</string><string name="collapse">Einklappen</string><string name="expand">Ausklappen</string><string name="send">Senden</string>
+    <string name="api_settings">API-Einstellungen</string><string name="enter_api_key">API-Schlüssel eingeben</string>
+    <string name="summarize_all">Alles zusammenfassen</string><string name="suggest_links">Links vorschlagen</string><string name="quiz_me">Mich abfragen</string>
+    <string name="ai_canvas_subtitle">Antwortet anhand der aktuellen Leinwand</string>
+    <string name="ai_examples">💡 Beispielfragen:</string><string name="ai_example_formula">• Erkläre die notierten Formeln einfacher</string><string name="ai_example_summary">• Fasse diese Vorlesung kurz zusammen</string><string name="ai_example_quiz">• Erstelle 3 Fragen zu diesen Notizen</string>
+    <string name="ai_analyzing">Die KI analysiert deine Notizen…</string><string name="ask_about_notes">Frage zu deinen Notizen…</string>
+    <string name="insert_elements">Elemente einfügen</string><string name="insert_image">Bild einfügen</string><string name="insert_text_block">Textblock einfügen</string><string name="insert_chart_grid">Diagramm / Koordinatensystem einfügen</string><string name="insert_shape">Form einfügen</string><string name="paste_content">Inhalt einfügen</string>
+    <string name="study_tools">Lernwerkzeuge</string><string name="vectorize">📐 Vektorisieren</string><string name="plot_function">📈 f(x) zeichnen</string><string name="latex_tool">∑ LaTeX</string><string name="code_lab_tool">⌨ Code-Labor</string><string name="summary_tool">📝 Zusammenfassung</string><string name="quiz_tool">🎓 Quiz</string><string name="find_links_tool">🔗 Links finden</string><string name="study_cards_tool">🗂 Karten</string>
+    <string name="undo_redo_tip">💡 Tipp: Verwende Rückgängig/Wiederholen in der oberen Leiste.</string>
+    <string name="local_code_lab">Lokales Code-Labor</string><string name="code_lab_subtitle">Sichere Offline-Ausführung einfacher Lernbeispiele</string><string name="code">Code</string><string name="run">Ausführen</string><string name="add_to_canvas">Zur Leinwand hinzufügen</string><string name="code_sandbox_hint">Kein Netzwerk · kein Dateizugriff · begrenzte Syntax</string><string name="console">KONSOLE</string><string name="press_run_hint">Drücke Ausführen, um den Code zu prüfen.</string><string name="program_no_output">Programm ohne Ausgabe beendet.</string>
+    <string name="study_decks">Lernkartensätze</string><string name="study_deck">Lernkartensatz</string><string name="review">Wiederholen</string><string name="create_first_deck">Erstelle deinen ersten Satz</string><string name="review_daily">Jeden Tag ein wenig wiederholen</string><string name="new_deck">Neuer Satz</string><string name="deck_title">Titel des Satzes</string><string name="description_optional">Beschreibung (optional)</string><string name="cards_count">%1$d Karten</string><string name="select_deck_continue">Wähle einen Satz aus</string><string name="review_due">%1$d fällig</string><string name="nothing_due">Nichts fällig</string><string name="add_card">Karte hinzufügen</string><string name="question_prompt">Frage oder Aufgabe</string><string name="answer">Antwort</string><string name="hint_optional">Hinweis (optional)</string><string name="no_cards">Noch keine Karten. Füge eine Frage und Antwort hinzu.</string><string name="delete_card">Karte löschen</string><string name="review_complete">Wiederholung abgeschlossen</string><string name="review_complete_hint">Gut gemacht — die nächsten Wiederholungen sind offline geplant.</string><string name="back_to_deck">Zurück zum Satz</string><string name="hint_value">Hinweis: %1$s</string><string name="show_hint">Hinweis anzeigen</string><string name="show_answer">Antwort anzeigen</string>
+    <string name="remaining_count">Noch %1$d</string><string name="again">Nochmal</string><string name="hard">Schwer</string><string name="good">Gut</string><string name="easy">Leicht</string><string name="due_count">%1$d fällig</string><string name="up_to_date">Aktuell</string>
+    <string name="canvas_fallback">Leinwand</string>
+    <string name="audio_started">Audioaufnahme gestartet…</string>
+    <string name="audio_permission_required">Mikrofonberechtigung ist erforderlich</string>
+    <string name="obsidian_export_done">Obsidian-Export abgeschlossen</string>
+    <string name="obsidian_export_failed">Export nach Obsidian fehlgeschlagen</string>
+    <string name="obsidian_folder_denied">Kein Zugriff auf den Obsidian-Ordner</string>
+    <string name="lecture_recording_saved">Vorlesungsaufnahme gespeichert</string>
+    <string name="record_audio">Audio aufnehmen</string>
+    <string name="audio_notes">Audionotizen</string>
+    <string name="layers">Ebenen</string>
+    <string name="export">Exportieren</string>
+    <string name="stop">Stopp</string>
+    <string name="audio_deleted">Audioaufnahme gelöscht</string>
+    <string name="add_link">Link hinzufügen</string>
+    <string name="open_links">Link(s) öffnen</string>
+    <string name="link_saved">Link gespeichert</string>
+    <string name="link_save_failed">Link konnte nicht gespeichert werden</string>
+    <string name="link_to_note">Mit einer Notiz verknüpfen</string>
+    <string name="selected_items_count">%1$d Element(e) ausgewählt</string>
+    <string name="search_sketchpads">Sketchpads durchsuchen</string>
+    <string name="no_matching_pages">Keine passenden Seiten</string>
+    <string name="page_number">Seite %1$d</string>
+    <string name="pages_count">%1$d Seite(n)</string>
+    <string name="frame_destination">Zielbereich festlegen</string>
+    <string name="frame_destination_hint">Verschiebe und zoome zur genauen Stelle, die der Link öffnen soll.</string>
+    <string name="save_link">Link speichern</string>
+    <string name="linked_notes">Verknüpfte Notizen</string>
+    <string name="no_links">Diese Auswahl hat noch keine Links.</string>
+    <string name="open">Öffnen</string>
+    <string name="insert_function_chart">Funktionsgraph einfügen</string>
+    <string name="function_formula_hint">Gib eine Formel ein, z. B. sin(x), cos(x)*2, x^2 - 4 oder 2*x + 1.</string>
+    <string name="formula_label">Formel y = f(x)</string>
+    <string name="empty_grid">Leeres Raster</string>
+    <string name="plot_graph">Graph zeichnen</string>
+    <string name="insert_text">Text einfügen</string>
+    <string name="your_text">Dein Text</string>
+    <string name="export_note_title">Sketchpad-Notizen exportieren</string>
+    <string name="export_note_hint">Exportiere die aktuelle Seite oder das gesamte Notizbuch.</string>
+    <string name="export_all_pdf">Gesamtes Notizbuch als PDF exportieren</string>
+    <string name="export_page_pdf">Aktuelle Seite als PDF exportieren</string>
+    <string name="export_png">Als PNG-Bild exportieren</string>
+    <string name="export_obsidian">Nach Obsidian exportieren</string>
+    <string name="export_svg">Als SVG-Vektor exportieren</string>
+    <string name="share_notebook_pdf">Notizbuch-PDF teilen</string>
+    <string name="share_page_pdf">Seiten-PDF teilen</string>
+    <string name="share_image">Bild teilen</string>
+    <string name="share_svg">SVG teilen</string>
+    <string name="insert_chart">Graph einfügen</string>
+    <string name="choose_grid_type">Koordinatenraster auswählen:</string>
+    <string name="empty_chart">Leerer Graph (ohne Zahlen)</string>
+    <string name="chart_with_steps">Graph mit Schritten</string>
+    <string name="x_step">X-Schritt</string>
+    <string name="y_step">Y-Schritt</string>
+    <string name="pasted_from_clipboard">Aus der Zwischenablage eingefügt</string>
+    <string name="shape_circle">Kreis</string><string name="shape_square">Quadrat</string><string name="shape_triangle">Dreieck</string><string name="shape_arrow">Pfeil</string><string name="shape_star">Stern</string><string name="shape_bold_arrow">Breiter Pfeil</string><string name="shape_hexagon">Sechseck</string><string name="shape_pentagon">Fünfeck</string><string name="shape_cloud">Wolke</string><string name="shape_speech_bubble">Sprechblase</string>
+    <string name="pause">Pause</string><string name="delete_audio">Audio löschen</string><string name="zoom_in">Vergrößern</string><string name="zoom_out">Verkleinern</string><string name="rotate">Drehen</string><string name="sticker">Notizzettel</string><string name="timer">Timer</string><string name="start">Start</string><string name="calculator">Taschenrechner</string><string name="stroke_width_value">Dicke: %1$d</string>
+    <string name="opacity">Deckkraft</string>
+    <string name="layer_number">Ebene %1$d</string><string name="ai_api_key_required">Füge einen API-Schlüssel für %1$s hinzu.</string><string name="shape_recognized">Form erkannt: %1$s (%2$d%% Sicherheit)</string><string name="shape_not_recognized">Form nicht erkannt. Zeichne einen deutlicheren Kreis oder ein Rechteck.</string><string name="no_strokes_function">Es gibt keine Striche zur Funktionsanalyse.</string><string name="graph_plotted">Graph gezeichnet: %1$s (R² = %2$s)</string><string name="function_fit_failed">An die vorhandenen Striche konnte keine Funktion angepasst werden.</string><string name="latex_generated">LaTeX erzeugt: %1$s</string><string name="audio_seek_seconds">Audio zum Strich verschoben: %1$d s</string>
 </resources>

@@ -46,12 +46,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ai.AiProvider
 import com.example.ai.AiProviderRegistry
 
@@ -81,12 +83,12 @@ fun AiProviderPickerSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "Вибір AI-провайдера",
+                text = stringResource(R.string.ai_provider_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Оберіть модель для роботи асистента конспекту",
+                text = stringResource(R.string.ai_provider_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -157,7 +159,7 @@ fun AiProviderPickerSheet(
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                                         Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Ключ збережено", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                        Text(stringResource(R.string.api_key_saved), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                     }
                                 }
                             }
@@ -171,7 +173,7 @@ fun AiProviderPickerSheet(
             // Inputs for selected provider
             val currentProvider = AiProviderRegistry.getProvider(selectedId)
             Text(
-                text = "Налаштування ключа (${currentProvider.displayName})",
+                text = stringResource(R.string.api_key_settings, currentProvider.displayName),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp
             )
@@ -180,14 +182,14 @@ fun AiProviderPickerSheet(
             OutlinedTextField(
                 value = apiKeyText,
                 onValueChange = { apiKeyText = it },
-                label = { Text("API Key (${currentProvider.displayName})") },
+                label = { Text(stringResource(R.string.api_key_label, currentProvider.displayName)) },
                 singleLine = true,
                 visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
                         Icon(
                             imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (isKeyVisible) "Сховати" else "Показати"
+                            contentDescription = stringResource(if (isKeyVisible) R.string.hide else R.string.show)
                         )
                     }
                 },
@@ -244,7 +246,7 @@ fun AiProviderPickerSheet(
                         value = effectiveModel,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Модель (${currentProvider.displayName})") },
+                        label = { Text(stringResource(R.string.model_label, currentProvider.displayName)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
                         modifier = Modifier
                             .menuAnchor()
@@ -269,7 +271,7 @@ fun AiProviderPickerSheet(
                 OutlinedTextField(
                     value = modelText,
                     onValueChange = { modelText = it },
-                    label = { Text("Model Name (опційно)") },
+                    label = { Text(stringResource(R.string.model_name_optional)) },
                     placeholder = { Text("gpt-4o-mini") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -281,7 +283,7 @@ fun AiProviderPickerSheet(
                 OutlinedTextField(
                     value = endpointText,
                     onValueChange = { endpointText = it },
-                    label = { Text("Custom Endpoint (опційно)") },
+                    label = { Text(stringResource(R.string.custom_endpoint_optional)) },
                     placeholder = { Text("https://api.openai.com/v1/chat/completions") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -295,7 +297,7 @@ fun AiProviderPickerSheet(
                 horizontalArrangement = Arrangement.End
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
@@ -312,7 +314,7 @@ fun AiProviderPickerSheet(
                     },
                     enabled = apiKeyText.isNotBlank() || getKeyForProvider(selectedId).isNotBlank()
                 ) {
-                    Text("Зберегти та обрати")
+                    Text(stringResource(R.string.save_and_select))
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

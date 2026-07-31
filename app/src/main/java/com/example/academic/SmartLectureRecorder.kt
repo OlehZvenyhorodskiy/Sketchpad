@@ -22,7 +22,7 @@ object SmartLectureRecorder {
             TimestampedStroke(
                 strokeId = st.id,
                 audioTimestampMs = relativeMs,
-                previewLabel = "Штрих #${idx + 1} ($timeStr)"
+                previewLabel = "Stroke #${idx + 1} ($timeStr)"
             )
         }
     }

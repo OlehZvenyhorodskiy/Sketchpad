@@ -16,9 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.models.HslaColor
+import com.example.R
 
 enum class PanelType { WIDTH, OPACITY }
 
@@ -53,8 +55,8 @@ fun VerticalFloatingSidePanel(
                     PanelType.OPACITY -> Icons.Default.Opacity
                 },
                 contentDescription = when (panelType) {
-                    PanelType.WIDTH -> "Товщина"
-                    PanelType.OPACITY -> "Прозорість"
+                    PanelType.WIDTH -> stringResource(R.string.thickness)
+                    PanelType.OPACITY -> stringResource(R.string.opacity_percent, (opacity * 100).toInt())
                 },
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp)
@@ -118,4 +120,3 @@ fun VerticalFloatingSidePanel(
         }
     }
 }
-

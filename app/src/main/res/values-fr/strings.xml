@@ -111,4 +111,142 @@
     <string name="preset_colors">Couleurs prédéfinies</string>
     <string name="recent_colors">Couleurs récentes</string>
     <string name="opacity_percent">Opacité : %1$d%%</string>
+    <string name="tool_panel">Barre d’outils</string>
+    <string name="brush_settings">Réglages du pinceau</string>
+    <string name="line_thickness_px">Épaisseur du trait : %1$d px</string>
+    <string name="color_palette">Palette de couleurs</string>
+    <string name="palette">Palette</string>
+    <string name="thickness">Épaisseur</string>
+    <string name="pen">Stylo</string>
+    <string name="pencil">Crayon</string>
+    <string name="ink_pen">Stylo à encre</string>
+    <string name="marker">Surligneur</string>
+    <string name="selection_lasso">Sélection (lasso)</string>
+    <string name="selection_single">Sélection (unique)</string>
+    <string name="eraser_object">Gomme (objet)</string>
+    <string name="eraser_pixel">Gomme (pixel)</string>
+    <string name="ruler">Règle</string>
+    <string name="slider_orientation">Orientation des curseurs</string>
+    <string name="canvas_background">Arrière-plan du canevas</string>
+    <string name="background_none">Aucun arrière-plan</string>
+    <string name="background_lined">Papier ligné</string>
+    <string name="background_square_grid">Quadrillage</string>
+    <string name="background_isometric">Grille isométrique</string>
+    <string name="background_protractor">Rapporteur</string>
+    <string name="background_music_staff">Portée musicale</string>
+    <string name="background_millimeter">Papier millimétré</string>
+    <string name="background_dot_paper">Papier pointé</string>
+    <string name="background_cornell">Notes Cornell</string>
+    <string name="background_kanban">Tableau Kanban</string>
+    <string name="background_3d_sketch">Croquis 3D</string>
+    <string name="move_ruler">Déplacer la règle</string>
+    <string name="rotate_scale_ruler">Faire pivoter et redimensionner la règle</string>
+    <string name="hide_ruler">Masquer la règle</string>
+    <string name="close_compass">Fermer le compas</string>
+    <string name="close_protractor">Fermer le rapporteur</string>
+    <string name="brush_editor">Éditeur de pinceau</string>
+    <string name="custom_brush">Pinceau personnalisé</string>
+    <string name="preview">Aperçu :</string>
+    <string name="brush_name">Nom du pinceau</string>
+    <string name="base_width_px">Largeur de base : %1$d px</string>
+    <string name="pressure_sensitivity_percent">Sensibilité à la pression : %1$d%%</string>
+    <string name="tilt_sensitivity_percent">Sensibilité à l’inclinaison : %1$d%%</string>
+    <string name="brush_opacity_percent">Opacité : %1$d%%</string>
+    <string name="paint_flow_percent">Débit de peinture : %1$d%%</string>
+    <string name="smoothing_percent">Lissage : %1$d%%</string>
+    <string name="pressure_curve">Courbe de pression :</string>
+    <string name="pressure_curve_linear">Linéaire</string>
+    <string name="pressure_curve_ease_in">Début progressif</string>
+    <string name="pressure_curve_ease_out">Fin progressive</string>
+    <string name="pressure_curve_ease_in_out">Début/fin progressifs</string>
+    <string name="dashed_stroke">Trait en pointillés</string>
+    <string name="save_brush">Enregistrer le pinceau</string>
+    <string name="ai_provider_title">Choisir un fournisseur d’IA</string>
+    <string name="ai_provider_subtitle">Choisissez le modèle de l’assistant de notes</string>
+    <string name="vision_capability">Vision</string>
+    <string name="api_key_saved">Clé enregistrée</string>
+    <string name="api_key_settings">Réglages de la clé (%1$s)</string>
+    <string name="api_key_label">Clé API (%1$s)</string>
+    <string name="hide">Masquer</string>
+    <string name="show">Afficher</string>
+    <string name="model_label">Modèle (%1$s)</string>
+    <string name="model_name_optional">Nom du modèle (facultatif)</string>
+    <string name="custom_endpoint_optional">Point de terminaison personnalisé (facultatif)</string>
+    <string name="save_and_select">Enregistrer et sélectionner</string>
+    <string name="api_key_help_gemini">Créez une clé sur aistudio.google.com/apikey</string>
+    <string name="api_key_help_openai">Créez une clé sur platform.openai.com/api-keys</string>
+    <string name="api_key_help_anthropic">Créez une clé sur console.anthropic.com</string>
+    <string name="api_key_help_deepseek">Créez une clé sur platform.deepseek.com</string>
+    <string name="api_key_help_custom">Saisissez l’URL et la clé de votre fournisseur compatible OpenAI</string>
+    <string name="close">Fermer</string><string name="add">Ajouter</string><string name="insert">Insérer</string>
+    <string name="ai_assistant">Assistant IA</string><string name="collapse">Réduire</string><string name="expand">Développer</string><string name="send">Envoyer</string>
+    <string name="api_settings">Réglages de l’API</string><string name="enter_api_key">Saisissez la clé API</string>
+    <string name="summarize_all">Tout résumer</string><string name="suggest_links">Suggérer des liens</string><string name="quiz_me">Me tester</string>
+    <string name="ai_canvas_subtitle">Répond à partir du canevas actuel</string>
+    <string name="ai_examples">💡 Exemples de questions :</string><string name="ai_example_formula">• Explique les formules écrites plus simplement</string><string name="ai_example_summary">• Fais un court résumé de ce cours</string><string name="ai_example_quiz">• Crée 3 questions à partir de ces notes</string>
+    <string name="ai_analyzing">L’IA analyse vos notes…</string><string name="ask_about_notes">Posez une question sur vos notes…</string>
+    <string name="insert_elements">Insérer des éléments</string><string name="insert_image">Insérer une image</string><string name="insert_text_block">Insérer un bloc de texte</string><string name="insert_chart_grid">Insérer un graphique / repère</string><string name="insert_shape">Insérer une forme</string><string name="paste_content">Coller le contenu</string>
+    <string name="study_tools">Outils d’étude</string><string name="vectorize">📐 Vectoriser</string><string name="plot_function">📈 Tracer f(x)</string><string name="latex_tool">∑ LaTeX</string><string name="code_lab_tool">⌨ Laboratoire de code</string><string name="summary_tool">📝 Résumé</string><string name="quiz_tool">🎓 Quiz</string><string name="find_links_tool">🔗 Trouver des liens</string><string name="study_cards_tool">🗂 Cartes</string>
+    <string name="undo_redo_tip">💡 Astuce : utilisez Annuler/Rétablir dans la barre supérieure.</string>
+    <string name="local_code_lab">Laboratoire de code local</string><string name="code_lab_subtitle">Exécution hors ligne sûre pour des extraits d’étude simples</string><string name="code">Code</string><string name="run">Exécuter</string><string name="add_to_canvas">Ajouter au canevas</string><string name="code_sandbox_hint">Sans réseau · sans accès aux fichiers · syntaxe limitée</string><string name="console">CONSOLE</string><string name="press_run_hint">Appuyez sur Exécuter pour vérifier le code.</string><string name="program_no_output">Programme terminé sans sortie.</string>
+    <string name="study_decks">Paquets de révision</string><string name="study_deck">Paquet de révision</string><string name="review">Révision</string><string name="create_first_deck">Créez votre premier paquet</string><string name="review_daily">Révisez un peu chaque jour</string><string name="new_deck">Nouveau paquet</string><string name="deck_title">Titre du paquet</string><string name="description_optional">Description (facultative)</string><string name="cards_count">%1$d cartes</string><string name="select_deck_continue">Sélectionnez un paquet pour continuer</string><string name="review_due">%1$d à réviser</string><string name="nothing_due">Aucune révision prévue</string><string name="add_card">Ajouter une carte</string><string name="question_prompt">Question ou consigne</string><string name="answer">Réponse</string><string name="hint_optional">Indice (facultatif)</string><string name="no_cards">Aucune carte. Ajoutez une question et une réponse.</string><string name="delete_card">Supprimer la carte</string><string name="review_complete">Révision terminée</string><string name="review_complete_hint">Bravo — vos prochaines révisions sont planifiées hors ligne.</string><string name="back_to_deck">Retour au paquet</string><string name="hint_value">Indice : %1$s</string><string name="show_hint">Afficher l’indice</string><string name="show_answer">Afficher la réponse</string>
+    <string name="remaining_count">%1$d restantes</string><string name="again">À revoir</string><string name="hard">Difficile</string><string name="good">Bien</string><string name="easy">Facile</string><string name="due_count">%1$d à faire</string><string name="up_to_date">À jour</string>
+    <string name="canvas_fallback">Canevas</string>
+    <string name="audio_started">Enregistrement audio démarré…</string>
+    <string name="audio_permission_required">L’autorisation du microphone est requise</string>
+    <string name="obsidian_export_done">Export Obsidian terminé</string>
+    <string name="obsidian_export_failed">Impossible d’exporter vers Obsidian</string>
+    <string name="obsidian_folder_denied">Aucun accès au dossier Obsidian</string>
+    <string name="lecture_recording_saved">Enregistrement du cours sauvegardé</string>
+    <string name="record_audio">Enregistrer l’audio</string>
+    <string name="audio_notes">Notes audio</string>
+    <string name="layers">Calques</string>
+    <string name="export">Exporter</string>
+    <string name="stop">Arrêter</string>
+    <string name="audio_deleted">Enregistrement audio supprimé</string>
+    <string name="add_link">Ajouter un lien</string>
+    <string name="open_links">Ouvrir le ou les liens</string>
+    <string name="link_saved">Lien enregistré</string>
+    <string name="link_save_failed">Impossible d’enregistrer le lien</string>
+    <string name="link_to_note">Lier à une note</string>
+    <string name="selected_items_count">%1$d élément(s) sélectionné(s)</string>
+    <string name="search_sketchpads">Rechercher des carnets</string>
+    <string name="no_matching_pages">Aucune page correspondante</string>
+    <string name="page_number">Page %1$d</string>
+    <string name="pages_count">%1$d page(s)</string>
+    <string name="frame_destination">Cadrez la destination</string>
+    <string name="frame_destination_hint">Déplacez et zoomez vers l’endroit exact que ce lien doit ouvrir.</string>
+    <string name="save_link">Enregistrer le lien</string>
+    <string name="linked_notes">Notes liées</string>
+    <string name="no_links">Cette sélection n’a encore aucun lien.</string>
+    <string name="open">Ouvrir</string>
+    <string name="insert_function_chart">Insérer un graphe de fonction</string>
+    <string name="function_formula_hint">Saisissez une formule telle que sin(x), cos(x)*2, x^2 - 4 ou 2*x + 1.</string>
+    <string name="formula_label">Formule y = f(x)</string>
+    <string name="empty_grid">Grille vide</string>
+    <string name="plot_graph">Tracer le graphe</string>
+    <string name="insert_text">Insérer du texte</string>
+    <string name="your_text">Votre texte</string>
+    <string name="export_note_title">Exporter les notes Sketchpad</string>
+    <string name="export_note_hint">Choisissez la page actuelle ou le carnet entier.</string>
+    <string name="export_all_pdf">Exporter tout le carnet en PDF</string>
+    <string name="export_page_pdf">Exporter la page actuelle en PDF</string>
+    <string name="export_png">Exporter en image PNG</string>
+    <string name="export_obsidian">Exporter vers Obsidian</string>
+    <string name="export_svg">Exporter en vecteur SVG</string>
+    <string name="share_notebook_pdf">Partager le carnet PDF</string>
+    <string name="share_page_pdf">Partager la page PDF</string>
+    <string name="share_image">Partager l’image</string>
+    <string name="share_svg">Partager le SVG</string>
+    <string name="insert_chart">Insérer un graphe</string>
+    <string name="choose_grid_type">Choisissez le type de grille de coordonnées :</string>
+    <string name="empty_chart">Graphe vide (sans nombres)</string>
+    <string name="chart_with_steps">Graphe avec graduations</string>
+    <string name="x_step">Pas X</string>
+    <string name="y_step">Pas Y</string>
+    <string name="pasted_from_clipboard">Collé depuis le presse-papiers</string>
+    <string name="shape_circle">Cercle</string><string name="shape_square">Carré</string><string name="shape_triangle">Triangle</string><string name="shape_arrow">Flèche</string><string name="shape_star">Étoile</string><string name="shape_bold_arrow">Flèche large</string><string name="shape_hexagon">Hexagone</string><string name="shape_pentagon">Pentagone</string><string name="shape_cloud">Nuage</string><string name="shape_speech_bubble">Bulle</string>
+    <string name="pause">Pause</string><string name="delete_audio">Supprimer l’audio</string><string name="zoom_in">Zoom avant</string><string name="zoom_out">Zoom arrière</string><string name="rotate">Pivoter</string><string name="sticker">Post-it</string><string name="timer">Minuteur</string><string name="start">Démarrer</string><string name="calculator">Calculatrice</string><string name="stroke_width_value">Épaisseur : %1$d</string>
+    <string name="opacity">Opacité</string>
+    <string name="layer_number">Calque %1$d</string><string name="ai_api_key_required">Ajoutez une clé API pour %1$s.</string><string name="shape_recognized">Forme reconnue : %1$s (confiance %2$d%%)</string><string name="shape_not_recognized">Forme non reconnue. Dessinez un cercle ou un rectangle plus net.</string><string name="no_strokes_function">Aucun trait à analyser comme fonction.</string><string name="graph_plotted">Graphe tracé : %1$s (R² = %2$s)</string><string name="function_fit_failed">Impossible d’ajuster une fonction aux traits actuels.</string><string name="latex_generated">LaTeX généré : %1$s</string><string name="audio_seek_seconds">Audio déplacé vers le trait : %1$d s</string>
 </resources>

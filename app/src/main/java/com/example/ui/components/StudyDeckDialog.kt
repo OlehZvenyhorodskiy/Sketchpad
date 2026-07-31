@@ -45,11 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.R
 import com.example.academic.study.ReviewGrade
 import com.example.data.models.FlashcardEntity
 import com.example.data.models.StudyDeckEntity
@@ -93,9 +95,9 @@ fun StudyDeckDialog(
             Column(Modifier.fillMaxSize()) {
                 StudyDeckHeader(
                     title = when (destination) {
-                        StudyDeckDestination.DECKS -> "Study decks"
-                        StudyDeckDestination.CARDS -> selectedDeck?.title ?: "Study deck"
-                        StudyDeckDestination.REVIEW -> "Review"
+                        StudyDeckDestination.DECKS -> stringResource(R.string.study_decks)
+                        StudyDeckDestination.CARDS -> selectedDeck?.title ?: stringResource(R.string.study_deck)
+                        StudyDeckDestination.REVIEW -> stringResource(R.string.review)
                     },
                     canNavigateBack = destination != StudyDeckDestination.DECKS,
                     onBack = {
@@ -161,7 +163,7 @@ private fun StudyDeckHeader(
     ) {
         if (canNavigateBack) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
             }
         } else {
             Icon(
@@ -180,7 +182,7 @@ private fun StudyDeckHeader(
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onDismiss) {
-            Icon(Icons.Default.Close, contentDescription = "Close")
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
         }
     }
 }
@@ -202,13 +204,13 @@ private fun DeckList(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (decks.isEmpty()) "Create your first deck" else "Review a little every day",
+                text = stringResource(if (decks.isEmpty()) R.string.create_first_deck else R.string.review_daily),
                 style = MaterialTheme.typography.bodyLarge
             )
             FilledTonalButton(onClick = { showCreator = !showCreator }) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("New deck")
+                Text(stringResource(R.string.new_deck))
             }
         }
 
@@ -221,7 +223,7 @@ private fun DeckList(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Deck title") },
+                        label = { Text(stringResource(R.string.deck_title)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -229,7 +231,7 @@ private fun DeckList(
                     OutlinedTextField(
                         value = description,
                         onValueChange = { description = it },
-                        label = { Text("Description (optional)") },
+                        label = { Text(stringResource(R.string.description_optional)) },
                         maxLines = 2,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -237,7 +239,7 @@ private fun DeckList(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = { showCreator = false }) { Text("Cancel") }
+                        TextButton(onClick = { showCreator = false }) { Text(stringResource(R.string.cancel)) }
                         Button(
                             onClick = {
                                 onCreateDeck(title, description)
@@ -246,7 +248,7 @@ private fun DeckList(
                                 showCreator = false
                             },
                             enabled = title.isNotBlank()
-                        ) { Text("Create") }
+                        ) { Text(stringResource(R.string.create)) }
                     }
                 }
             }
@@ -278,7 +280,7 @@ private fun DeckList(
                                 )
                             }
                             Text(
-                                "${summary.cardCount} cards",
+                                stringResource(R.string.cards_count, summary.cardCount),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -302,7 +304,7 @@ private fun DeckCards(
 ) {
     if (deck == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Select a deck to continue")
+            Text(stringResource(R.string.select_deck_continue))
         }
         return
     }
@@ -321,12 +323,15 @@ private fun DeckCards(
             Button(onClick = onStartReview, enabled = dueCount > 0) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text(if (dueCount > 0) "Review $dueCount due" else "Nothing due")
+                Text(
+                    if (dueCount > 0) stringResource(R.string.review_due, dueCount)
+                    else stringResource(R.string.nothing_due)
+                )
             }
             OutlinedButton(onClick = { showCreator = !showCreator }) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text("Add card")
+                Text(stringResource(R.string.add_card))
             }
         }
 
@@ -339,28 +344,28 @@ private fun DeckCards(
                     OutlinedTextField(
                         value = prompt,
                         onValueChange = { prompt = it },
-                        label = { Text("Question or prompt") },
+                        label = { Text(stringResource(R.string.question_prompt)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = answer,
                         onValueChange = { answer = it },
-                        label = { Text("Answer") },
+                        label = { Text(stringResource(R.string.answer)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = hint,
                         onValueChange = { hint = it },
-                        label = { Text("Hint (optional)") },
+                        label = { Text(stringResource(R.string.hint_optional)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = { showCreator = false }) { Text("Cancel") }
+                        TextButton(onClick = { showCreator = false }) { Text(stringResource(R.string.cancel)) }
                         Button(
                             onClick = {
                                 onAddCard(deck.id, prompt, answer, hint)
@@ -370,7 +375,7 @@ private fun DeckCards(
                                 showCreator = false
                             },
                             enabled = prompt.isNotBlank() && answer.isNotBlank()
-                        ) { Text("Add") }
+                        ) { Text(stringResource(R.string.add)) }
                     }
                 }
             }
@@ -379,7 +384,7 @@ private fun DeckCards(
         Spacer(Modifier.height(12.dp))
         if (cards.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No cards yet. Add a question and answer to begin.")
+                Text(stringResource(R.string.no_cards))
             }
         } else {
             LazyColumn(
@@ -403,7 +408,7 @@ private fun DeckCards(
                                 )
                             }
                             IconButton(onClick = { onDeleteCard(card) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete card")
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_card))
                             }
                         }
                     }
@@ -436,10 +441,10 @@ private fun ReviewDeck(
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(12.dp))
-            Text("Review complete", style = MaterialTheme.typography.headlineSmall)
-            Text("Nice work — your next reviews are scheduled offline.")
+            Text(stringResource(R.string.review_complete), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.review_complete_hint))
             Spacer(Modifier.height(20.dp))
-            Button(onClick = onFinish) { Text("Back to deck") }
+            Button(onClick = onFinish) { Text(stringResource(R.string.back_to_deck)) }
         }
         return
     }
@@ -449,7 +454,7 @@ private fun ReviewDeck(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            "${queueIds.size} remaining",
+            stringResource(R.string.remaining_count, queueIds.size),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -469,7 +474,7 @@ private fun ReviewDeck(
                 )
                 if (hintVisible && card.hint.isNotBlank()) {
                     Spacer(Modifier.height(16.dp))
-                    Text("Hint: ${card.hint}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.hint_value, card.hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (answerVisible) {
                     Spacer(Modifier.height(22.dp))
@@ -483,25 +488,25 @@ private fun ReviewDeck(
         if (!answerVisible) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (card.hint.isNotBlank()) {
-                    OutlinedButton(onClick = { hintVisible = true }) { Text("Show hint") }
+                    OutlinedButton(onClick = { hintVisible = true }) { Text(stringResource(R.string.show_hint)) }
                 }
-                Button(onClick = { answerVisible = true }) { Text("Show answer") }
+                Button(onClick = { answerVisible = true }) { Text(stringResource(R.string.show_answer)) }
             }
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GradeButton("Again", Color(0xFFB3261E), Modifier.weight(1f)) {
+                GradeButton(stringResource(R.string.again), Color(0xFFB3261E), Modifier.weight(1f)) {
                     onGrade(card, ReviewGrade.AGAIN)
                 }
-                GradeButton("Hard", Color(0xFF9A6700), Modifier.weight(1f)) {
+                GradeButton(stringResource(R.string.hard), Color(0xFF9A6700), Modifier.weight(1f)) {
                     onGrade(card, ReviewGrade.HARD)
                 }
-                GradeButton("Good", Color(0xFF19723B), Modifier.weight(1f)) {
+                GradeButton(stringResource(R.string.good), Color(0xFF19723B), Modifier.weight(1f)) {
                     onGrade(card, ReviewGrade.GOOD)
                 }
-                GradeButton("Easy", MaterialTheme.colorScheme.primary, Modifier.weight(1f)) {
+                GradeButton(stringResource(R.string.easy), MaterialTheme.colorScheme.primary, Modifier.weight(1f)) {
                     onGrade(card, ReviewGrade.EASY)
                 }
             }
@@ -532,7 +537,7 @@ private fun DueBadge(count: Int) {
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Text(
-            text = if (count > 0) "$count due" else "Up to date",
+            text = if (count > 0) stringResource(R.string.due_count, count) else stringResource(R.string.up_to_date),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             style = MaterialTheme.typography.labelLarge
         )

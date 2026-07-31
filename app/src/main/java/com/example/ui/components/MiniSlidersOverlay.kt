@@ -29,9 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.models.HslaColor
 
 @Composable
@@ -147,7 +149,7 @@ fun MiniSlidersOverlay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Товщина: ${width.toInt()}",
+                        text = stringResource(R.string.stroke_width_value, width.toInt()),
                         style = MaterialTheme.typography.labelMedium,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -180,7 +182,7 @@ fun MiniSlidersOverlay(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Прозорість: ${(opacity * 100).toInt()}%",
+                    text = stringResource(R.string.opacity_percent, (opacity * 100).toInt()),
                     style = MaterialTheme.typography.labelMedium,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold

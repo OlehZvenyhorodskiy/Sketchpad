@@ -7,8 +7,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.data.models.BackgroundPattern
+import com.example.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -19,24 +21,24 @@ fun GridBackgroundSelector(
 ) {
     val patterns = BackgroundPattern.entries.toList()
     val labels = mapOf(
-        BackgroundPattern.BLANK to "Без фону",
-        BackgroundPattern.NONE to "Без фону",
-        BackgroundPattern.LINED to "Лінійка",
-        BackgroundPattern.DOTTED to "Точки",
-        BackgroundPattern.GRID_SQUARE to "Квадратна сітка",
-        BackgroundPattern.GRID_ISOMETRIC to "Ізометрія",
-        BackgroundPattern.PROTRACTOR to "Транспортир",
-        BackgroundPattern.MUSIC_STAFF to "Нотоносець",
-        BackgroundPattern.GRAPH_MM to "Міліметрівка",
-        BackgroundPattern.DOT_GRID to "Крапковий папір",
-        BackgroundPattern.CORNELL_NOTES to "Cornell Notes",
-        BackgroundPattern.KANBAN_TEMPLATE to "Kanban Дошка",
-        BackgroundPattern.ISO_3D to "3D Скетч"
+        BackgroundPattern.BLANK to stringResource(R.string.background_none),
+        BackgroundPattern.NONE to stringResource(R.string.background_none),
+        BackgroundPattern.LINED to stringResource(R.string.background_lined),
+        BackgroundPattern.DOTTED to stringResource(R.string.dots),
+        BackgroundPattern.GRID_SQUARE to stringResource(R.string.background_square_grid),
+        BackgroundPattern.GRID_ISOMETRIC to stringResource(R.string.background_isometric),
+        BackgroundPattern.PROTRACTOR to stringResource(R.string.background_protractor),
+        BackgroundPattern.MUSIC_STAFF to stringResource(R.string.background_music_staff),
+        BackgroundPattern.GRAPH_MM to stringResource(R.string.background_millimeter),
+        BackgroundPattern.DOT_GRID to stringResource(R.string.background_dot_paper),
+        BackgroundPattern.CORNELL_NOTES to stringResource(R.string.background_cornell),
+        BackgroundPattern.KANBAN_TEMPLATE to stringResource(R.string.background_kanban),
+        BackgroundPattern.ISO_3D to stringResource(R.string.background_3d_sketch)
     )
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(20.dp).padding(bottom = 32.dp)) {
-            Text("Фон полотна", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.canvas_background), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),

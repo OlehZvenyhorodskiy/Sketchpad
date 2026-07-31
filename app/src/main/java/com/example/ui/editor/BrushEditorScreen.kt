@@ -47,8 +47,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.brush.BrushProfile
 import com.example.brush.PressureCurve
 import com.example.data.models.ToolType
@@ -61,7 +63,8 @@ fun BrushEditorScreen(
     onSave: (BrushProfile) -> Unit,
     onBack: () -> Unit
 ) {
-    var brushName by remember { mutableStateOf(initialProfile?.name ?: "Кастомний пензель") }
+    val defaultBrushName = stringResource(R.string.custom_brush)
+    var brushName by remember { mutableStateOf(initialProfile?.name ?: defaultBrushName) }
     var baseWidth by remember { mutableFloatStateOf(initialProfile?.baseWidth ?: 8f) }
     var pressureSensitivity by remember { mutableFloatStateOf(initialProfile?.pressureSensitivity ?: 0.8f) }
     var tiltSensitivity by remember { mutableFloatStateOf(initialProfile?.tiltSensitivity ?: 0.2f) }
@@ -96,15 +99,15 @@ fun BrushEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Редактор пензлів") },
+                title = { Text(stringResource(R.string.brush_editor)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { onSave(currentProfile) }) {
-                        Icon(Icons.Default.Check, contentDescription = "Зберегти")
+                        Icon(Icons.Default.Check, contentDescription = stringResource(R.string.save))
                     }
                 }
             )
@@ -119,7 +122,7 @@ fun BrushEditorScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Preview Canvas
-            Text("Попередній перегляд:", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.preview), style = MaterialTheme.typography.titleMedium)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -148,30 +151,30 @@ fun BrushEditorScreen(
             OutlinedTextField(
                 value = brushName,
                 onValueChange = { brushName = it },
-                label = { Text("Назва пензля") },
+                label = { Text(stringResource(R.string.brush_name)) },
                 modifier = Modifier.fillMaxWidth()
             )
 
             // Sliders
-            Text("Базова ширина: ${baseWidth.toInt()} px")
+            Text(stringResource(R.string.base_width_px, baseWidth.toInt()))
             Slider(value = baseWidth, onValueChange = { baseWidth = it }, valueRange = 1f..60f)
 
-            Text("Чутливість до натиску: ${(pressureSensitivity * 100).toInt()}%")
+            Text(stringResource(R.string.pressure_sensitivity_percent, (pressureSensitivity * 100).toInt()))
             Slider(value = pressureSensitivity, onValueChange = { pressureSensitivity = it }, valueRange = 0f..1f)
 
-            Text("Чутливість до нахилу: ${(tiltSensitivity * 100).toInt()}%")
+            Text(stringResource(R.string.tilt_sensitivity_percent, (tiltSensitivity * 100).toInt()))
             Slider(value = tiltSensitivity, onValueChange = { tiltSensitivity = it }, valueRange = 0f..1f)
 
-            Text("Прозорість: ${(opacity * 100).toInt()}%")
+            Text(stringResource(R.string.brush_opacity_percent, (opacity * 100).toInt()))
             Slider(value = opacity, onValueChange = { opacity = it }, valueRange = 0.05f..1f)
 
-            Text("Потік фарби (Flow): ${(flow * 100).toInt()}%")
+            Text(stringResource(R.string.paint_flow_percent, (flow * 100).toInt()))
             Slider(value = flow, onValueChange = { flow = it }, valueRange = 0.05f..1f)
 
-            Text("Згладжування: ${(smoothing * 100).toInt()}%")
+            Text(stringResource(R.string.smoothing_percent, (smoothing * 100).toInt()))
             Slider(value = smoothing, onValueChange = { smoothing = it }, valueRange = 0f..1f)
 
-            Text("Крива натиску:", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.pressure_curve), style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -190,7 +193,7 @@ fun BrushEditorScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Пунктирний штрих")
+                Text(stringResource(R.string.dashed_stroke))
                 Switch(checked = isDashed, onCheckedChange = { isDashed = it })
             }
 
@@ -198,7 +201,7 @@ fun BrushEditorScreen(
                 onClick = { onSave(currentProfile) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Зберегти пензель")
+                Text(stringResource(R.string.save_brush))
             }
         }
     }
