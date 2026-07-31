@@ -337,7 +337,6 @@ private fun ThemePreviewCard(
 
 private fun themeDisplayName(style: AppThemeStyle): String = when (style) {
     AppThemeStyle.SYSTEM_DEFAULT -> "Стандарт"
-    AppThemeStyle.IOS_GLASS -> "Скло"
     AppThemeStyle.PAPER_NOTEBOOK -> "Зошит"
     AppThemeStyle.NEUMORPHISM -> "Неоморфізм"
     AppThemeStyle.AMOLED_BLACK -> "AMOLED"

@@ -36,14 +36,6 @@ fun ThemedPanel(
     val shape = RoundedCornerShape(spec.cornerRadius)
 
     when (spec.style) {
-        AppThemeStyle.IOS_GLASS -> {
-            GlassSurface(
-                modifier = modifier,
-                cornerRadius = spec.cornerRadius,
-                content = content
-            )
-        }
-
         AppThemeStyle.NEUMORPHISM -> {
             Box(
                 modifier = modifier

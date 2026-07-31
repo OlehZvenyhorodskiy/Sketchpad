@@ -48,26 +48,6 @@ object ThemeSpecs {
                 accentColor = accentColor,
                 borderStyle = BorderStyle.NONE
             )
-            AppThemeStyle.IOS_GLASS -> ThemeSpec(
-                style = style,
-                colorScheme = if (isDark) darkColorScheme(
-                    primary = accentColor,
-                    surface = Color(0x331E293B),
-                    surfaceContainer = Color(0x440F172A),
-                    background = Color(0xFF0F172A)
-                ) else lightColorScheme(
-                    primary = accentColor,
-                    surface = Color(0xAAFFFFFF),
-                    surfaceContainer = Color(0xDDFFFFFF),
-                    background = Color(0xFFF1F5F9)
-                ),
-                cornerRadius = 24.dp,
-                surfaceBlurEnabled = true,
-                surfaceBlurRadius = 20.dp,
-                elevationStyle = ElevationStyle.SOFT_SHADOW,
-                accentColor = accentColor,
-                borderStyle = BorderStyle.THIN_GLOW
-            )
             AppThemeStyle.PAPER_NOTEBOOK -> ThemeSpec(
                 style = style,
                 colorScheme = lightColorScheme(

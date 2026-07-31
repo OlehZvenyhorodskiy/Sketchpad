@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.ui.theme.AppThemeStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -25,7 +26,8 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_COLOR_VAL = floatPreferencesKey("color_val")
         val KEY_DRAW_WITH_FINGERS = booleanPreferencesKey("draw_with_fingers")
         val KEY_THEME_MODE = intPreferencesKey("theme_mode") // 0: SYSTEM, 1: LIGHT, 2: DARK
-        val KEY_THEME_STYLE = intPreferencesKey("theme_style") // 0..6 (AppThemeStyle)
+        val KEY_THEME_STYLE = intPreferencesKey("theme_style") // Legacy ordinal from pre-name storage.
+        val KEY_THEME_STYLE_V2 = stringPreferencesKey("theme_style_v2")
         val KEY_ACCENT_COLOR = intPreferencesKey("accent_color") // ARGB int
         val KEY_LEFT_HANDED_MODE = booleanPreferencesKey("left_handed_mode")
         val KEY_SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
@@ -36,7 +38,16 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     val themeStyle: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[KEY_THEME_STYLE] ?: 0
+        val savedName = prefs[KEY_THEME_STYLE_V2]
+        if (savedName != null) {
+            try {
+                AppThemeStyle.valueOf(savedName).ordinal
+            } catch (_: IllegalArgumentException) {
+                AppThemeStyle.SYSTEM_DEFAULT.ordinal
+            }
+        } else {
+            legacyThemeStyleOrdinal(prefs[KEY_THEME_STYLE] ?: AppThemeStyle.SYSTEM_DEFAULT.ordinal)
+        }
     }
 
     val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
@@ -79,7 +90,8 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setThemeStyle(styleOrdinal: Int) {
         context.dataStore.edit { prefs ->
-            prefs[KEY_THEME_STYLE] = styleOrdinal
+            val style = AppThemeStyle.entries.getOrElse(styleOrdinal) { AppThemeStyle.SYSTEM_DEFAULT }
+            prefs[KEY_THEME_STYLE_V2] = style.name
         }
     }
 
@@ -246,5 +258,11 @@ class UserPreferencesRepository(private val context: Context) {
             if (tool != null) prefs[KEY_LAST_TOOL] = tool
         }
     }
+}
+
+private fun legacyThemeStyleOrdinal(legacyOrdinal: Int): Int = when (legacyOrdinal) {
+    0, 1 -> AppThemeStyle.SYSTEM_DEFAULT.ordinal
+    in 2..6 -> legacyOrdinal - 1
+    else -> AppThemeStyle.SYSTEM_DEFAULT.ordinal
 }
 
