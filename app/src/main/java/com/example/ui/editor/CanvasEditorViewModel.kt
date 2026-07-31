@@ -1107,41 +1107,36 @@ class CanvasEditorViewModel(
 
         page.getEffectiveLayers().filter { it.isVisible }.forEach { layer ->
             layer.shapes.forEach { shape ->
-                val center = Offset(shape.x + shape.width / 2f, shape.y + shape.height / 2f)
-                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(shape.id)
+                if (doesRectIntersectPolygon(
+                        Rect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height),
+                        lassoWorldPoints
+                    )
+                ) hitIds.add(shape.id)
             }
             layer.images.forEach { img ->
-                val center = Offset(img.x + img.width / 2f, img.y + img.height / 2f)
-                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(img.id)
+                if (doesRectIntersectPolygon(
+                        Rect(img.x, img.y, img.x + img.width, img.y + img.height),
+                        lassoWorldPoints
+                    )
+                ) hitIds.add(img.id)
             }
             layer.textBlocks.forEach { tb ->
-                val center = Offset(tb.x + tb.width / 2f, tb.y + tb.height / 2f)
-                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(tb.id)
+                if (doesRectIntersectPolygon(
+                        Rect(tb.x, tb.y, tb.x + tb.width, tb.y + tb.height),
+                        lassoWorldPoints
+                    )
+                ) hitIds.add(tb.id)
             }
             layer.charts.forEach { chart ->
-                val center = Offset(chart.x + chart.width / 2f, chart.y + chart.height / 2f)
-                if (isPointInPolygon(center, lassoWorldPoints)) hitIds.add(chart.id)
+                if (doesRectIntersectPolygon(
+                        Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height),
+                        lassoWorldPoints
+                    )
+                ) hitIds.add(chart.id)
             }
         }
 
         _selectedElementIds.value = hitIds
-    }
-
-    private fun isPointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
-        var inside = false
-        val n = polygon.size
-        var j = n - 1
-        for (i in 0 until n) {
-            val yi = polygon[i].y; val yj = polygon[j].y
-            val xi = polygon[i].x; val xj = polygon[j].x
-            if ((yi > point.y) != (yj > point.y) &&
-                point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi
-            ) {
-                inside = !inside
-            }
-            j = i
-        }
-        return inside
     }
 
     fun moveSelectedElements(dx: Float, dy: Float) {
@@ -1668,5 +1663,62 @@ class CanvasEditorViewModel(
         _isPagedCanvasActive.value = !_isPagedCanvasActive.value
         _academicStatusMessage.value = if (_isPagedCanvasActive.value) "Нескінченне полотно з Paging & BitmapPool активне!" else "Paging вимкнено"
     }
+}
+
+internal fun doesRectIntersectPolygon(rect: Rect, polygon: List<Offset>): Boolean {
+    if (polygon.size < 3) return false
+
+    val rectPoints = listOf(
+        Offset(rect.left, rect.top),
+        Offset(rect.right, rect.top),
+        Offset(rect.right, rect.bottom),
+        Offset(rect.left, rect.bottom),
+        rect.center
+    )
+    if (rectPoints.any { isPointInPolygon(it, polygon) }) return true
+    if (polygon.any { it.x in rect.left..rect.right && it.y in rect.top..rect.bottom }) return true
+
+    val rectEdges = rectPoints.take(4).zipWithNext() + listOf(rectPoints[3] to rectPoints[0])
+    val polygonEdges = polygon.zipWithNext() + listOf(polygon.last() to polygon.first())
+    return rectEdges.any { (rectStart, rectEnd) ->
+        polygonEdges.any { (polygonStart, polygonEnd) ->
+            doLineSegmentsIntersect(rectStart, rectEnd, polygonStart, polygonEnd)
+        }
+    }
+}
+
+internal fun isPointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
+    var inside = false
+    var previousIndex = polygon.lastIndex
+    for (index in polygon.indices) {
+        val current = polygon[index]
+        val previous = polygon[previousIndex]
+        if ((current.y > point.y) != (previous.y > point.y) &&
+            point.x < (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x
+        ) {
+            inside = !inside
+        }
+        previousIndex = index
+    }
+    return inside
+}
+
+private fun doLineSegmentsIntersect(a: Offset, b: Offset, c: Offset, d: Offset): Boolean {
+    fun orientation(p: Offset, q: Offset, r: Offset): Float =
+        (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y)
+
+    fun isOnSegment(p: Offset, q: Offset, r: Offset): Boolean =
+        q.x in minOf(p.x, r.x)..maxOf(p.x, r.x) && q.y in minOf(p.y, r.y)..maxOf(p.y, r.y)
+
+    val o1 = orientation(a, b, c)
+    val o2 = orientation(a, b, d)
+    val o3 = orientation(c, d, a)
+    val o4 = orientation(c, d, b)
+
+    if ((o1 > 0f) != (o2 > 0f) && (o3 > 0f) != (o4 > 0f)) return true
+    return (o1 == 0f && isOnSegment(a, c, b)) ||
+        (o2 == 0f && isOnSegment(a, d, b)) ||
+        (o3 == 0f && isOnSegment(c, a, d)) ||
+        (o4 == 0f && isOnSegment(c, b, d))
 }
 

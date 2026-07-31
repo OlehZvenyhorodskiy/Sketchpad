@@ -128,6 +128,7 @@ fun InteractiveCanvas(
     var elementOriginalSize by remember { mutableStateOf(Offset.Zero) }
     var isResizingCorner by remember { mutableStateOf(false) }
     var resizingCorner by remember { mutableStateOf<String?>(null) }
+    var isDraggingGroup by remember { mutableStateOf(false) }
 
     var rulerGuideEdge by remember { mutableStateOf<Pair<Offset, Offset>?>(null) }
     var cursorPos by remember { mutableStateOf<Offset?>(null) }
@@ -155,6 +156,9 @@ fun InteractiveCanvas(
     // Preload image bitmaps off the UI thread via ViewModel LruCache
     val imageUris = remember(pageEntity) {
         pageEntity?.getEffectiveLayers()?.flatMap { it.images }?.map { it.sourceUri }?.distinct() ?: emptyList()
+    }
+    val selectedGroupBounds = remember(pageEntity, selectedElementIds) {
+        pageEntity?.selectionBounds(selectedElementIds)
     }
     imageUris.forEach { uri ->
         if (getCachedBitmap(uri) == null) {
@@ -274,7 +278,12 @@ fun InteractiveCanvas(
                             dragStartOffset = rawPoint
                             isResizingCorner = false
                             resizingCorner = null
+                            isDraggingGroup = selectedElementIds.isNotEmpty() && selectedGroupBounds?.contains(rawPoint) == true
 
+                            if (isDraggingGroup) {
+                                selectedElementId = null
+                                selectedElementType = null
+                            } else {
                             // Check corner resize touch for active selection (ALL 4 CORNERS)
                             val selId = selectedElementId
                             val selType = selectedElementType
@@ -398,6 +407,7 @@ fun InteractiveCanvas(
                                     }
                                 }
                             }
+                            }
                         } else if (currentTool == ToolType.ERASER) {
                             cursorPos = rawPoint
                             eraserTouchPos = rawPoint
@@ -422,6 +432,14 @@ fun InteractiveCanvas(
                     MotionEvent.ACTION_MOVE -> {
                         when (currentTool) {
                             ToolType.SELECTOR -> {
+                                if (isDraggingGroup) {
+                                    val dx = rawPoint.x - dragStartOffset.x
+                                    val dy = rawPoint.y - dragStartOffset.y
+                                    if (dx != 0f || dy != 0f) {
+                                        onMoveSelectedGroup(dx, dy)
+                                        dragStartOffset = rawPoint
+                                    }
+                                } else {
                                 val id = selectedElementId
                                 val type = selectedElementType
                                 if (id != null && type != null) {
@@ -481,6 +499,7 @@ fun InteractiveCanvas(
                                         }
                                     }
                                 }
+                                }
                             }
                             ToolType.ERASER -> {
                                 cursorPos = rawPoint
@@ -521,6 +540,7 @@ fun InteractiveCanvas(
                         activeEraserPoints.clear()
                         eraserTouchPos = null
                         resizingCorner = null
+                        isDraggingGroup = false
                         rulerGuideEdge = null
                         cursorPos = null
                     }
@@ -1051,7 +1071,7 @@ fun InteractiveCanvas(
             // 5. Highlight Selected Element Bounding Box
             val selId = selectedElementId
             val selType = selectedElementType
-            if (selId != null && selType != null && pageEntity != null) {
+            if (selectedGroupBounds == null && selId != null && selType != null && pageEntity != null) {
                 var elemRect: Rect? = null
                 var elemRotation = 0f
 
@@ -1097,6 +1117,28 @@ fun InteractiveCanvas(
                         drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, bottom))
                     }
                 }
+            }
+
+            selectedGroupBounds?.let { bounds ->
+                val left = bounds.left * currentScale + panOffset.x
+                val top = bounds.top * currentScale + panOffset.y
+                val right = bounds.right * currentScale + panOffset.x
+                val bottom = bounds.bottom * currentScale + panOffset.y
+                val handleRadius = 6.dp.toPx()
+
+                drawRect(
+                    color = Color(0xFF38BDF8),
+                    topLeft = Offset(left, top),
+                    size = androidx.compose.ui.geometry.Size(right - left, bottom - top),
+                    style = Stroke(
+                        width = 2.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                    )
+                )
+                drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, top))
+                drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, top))
+                drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(left, bottom))
+                drawCircle(color = Color(0xFF38BDF8), radius = handleRadius, center = Offset(right, bottom))
             }
 
             // 6. Brush Cursor & Slider Change Preview Circle Overlay
@@ -1303,3 +1345,22 @@ private fun PageEntity.findText(id: String): TextBlockEntity? =
 
 private fun PageEntity.findChart(id: String): ChartElementEntity? =
     getEffectiveLayers().flatMap { it.charts }.find { it.id == id }
+
+private fun PageEntity.selectionBounds(ids: Set<String>): Rect? {
+    if (ids.isEmpty()) return null
+    val bounds = getEffectiveLayers().flatMap { layer ->
+        buildList {
+            layer.shapes.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
+            layer.images.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
+            layer.textBlocks.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
+            layer.charts.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
+        }
+    }
+    if (bounds.isEmpty()) return null
+    return Rect(
+        left = bounds.minOf { it.left },
+        top = bounds.minOf { it.top },
+        right = bounds.maxOf { it.right },
+        bottom = bounds.maxOf { it.bottom }
+    )
+}

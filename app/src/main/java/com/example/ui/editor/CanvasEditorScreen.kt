@@ -410,7 +410,9 @@ fun CanvasEditorScreen(
 
             // 1b. Lasso Selection Overlay
             com.example.ui.components.LassoSelectionOverlay(
-                isActive = currentTool == com.example.data.models.ToolType.SELECTOR && selectionMode == com.example.data.models.SelectionMode.LASSO,
+                isActive = currentTool == com.example.data.models.ToolType.SELECTOR &&
+                    selectionMode == com.example.data.models.SelectionMode.LASSO &&
+                    selectedElementIds.isEmpty(),
                 scale = zoomScale,
                 panOffset = panOffset,
                 onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) }
