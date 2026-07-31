@@ -61,7 +61,6 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showGoogleAccountPicker by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -133,7 +132,55 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = { showGoogleAccountPicker = true },
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    val credentialManager = CredentialManager.create(context)
+                                    // WEB_CLIENT_ID placeholder or string resource
+                                    val webClientId = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+
+                                    val googleIdOption = GetGoogleIdOption.Builder()
+                                        .setServerClientId(webClientId)
+                                        .setFilterByAuthorizedAccounts(false)
+                                        .setAutoSelectEnabled(false)
+                                        .build()
+
+                                    val request = androidx.credentials.GetCredentialRequest.Builder()
+                                        .addCredentialOption(googleIdOption)
+                                        .build()
+
+                                    val result = credentialManager.getCredential(context, request)
+                                    val credential = result.credential
+
+                                    if (credential is CustomCredential &&
+                                        credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                                    ) {
+                                        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                                        val name = googleIdTokenCredential.displayName ?: "Користувач Google"
+                                        val email = googleIdTokenCredential.id
+
+                                        userPreferencesRepository.setLoggedIn(
+                                            loggedIn = true,
+                                            email = email,
+                                            name = name
+                                        )
+                                        Toast.makeText(context, "Вітаємо, $name!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    } else {
+                                        Toast.makeText(context, "Невідомий тип учетного запису", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                                    // User cancelled the sign-in flow
+                                } catch (e: Exception) {
+                                    android.util.Log.e("LoginScreen", "Google Sign-In failed", e)
+                                    Toast.makeText(
+                                        context,
+                                        "Google Sign-In: ${e.localizedMessage ?: "Помилка авторизації (перевірте Client ID)"}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -161,81 +208,5 @@ fun LoginScreen(
                 }
             }
         }
-    }
-
-    var inputName by remember { mutableStateOf("") }
-    var inputEmail by remember { mutableStateOf("") }
-
-    if (showGoogleAccountPicker) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showGoogleAccountPicker = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Вхід в обліковий запис")
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Введіть ваші дані для синхронізації та профілю:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    androidx.compose.material3.OutlinedTextField(
-                        value = inputName,
-                        onValueChange = { inputName = it },
-                        label = { Text("Ім'я та Прізвище") },
-                        placeholder = { Text("Олександр Іваненко") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    androidx.compose.material3.OutlinedTextField(
-                        value = inputEmail,
-                        onValueChange = { inputEmail = it },
-                        label = { Text("Електронна пошта (Email)") },
-                        placeholder = { Text("example@gmail.com") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val name = inputName.trim().ifEmpty { "Користувач" }
-                        val email = inputEmail.trim().ifEmpty { "user@mecanvas.app" }
-                        showGoogleAccountPicker = false
-                        scope.launch {
-                            userPreferencesRepository.setLoggedIn(
-                                loggedIn = true,
-                                email = email,
-                                name = name
-                            )
-                            Toast.makeText(context, "Вітаємо, $name!", Toast.LENGTH_SHORT).show()
-                            onLoginSuccess()
-                        }
-                    }
-                ) {
-                    Text("Увійти")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGoogleAccountPicker = false }) {
-                    Text("Скасувати")
-                }
-            }
-        )
     }
 }

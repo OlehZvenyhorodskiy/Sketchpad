@@ -16,3 +16,13 @@
 local.properties
 .env
 debug.keystore
+
+# APK and binaries
+*.apk
+*.aab
+
+# Prompt files and internal documentation
+*PROMPT*.md
+prompt_*.md
+*.apk
+

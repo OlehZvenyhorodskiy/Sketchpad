@@ -22,9 +22,9 @@ import androidx.compose.ui.unit.dp
 /**
  * Frosted-glass surface inspired by iOS / Liquid Glass design.
  *
- * On API 31+ applies real Gaussian blur via [Modifier.blur].
- * On older APIs falls back to a semi-transparent gradient overlay
- * that visually approximates the frosted look without blur.
+ * On API 31+ applies real Gaussian blur via [Modifier.blur] to an isolated background layer
+ * so child content (buttons, text, icons) stays crisp and unblurred.
+ * On older APIs falls back to a semi-transparent gradient overlay.
  *
  * Includes a subtle "glare" highlight gradient at the top edge to
  * mimic a light reflection on glass.
@@ -65,11 +65,23 @@ fun GlassSurface(
         modifier = modifier
             .shadow(16.dp, shape = shape, spotColor = Color(0x40000000))
             .clip(shape)
-            .then(blurModifier)
-            .background(Color.White.copy(alpha = 0.12f))
-            .background(glassBrush)
-            .border(1.dp, Color.White.copy(alpha = 0.4f), shape)
     ) {
+        // Isolated background layer that receives the blur modifier
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .then(blurModifier)
+                .background(Color.White.copy(alpha = 0.12f))
+                .background(glassBrush)
+        )
+
+        // Subtle border stroke overlay
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .border(1.dp, Color.White.copy(alpha = 0.4f), shape)
+        )
+
         // Glare highlight at the very top of the panel
         Box(
             modifier = Modifier
@@ -78,6 +90,8 @@ fun GlassSurface(
                 .align(Alignment.TopCenter)
                 .background(glareBrush)
         )
+
+        // Crisp, unblurred content layer
         content()
     }
 }

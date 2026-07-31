@@ -224,6 +224,7 @@ fun CanvasEditorScreen(
     }
 
     Scaffold(
+        containerColor = canvas?.backgroundColor?.let { Color(it) } ?: MaterialTheme.colorScheme.background,
         modifier = Modifier.onPreviewKeyEvent { event ->
             if (event.type == KeyEventType.KeyDown && event.isCtrlPressed) {
                 when (event.key) {

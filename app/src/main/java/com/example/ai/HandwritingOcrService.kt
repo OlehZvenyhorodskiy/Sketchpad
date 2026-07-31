@@ -55,7 +55,7 @@ class HandwritingOcrService {
                     })
                 }
 
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/${AiModelDefaults.OCR_MODEL}:generateContent?key=$apiKey"
                 val request = Request.Builder()
                     .url(url)
                     .post(requestJson.toString().toRequestBody("application/json".toMediaType()))

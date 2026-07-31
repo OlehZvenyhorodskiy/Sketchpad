@@ -14,6 +14,10 @@ interface AiProvider {
     val id: String
     val displayName: String
     val supportsVision: Boolean
+    val availableModels: List<String>
+    val defaultModel: String
+    val apiKeyHelpUrl: String
+    val apiKeyHelpText: String
     suspend fun query(
         text: String,
         imageBase64: String?,
@@ -27,6 +31,10 @@ class GeminiProvider : AiProvider {
     override val id: String = "GEMINI"
     override val displayName: String = "Google Gemini"
     override val supportsVision: Boolean = true
+    override val availableModels: List<String> = AiModelDefaults.GEMINI_MODELS
+    override val defaultModel: String = AiModelDefaults.GEMINI_DEFAULT
+    override val apiKeyHelpUrl: String = "https://aistudio.google.com/apikey"
+    override val apiKeyHelpText: String = "Створіть ключ на aistudio.google.com/apikey"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -40,7 +48,7 @@ class GeminiProvider : AiProvider {
         endpoint: String?,
         model: String?
     ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val modelName = model?.ifBlank { null } ?: "gemini-3.5-flash"
+        val modelName = model?.ifBlank { null } ?: defaultModel
         val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey"
 
         val jsonBody = JSONObject().apply {
@@ -99,8 +107,12 @@ class GeminiProvider : AiProvider {
 
 class OpenAiProvider : AiProvider {
     override val id: String = "OPENAI"
-    override val displayName: String = "OpenAI GPT-4o"
+    override val displayName: String = "OpenAI (GPT)"
     override val supportsVision: Boolean = true
+    override val availableModels: List<String> = AiModelDefaults.OPENAI_MODELS
+    override val defaultModel: String = AiModelDefaults.OPENAI_DEFAULT
+    override val apiKeyHelpUrl: String = "https://platform.openai.com/api-keys"
+    override val apiKeyHelpText: String = "Створіть ключ на platform.openai.com/api-keys"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -115,7 +127,7 @@ class OpenAiProvider : AiProvider {
         model: String?
     ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val targetUrl = endpoint?.ifBlank { null } ?: "https://api.openai.com/v1/chat/completions"
-        val targetModel = model?.ifBlank { null } ?: "gpt-4o-mini"
+        val targetModel = model?.ifBlank { null } ?: defaultModel
 
         val jsonBody = JSONObject().apply {
             put("model", targetModel)
@@ -174,6 +186,10 @@ class AnthropicProvider : AiProvider {
     override val id: String = "ANTHROPIC"
     override val displayName: String = "Anthropic Claude"
     override val supportsVision: Boolean = true
+    override val availableModels: List<String> = AiModelDefaults.ANTHROPIC_MODELS
+    override val defaultModel: String = AiModelDefaults.ANTHROPIC_DEFAULT
+    override val apiKeyHelpUrl: String = "https://console.anthropic.com/settings/keys"
+    override val apiKeyHelpText: String = "Створіть ключ на console.anthropic.com"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -188,7 +204,7 @@ class AnthropicProvider : AiProvider {
         model: String?
     ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val targetUrl = endpoint?.ifBlank { null } ?: "https://api.anthropic.com/v1/messages"
-        val targetModel = model?.ifBlank { null } ?: "claude-3-5-haiku-20241022"
+        val targetModel = model?.ifBlank { null } ?: defaultModel
 
         val jsonBody = JSONObject().apply {
             put("model", targetModel)
@@ -249,6 +265,10 @@ class DeepSeekProvider : AiProvider {
     override val id: String = "DEEPSEEK"
     override val displayName: String = "DeepSeek AI"
     override val supportsVision: Boolean = false
+    override val availableModels: List<String> = AiModelDefaults.DEEPSEEK_MODELS
+    override val defaultModel: String = AiModelDefaults.DEEPSEEK_DEFAULT
+    override val apiKeyHelpUrl: String = "https://platform.deepseek.com/api_keys"
+    override val apiKeyHelpText: String = "Створіть ключ на platform.deepseek.com"
 
     private val openAiProvider = OpenAiProvider()
 
@@ -260,7 +280,7 @@ class DeepSeekProvider : AiProvider {
         model: String?
     ): String {
         val targetEndpoint = endpoint?.ifBlank { null } ?: "https://api.deepseek.com/chat/completions"
-        val targetModel = model?.ifBlank { null } ?: "deepseek-chat"
+        val targetModel = model?.ifBlank { null } ?: defaultModel
         return openAiProvider.query(text, null, apiKey, targetEndpoint, targetModel)
     }
 }
@@ -269,6 +289,10 @@ class CustomOpenAiCompatibleProvider : AiProvider {
     override val id: String = "CUSTOM"
     override val displayName: String = "Custom OpenAI-compatible"
     override val supportsVision: Boolean = true
+    override val availableModels: List<String> = emptyList()
+    override val defaultModel: String = ""
+    override val apiKeyHelpUrl: String = ""
+    override val apiKeyHelpText: String = "Введіть URL та ключ свого OpenAI-сумісного провайдера"
 
     private val openAiProvider = OpenAiProvider()
 

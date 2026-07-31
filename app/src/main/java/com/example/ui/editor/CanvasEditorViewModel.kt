@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -228,6 +229,15 @@ class CanvasEditorViewModel(
 
     init {
         viewModelScope.launch {
+            try {
+                val initial = repository.getCanvasById(canvasId).first()
+                if (initial != null) {
+                    _canvas.value = initial
+                    ensureContrastingDefaultColor(initial.backgroundColor)
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("CanvasVM", "Failed to fetch initial canvas entity", e)
+            }
             repository.getCanvasById(canvasId).collect { c ->
                 _canvas.value = c
                 ensureContrastingDefaultColor(c?.backgroundColor)
