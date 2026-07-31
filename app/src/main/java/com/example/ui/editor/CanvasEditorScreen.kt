@@ -226,6 +226,45 @@ fun CanvasEditorScreen(
         }
     }
 
+    val obsidianPreferences = remember(context) {
+        context.getSharedPreferences("obsidian_export", android.content.Context.MODE_PRIVATE)
+    }
+    val obsidianVaultLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { uri: android.net.Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            obsidianPreferences.edit().putString("vault_uri", uri.toString()).apply()
+            viewModel.exportToObsidian(uri) { result ->
+                Toast.makeText(
+                    context,
+                    if (result.isSuccess) "Експорт для Obsidian завершено" else "Не вдалося експортувати в Obsidian",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } catch (_: SecurityException) {
+            Toast.makeText(context, "Немає доступу до папки Obsidian", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val exportToObsidian = {
+        val savedUri = obsidianPreferences.getString("vault_uri", null)?.let(android.net.Uri::parse)
+        if (savedUri == null) {
+            obsidianVaultLauncher.launch(null)
+        } else {
+            viewModel.exportToObsidian(savedUri) { result ->
+                Toast.makeText(
+                    context,
+                    if (result.isSuccess) "Експорт для Obsidian завершено" else "Не вдалося експортувати в Obsidian",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
     Scaffold(
         containerColor = canvas?.backgroundColor?.let { Color(it) } ?: MaterialTheme.colorScheme.background,
         modifier = Modifier.onPreviewKeyEvent { event ->
@@ -953,6 +992,16 @@ fun CanvasEditorScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Експортувати в PNG (Фото)")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            exportToObsidian()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Експортувати в Obsidian")
                     }
 
                     OutlinedButton(

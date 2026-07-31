@@ -1522,6 +1522,21 @@ class CanvasEditorViewModel(
         }
     }
 
+    fun exportToObsidian(
+        vaultUri: android.net.Uri,
+        format: com.example.drive.ObsidianFormat = com.example.drive.ObsidianFormat.PNG,
+        onComplete: (Result<Unit>) -> Unit
+    ) {
+        val page = currentPage ?: return
+        val shapes = page.getEffectiveLayers().flatMap { it.shapes }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val result = ExportManager.exportToObsidian(page, shapes, vaultUri, context, format)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onComplete(result)
+            }
+        }
+    }
+
     fun updateSelectedElementIds(ids: Set<String>) {
         _selectedElementIds.value = ids
     }

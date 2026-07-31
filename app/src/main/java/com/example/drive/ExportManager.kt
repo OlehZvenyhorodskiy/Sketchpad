@@ -1,6 +1,8 @@
 package com.example.drive
 
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
@@ -9,6 +11,10 @@ import com.example.core.drawing.DrawingEngine
 import com.example.data.models.*
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+enum class ObsidianFormat { PNG, SVG }
 
 object ExportManager {
 
@@ -520,6 +526,94 @@ object ExportManager {
         }
         return bitmap
     }
+
+    suspend fun exportToObsidian(
+        page: PageEntity,
+        shapes: List<ShapeEntity>,
+        vaultUri: Uri,
+        context: Context,
+        format: ObsidianFormat = ObsidianFormat.PNG
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val timestamp = System.currentTimeMillis()
+            val pageName = "Sketchpad page ${page.pageIndex + 1}"
+            val safeName = pageName.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val extension = if (format == ObsidianFormat.PNG) "png" else "svg"
+            val attachmentName = "sketchpad_${safeName}_$timestamp.$extension"
+            val tempFile = File(context.cacheDir, attachmentName)
+
+            try {
+                when (format) {
+                    ObsidianFormat.PNG -> exportToPng(page.copy(shapes = shapes), tempFile, context = context)
+                    ObsidianFormat.SVG -> exportToSvg(page.copy(shapes = shapes), tempFile)
+                }
+
+                val rootUri = DocumentsContract.buildDocumentUriUsingTree(
+                    vaultUri,
+                    DocumentsContract.getTreeDocumentId(vaultUri)
+                )
+                val attachmentsUri = findOrCreateDirectory(context, rootUri, "attachments")
+                val sketchpadUri = findOrCreateDirectory(context, rootUri, "Sketchpad")
+                val attachmentMimeType = if (format == ObsidianFormat.PNG) "image/png" else "image/svg+xml"
+                val attachmentUri = createDocument(context, attachmentsUri, attachmentName, attachmentMimeType)
+                context.contentResolver.openOutputStream(attachmentUri)?.use { output ->
+                    tempFile.inputStream().use { input -> input.copyTo(output) }
+                } ?: error("Unable to write Obsidian attachment")
+
+                val markdown = """
+                    ---
+                    tags:
+                      - sketchpad
+                      - lecture
+                    date: ${java.time.LocalDate.now()}
+                    source: Sketchpad
+                    ---
+
+                    # $pageName
+
+                    ![[$attachmentName]]
+
+                    ## Нотатки
+                """.trimIndent() + "\n"
+                val noteUri = createDocument(context, sketchpadUri, "$safeName.md", "text/markdown")
+                context.contentResolver.openOutputStream(noteUri)?.bufferedWriter()?.use { it.write(markdown) }
+                    ?: error("Unable to write Obsidian note")
+            } finally {
+                tempFile.delete()
+            }
+        }
+    }
+
+    private fun findOrCreateDirectory(context: Context, parentUri: Uri, name: String): Uri {
+        val resolver = context.contentResolver
+        val parentDocumentId = DocumentsContract.getDocumentId(parentUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentDocumentId)
+        resolver.query(
+            childrenUri,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == name) {
+                    return DocumentsContract.buildDocumentUriUsingTree(parentUri, cursor.getString(idIndex))
+                }
+            }
+        }
+        return DocumentsContract.createDocument(
+            resolver,
+            parentUri,
+            DocumentsContract.Document.MIME_TYPE_DIR,
+            name
+        ) ?: error("Unable to create Obsidian directory: $name")
+    }
+
+    private fun createDocument(context: Context, parentUri: Uri, name: String, mimeType: String): Uri =
+        DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, name)
+            ?: error("Unable to create Obsidian file: $name")
 
     /**
      * Видалення тимчасових файлів експорту з папки кешу.
