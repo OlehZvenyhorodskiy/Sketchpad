@@ -76,13 +76,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.models.CanvasEntity
 import java.io.File
-import java.text.SimpleDateFormat
+import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -109,7 +111,8 @@ fun HomeScreen(
     var profileAvatarInput by remember { mutableStateOf("🎓") }
 
     var showCreateCanvasDialog by remember { mutableStateOf(false) }
-    var newCanvasTitle by remember { mutableStateOf("Нова канва") }
+    val defaultNewCanvasTitle = stringResource(R.string.new_canvas_default_title)
+    var newCanvasTitle by remember(defaultNewCanvasTitle) { mutableStateOf(defaultNewCanvasTitle) }
     var selectedPreset by remember { mutableStateOf(com.example.data.models.PageSizePreset.UNLIMITED) }
     var selectedColorInt by remember { mutableIntStateOf(0xFFFFFFFF.toInt()) }
     var selectedPattern by remember { mutableStateOf(com.example.data.models.BackgroundPattern.DOTTED) }
@@ -147,7 +150,7 @@ fun HomeScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { viewModel.onSearchQueryChange(it) },
-                                placeholder = { Text("Пошук за назвою...") },
+                                placeholder = { Text(stringResource(R.string.search_by_title)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -161,7 +164,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Планшетні нотатки",
+                                    text = stringResource(R.string.home_tagline),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -170,11 +173,11 @@ fun HomeScreen(
                     },
                     actions = {
                         IconButton(onClick = { viewModel.setSearchActive(!isSearchActive) }) {
-                            Icon(imageVector = Icons.Default.Search, contentDescription = "Пошук")
+                            Icon(imageVector = Icons.Default.Search, contentDescription = stringResource(R.string.search))
                         }
 
                         IconButton(onClick = onOpenThemeSettings) {
-                            Icon(imageVector = Icons.Default.Palette, contentDescription = "Теми й зовнішній вигляд")
+                            Icon(imageVector = Icons.Default.Palette, contentDescription = stringResource(R.string.theme_and_appearance))
                         }
 
                         OutlinedButton(
@@ -183,7 +186,7 @@ fun HomeScreen(
                         ) {
                             Icon(imageVector = Icons.Default.NoteAdd, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Імпорт")
+                            Text(stringResource(R.string.import_content))
                         }
 
                         // Local profile button
@@ -203,8 +206,8 @@ fun HomeScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Column {
-                                            Text(userName ?: "Користувач", fontWeight = FontWeight.Bold)
-                                            Text("Локальний профіль", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(userName ?: stringResource(R.string.user), fontWeight = FontWeight.Bold)
+                                            Text(stringResource(R.string.local_profile), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     },
                                     leadingIcon = {
@@ -223,7 +226,7 @@ fun HomeScreen(
                                 )
                                 androidx.compose.material3.HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Редагувати локальний профіль") },
+                                    text = { Text(stringResource(R.string.edit_local_profile)) },
                                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                                     onClick = {
                                         showAccountMenu = false
@@ -233,7 +236,7 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Тема й зовнішній вигляд") },
+                                    text = { Text(stringResource(R.string.theme_and_appearance)) },
                                     leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) },
                                     onClick = {
                                         showAccountMenu = false
@@ -252,12 +255,12 @@ fun HomeScreen(
                     Tab(
                         selected = selectedTabIndex == 0,
                         onClick = { selectedTabIndex = 0 },
-                        text = { Text("Мої канви (${canvases.size})") }
+                        text = { Text(stringResource(R.string.my_canvases_count, canvases.size)) }
                     )
                     Tab(
                         selected = selectedTabIndex == 1,
                         onClick = { selectedTabIndex = 1 },
-                        text = { Text("Шаблони конспектів") }
+                        text = { Text(stringResource(R.string.note_templates)) }
                     )
                 }
             }
@@ -268,7 +271,7 @@ fun HomeScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Створити канву")
+                Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.create_canvas))
             }
         }
     ) { padding ->
@@ -296,12 +299,12 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Немає створених канв",
+                                text = stringResource(R.string.no_canvases),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Натисніть '+' або виберіть шаблон, щоб почати малювання та конспектування",
+                                text = stringResource(R.string.no_canvases_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -335,8 +338,8 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     TemplateCardItem(
-                        title = "Чистий аркуш (Unlimited)",
-                        description = "Безкінечний простір для вільних малюнків та конспектів",
+                        title = stringResource(R.string.template_blank_title),
+                        description = stringResource(R.string.template_blank_description),
                         icon = Icons.Default.Description,
                         onClick = {
                             viewModel.createTemplateCanvas("BLANK") { canvasId ->
@@ -346,8 +349,8 @@ fun HomeScreen(
                     )
 
                     TemplateCardItem(
-                        title = "Аркуш з графіком (Grid Chart)",
-                        description = "Готова заготовка з координатною сіткою та осями X/Y",
+                        title = stringResource(R.string.template_graph_title),
+                        description = stringResource(R.string.template_graph_description),
                         icon = Icons.Default.GridOn,
                         onClick = {
                             viewModel.createTemplateCanvas("GRID_CHART") { canvasId ->
@@ -357,8 +360,8 @@ fun HomeScreen(
                     )
 
                     TemplateCardItem(
-                        title = "Конспект Корнелла (Cornell Notes)",
-                        description = "Розмітка полів для тез, ключових слів та резюме лекцій",
+                        title = stringResource(R.string.template_cornell_title),
+                        description = stringResource(R.string.template_cornell_description),
                         icon = Icons.Default.Edit,
                         onClick = {
                             viewModel.createTemplateCanvas("LECTURE_NOTES") { canvasId ->
@@ -375,7 +378,7 @@ fun HomeScreen(
         val emojiOptions = listOf("🎓", "📚", "🧠", "✏️", "🦉", "🚀", "🔬", "🧪", "📐", "💻", "🌌", "☕")
         AlertDialog(
             onDismissRequest = { showProfileDialog = false },
-            title = { Text("Локальний профіль") },
+            title = { Text(stringResource(R.string.local_profile)) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -390,11 +393,11 @@ fun HomeScreen(
                     OutlinedTextField(
                         value = profileNameInput,
                         onValueChange = { profileNameInput = it },
-                        label = { Text("Username") },
+                        label = { Text(stringResource(R.string.profile_username)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("Готовий аватар", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.ready_avatar), style = MaterialTheme.typography.labelLarge)
                     emojiOptions.chunked(6).forEach { rowOptions ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -422,10 +425,10 @@ fun HomeScreen(
                         onClick = { avatarPickerLauncher.launch(arrayOf("image/*")) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Обрати фото з галереї")
+                        Text(stringResource(R.string.choose_photo_gallery))
                     }
                     Text(
-                        "Профіль зберігається лише на цьому пристрої.",
+                        stringResource(R.string.profile_local_only),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -439,12 +442,12 @@ fun HomeScreen(
                     },
                     enabled = profileNameInput.isNotBlank()
                 ) {
-                    Text("Зберегти")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showProfileDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -454,13 +457,13 @@ fun HomeScreen(
     canvasToRename?.let { canvas ->
         AlertDialog(
             onDismissRequest = { canvasToRename = null },
-            title = { Text("Перейменувати канву") },
+            title = { Text(stringResource(R.string.rename_canvas)) },
             text = {
                 OutlinedTextField(
                     value = renameInputText,
                     onValueChange = { renameInputText = it },
                     singleLine = true,
-                    label = { Text("Назва канви") }
+                    label = { Text(stringResource(R.string.canvas_name)) }
                 )
             },
             confirmButton = {
@@ -470,12 +473,12 @@ fun HomeScreen(
                     }
                     canvasToRename = null
                 }) {
-                    Text("Зберегти")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { canvasToRename = null }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -485,26 +488,26 @@ fun HomeScreen(
     if (showCreateCanvasDialog) {
         AlertDialog(
             onDismissRequest = { showCreateCanvasDialog = false },
-            title = { Text("Параметри нової канви", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.new_canvas_settings), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = newCanvasTitle,
                         onValueChange = { newCanvasTitle = it },
                         singleLine = true,
-                        label = { Text("Назва конспекту") },
+                        label = { Text(stringResource(R.string.note_name)) },
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text("Формат аркуша:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.sheet_format), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         val presets = listOf(
-                            Pair("Безкінечний", com.example.data.models.PageSizePreset.UNLIMITED),
-                            Pair("A4 Вертик.", com.example.data.models.PageSizePreset.A4_VERTICAL),
-                            Pair("A4 Гориз.", com.example.data.models.PageSizePreset.A4_HORIZONTAL)
+                            Pair(stringResource(R.string.unlimited), com.example.data.models.PageSizePreset.UNLIMITED),
+                            Pair(stringResource(R.string.a4_portrait_short), com.example.data.models.PageSizePreset.A4_VERTICAL),
+                            Pair(stringResource(R.string.a4_landscape_short), com.example.data.models.PageSizePreset.A4_HORIZONTAL)
                         )
                         presets.forEach { (label, preset) ->
                             val isSelected = selectedPreset == preset
@@ -523,15 +526,15 @@ fun HomeScreen(
                         onSelectColor = { selectedColorInt = it }
                     )
 
-                    Text("Візерунок сітки:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.grid_pattern), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val patternOpts = listOf(
-                            Pair("Крапки", com.example.data.models.BackgroundPattern.DOTTED),
-                            Pair("Лінії", com.example.data.models.BackgroundPattern.LINED),
-                            Pair("Чистий", com.example.data.models.BackgroundPattern.BLANK)
+                            Pair(stringResource(R.string.dots), com.example.data.models.BackgroundPattern.DOTTED),
+                            Pair(stringResource(R.string.lines), com.example.data.models.BackgroundPattern.LINED),
+                            Pair(stringResource(R.string.blank), com.example.data.models.BackgroundPattern.BLANK)
                         )
                         patternOpts.forEach { (lbl, pat) ->
                             val isSel = selectedPattern == pat
@@ -550,7 +553,7 @@ fun HomeScreen(
                 Button(onClick = {
                     showCreateCanvasDialog = false
                     viewModel.createNewCanvas(
-                        title = newCanvasTitle.ifBlank { "Нова канва" },
+                        title = newCanvasTitle.ifBlank { defaultNewCanvasTitle },
                         pageSizePreset = selectedPreset,
                         pattern = selectedPattern,
                         bgColor = selectedColorInt
@@ -558,12 +561,12 @@ fun HomeScreen(
                         onCanvasClick(canvasId)
                     }
                 }) {
-                    Text("Створити")
+                    Text(stringResource(R.string.create))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCreateCanvasDialog = false }) {
-                    Text("Скасувати")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -585,7 +588,7 @@ private fun LocalProfileAvatar(
             if (avatar?.startsWith("content://") == true || avatar?.startsWith("file://") == true) {
                 AsyncImage(
                     model = avatar,
-                    contentDescription = "Аватар локального профілю",
+                    contentDescription = stringResource(R.string.local_profile_avatar),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape)
                 )
@@ -612,7 +615,9 @@ fun CanvasCardItem(
     onDeleteClick: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+    val dateFormat = remember(Locale.getDefault()) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
+    }
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -700,7 +705,7 @@ fun CanvasCardItem(
                     IconButton(onClick = { showMenu = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Опції",
+                            contentDescription = stringResource(R.string.options),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -710,7 +715,7 @@ fun CanvasCardItem(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Перейменувати") },
+                            text = { Text(stringResource(R.string.rename)) },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                             onClick = {
                                 showMenu = false
@@ -718,7 +723,7 @@ fun CanvasCardItem(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Дублювати") },
+                            text = { Text(stringResource(R.string.duplicate)) },
                             leadingIcon = { Icon(Icons.Default.FileCopy, contentDescription = null) },
                             onClick = {
                                 showMenu = false
@@ -726,7 +731,7 @@ fun CanvasCardItem(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Видалити") },
+                            text = { Text(stringResource(R.string.delete)) },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                             onClick = {
                                 showMenu = false

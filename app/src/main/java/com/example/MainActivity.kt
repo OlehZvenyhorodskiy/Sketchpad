@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,14 +20,21 @@ import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import com.example.data.repository.CanvasRepository
 import com.example.data.repository.UserPreferencesRepository
+import com.example.localization.AppLanguage
+import com.example.localization.AppLocaleManager
 import com.example.ui.editor.CanvasEditorScreen
 import com.example.ui.editor.CanvasEditorViewModel
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.HomeViewModel
+import com.example.ui.localization.LanguageSetupScreen
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocaleManager.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -50,7 +58,21 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SketchpadApp(userPrefsRepository = userPrefsRepository)
+                    if (AppLocaleManager.hasSelectedLanguage(this@MainActivity)) {
+                        SketchpadApp(
+                            userPrefsRepository = userPrefsRepository,
+                            currentLanguage = AppLocaleManager.currentLanguage(this@MainActivity),
+                            onLanguageSelected = { language ->
+                                AppLocaleManager.setLanguage(this@MainActivity, language)
+                                recreate()
+                            }
+                        )
+                    } else {
+                        LanguageSetupScreen { language ->
+                            AppLocaleManager.setLanguage(this@MainActivity, language)
+                            recreate()
+                        }
+                    }
                 }
             }
         }
@@ -58,7 +80,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
+fun SketchpadApp(
+    userPrefsRepository: UserPreferencesRepository,
+    currentLanguage: AppLanguage,
+    onLanguageSelected: (AppLanguage) -> Unit
+) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { CanvasRepository(context) }
@@ -88,6 +114,7 @@ fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
                 currentThemeOrdinal = themeStyleOrdinal,
                 currentAccentArgb = accentColorArgb,
                 isLeftHanded = isLeftHanded,
+                currentLanguage = currentLanguage,
                 onThemeSelected = { style ->
                     scope.launch {
                         userPrefsRepository.setThemeStyle(style)
@@ -103,6 +130,7 @@ fun SketchpadApp(userPrefsRepository: UserPreferencesRepository) {
                         userPrefsRepository.setLeftHandedMode(enabled)
                     }
                 },
+                onLanguageSelected = onLanguageSelected,
                 onBack = { navController.popBackStack() }
             )
         }

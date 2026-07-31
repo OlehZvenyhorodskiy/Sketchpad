@@ -43,7 +43,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.models.HslaColor
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -102,7 +104,7 @@ fun ColorPickerBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Вибір кольору",
+                    text = stringResource(R.string.color_picker),
                     style = MaterialTheme.typography.titleLarge
                 )
 
@@ -122,10 +124,10 @@ fun ColorPickerBottomSheet(
                         lightness = 0f
                         alpha = 1f
                     }) {
-                        Text("Скинути")
+                        Text(stringResource(R.string.reset))
                     }
                     TextButton(onClick = onDismiss) {
-                        Text("Готово", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text(stringResource(R.string.done), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     }
                 }
             }
@@ -134,7 +136,7 @@ fun ColorPickerBottomSheet(
 
             // Standard Preset Swatches Palette
             Text(
-                text = "Готові палітри",
+                text = stringResource(R.string.preset_colors),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -163,7 +165,7 @@ fun ColorPickerBottomSheet(
 
             if (recentColors.isNotEmpty()) {
                 Text(
-                    text = "Нещодавні кольори",
+                    text = stringResource(R.string.recent_colors),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -208,7 +210,7 @@ fun ColorPickerBottomSheet(
             }
 
             // Opacity slider
-            Text(text = "Прозорість: ${(alpha * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Text(text = stringResource(R.string.opacity_percent, (alpha * 100).toInt()), style = MaterialTheme.typography.bodyMedium)
             Slider(
                 value = alpha,
                 onValueChange = { alpha = it },

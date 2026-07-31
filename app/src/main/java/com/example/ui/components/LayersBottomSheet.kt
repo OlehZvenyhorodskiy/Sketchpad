@@ -14,10 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.models.LayerEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +61,7 @@ fun LayersBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(Icons.Default.Layers, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                    Text("Шари (${layers.size})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.layers_count, layers.size), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
@@ -69,7 +71,7 @@ fun LayersBottomSheet(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Новий шар", fontSize = 13.sp)
+                    Text(stringResource(R.string.new_layer), fontSize = 13.sp)
                 }
             }
 
@@ -100,7 +102,7 @@ fun LayersBottomSheet(
                                 ) {
                                     Icon(
                                         imageVector = if (layer.isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = "Видимість",
+                                        contentDescription = stringResource(R.string.visibility),
                                         tint = if (layer.isVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -115,9 +117,9 @@ fun LayersBottomSheet(
                                         )
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             TextButton(onClick = { onRename(layer.id, renameText.trim()); renamingId = null }) {
-                                                Text("Зберегти", fontSize = 12.sp)
+                                                Text(stringResource(R.string.save), fontSize = 12.sp)
                                             }
-                                            TextButton(onClick = { renamingId = null }) { Text("Скасувати", fontSize = 12.sp) }
+                                            TextButton(onClick = { renamingId = null }) { Text(stringResource(R.string.cancel), fontSize = 12.sp) }
                                         }
                                     } else {
                                         Text(
@@ -128,7 +130,7 @@ fun LayersBottomSheet(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "Елементів: ${layer.totalElements} • ${(layer.opacity * 100).toInt()}%",
+                                            text = stringResource(R.string.layer_elements_opacity, layer.totalElements, (layer.opacity * 100).toInt()),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -136,17 +138,17 @@ fun LayersBottomSheet(
                                 }
 
                                 IconButton(onClick = { onMoveUp(layer.id) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.ArrowUpward, "Вгору", modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.ArrowUpward, stringResource(R.string.move_up), modifier = Modifier.size(16.dp))
                                 }
                                 IconButton(onClick = { onMoveDown(layer.id) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.ArrowDownward, "Вниз", modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.ArrowDownward, stringResource(R.string.move_down), modifier = Modifier.size(16.dp))
                                 }
                                 IconButton(onClick = { renamingId = layer.id; renameText = layer.name }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Edit, "Перейменувати", modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Edit, stringResource(R.string.rename), modifier = Modifier.size(16.dp))
                                 }
                                 if (layers.size > 1) {
                                     IconButton(onClick = { onDeleteLayer(layer.id) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Delete, "Видалити", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                        Icon(Icons.Default.Delete, stringResource(R.string.delete), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                                     }
                                 }
                             }

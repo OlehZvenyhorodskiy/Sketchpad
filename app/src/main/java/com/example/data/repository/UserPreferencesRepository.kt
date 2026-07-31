@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.R
 import com.example.ui.theme.AppThemeStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -168,7 +169,8 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun ensureLocalProfile() {
         context.dataStore.edit { prefs ->
             if (prefs[KEY_USER_NAME].isNullOrBlank()) {
-                prefs[KEY_USER_NAME] = "Студент-${java.util.UUID.randomUUID().toString().take(4).uppercase()}"
+                val suffix = java.util.UUID.randomUUID().toString().take(4).uppercase()
+                prefs[KEY_USER_NAME] = context.getString(R.string.generated_student_name, suffix)
             }
             if (prefs[KEY_USER_AVATAR].isNullOrBlank()) {
                 prefs[KEY_USER_AVATAR] = listOf("🎓", "📚", "🧠", "✏️", "🦉", "🚀").random()
@@ -178,7 +180,7 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setLocalProfile(name: String, avatar: String) {
         context.dataStore.edit { prefs ->
-            prefs[KEY_USER_NAME] = name.trim().ifBlank { "Студент" }
+            prefs[KEY_USER_NAME] = name.trim().ifBlank { context.getString(R.string.student) }
             prefs[KEY_USER_AVATAR] = avatar.ifBlank { "🎓" }
         }
     }

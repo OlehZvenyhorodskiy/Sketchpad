@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,9 +46,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
+import com.example.localization.AppLanguage
 import com.example.ui.theme.AppThemeStyle
 import com.example.ui.theme.ThemeSpecs
 
@@ -63,9 +67,11 @@ fun ThemeSettingsScreen(
     currentThemeOrdinal: Int,
     currentAccentArgb: Int,
     isLeftHanded: Boolean,
+    currentLanguage: AppLanguage,
     onThemeSelected: (Int) -> Unit,
     onAccentColorChanged: (Int) -> Unit,
     onLeftHandedChanged: (Boolean) -> Unit,
+    onLanguageSelected: (AppLanguage) -> Unit,
     onBack: () -> Unit
 ) {
     var selectedTheme by remember { mutableIntStateOf(currentThemeOrdinal) }
@@ -87,10 +93,10 @@ fun ThemeSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Тема й зовнішній вигляд") },
+                title = { Text(stringResource(R.string.theme_and_appearance)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 }
             )
@@ -104,11 +110,36 @@ fun ThemeSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.language_settings_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.language_settings_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(AppLanguage.entries) { language ->
+                    FilterChip(
+                        selected = currentLanguage == language,
+                        onClick = {
+                            if (currentLanguage != language) onLanguageSelected(language)
+                        },
+                        label = { Text("${language.flag} ${language.nativeName}") }
+                    )
+                }
+            }
+
             // ──────────────────────────────────────────────
             // Section: Theme Style Picker
             // ──────────────────────────────────────────────
             Text(
-                text = "Стиль теми",
+                text = stringResource(R.string.theme_style),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -140,7 +171,7 @@ fun ThemeSettingsScreen(
             // Section: Accent Color
             // ──────────────────────────────────────────────
             Text(
-                text = "Акцентний колір",
+                text = stringResource(R.string.accent_color),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -222,12 +253,12 @@ fun ThemeSettingsScreen(
             ) {
                 Column {
                     Text(
-                        text = "Режим для лівші",
+                        text = stringResource(R.string.left_handed_mode),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Дзеркалити панелі інструментів",
+                        text = stringResource(R.string.mirror_tool_panels),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -327,7 +358,7 @@ private fun ThemePreviewCard(
         if (isSelected) {
             Icon(
                 imageVector = Icons.Default.Check,
-                contentDescription = "Обрано",
+                contentDescription = stringResource(R.string.selected),
                 tint = primaryColor,
                 modifier = Modifier.size(16.dp)
             )
@@ -335,11 +366,12 @@ private fun ThemePreviewCard(
     }
 }
 
+@Composable
 private fun themeDisplayName(style: AppThemeStyle): String = when (style) {
-    AppThemeStyle.SYSTEM_DEFAULT -> "Стандарт"
-    AppThemeStyle.PAPER_NOTEBOOK -> "Зошит"
-    AppThemeStyle.NEUMORPHISM -> "Неоморфізм"
-    AppThemeStyle.AMOLED_BLACK -> "AMOLED"
-    AppThemeStyle.CHALKBOARD -> "Дошка"
-    AppThemeStyle.SEPIA_EINK -> "Сепія"
+    AppThemeStyle.SYSTEM_DEFAULT -> stringResource(R.string.theme_system_default)
+    AppThemeStyle.PAPER_NOTEBOOK -> stringResource(R.string.theme_paper_notebook)
+    AppThemeStyle.NEUMORPHISM -> stringResource(R.string.theme_neumorphism)
+    AppThemeStyle.AMOLED_BLACK -> stringResource(R.string.theme_amoled)
+    AppThemeStyle.CHALKBOARD -> stringResource(R.string.theme_chalkboard)
+    AppThemeStyle.SEPIA_EINK -> stringResource(R.string.theme_sepia)
 }

@@ -20,7 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,9 +42,9 @@ fun TimelineSliderBottomSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Історія версій полотна", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.canvas_version_history), style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Версія ${selectedIndex + 1} з $totalVersions",
+                text = stringResource(R.string.version_of_total, selectedIndex + 1, totalVersions),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -58,7 +60,7 @@ fun TimelineSliderBottomSheet(
                     steps = maxOf(0, totalVersions - 2)
                 )
             } else {
-                Text("Поки немає збережених знімків історії.")
+                Text(stringResource(R.string.no_saved_history))
             }
 
             Row(
@@ -73,7 +75,7 @@ fun TimelineSliderBottomSheet(
                     },
                     enabled = totalVersions > 1
                 ) {
-                    Text("Відновити цю версію")
+                    Text(stringResource(R.string.restore_version))
                 }
             }
         }

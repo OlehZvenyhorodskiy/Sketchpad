@@ -20,9 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 
 @Composable
 fun TextInputDialog(
@@ -36,7 +38,7 @@ fun TextInputDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Введення тексту") },
+        title = { Text(stringResource(R.string.text_input_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -45,13 +47,13 @@ fun TextInputDialog(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Введіть ваш текст...") },
+                    label = { Text(stringResource(R.string.enter_your_text)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 5
                 )
 
                 Text(
-                    text = "Розмір шрифту: ${fontSize.toInt()} px",
+                    text = stringResource(R.string.font_size_px, fontSize.toInt()),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -72,12 +74,12 @@ fun TextInputDialog(
                     }
                 }
             ) {
-                Text("Зберегти")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Скасувати")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

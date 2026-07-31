@@ -41,11 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.models.BackgroundPattern
 import com.example.data.models.HslaColor
 import com.example.data.models.PageSizePreset
+import com.example.R
 
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.OutlinedButton
@@ -63,17 +65,6 @@ fun CanvasTopMenuBottomSheet(
     onOpenThemeSettings: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    val bgPresets = remember {
-        listOf(
-            Pair("Білий", 0xFFFFFFFF.toInt()),
-            Pair("Сірий", 0xFFF1F5F9.toInt()),
-            Pair("Чорний", 0xFF0F172A.toInt()),
-            Pair("Кремовий", 0xFFFFFBEB.toInt()),
-            Pair("М'ятний", 0xFFECFDF5.toInt()),
-            Pair("Темно-синій", 0xFF1E1B4B.toInt())
-        )
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -84,7 +75,7 @@ fun CanvasTopMenuBottomSheet(
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "Налаштування сторінки канви",
+                text = stringResource(R.string.canvas_page_settings),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -101,7 +92,7 @@ fun CanvasTopMenuBottomSheet(
 
             // 2. Background Pattern Section
             Text(
-                text = "Тип фону (паттерн)",
+                text = stringResource(R.string.background_pattern),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -114,21 +105,21 @@ fun CanvasTopMenuBottomSheet(
                     onClick = { onPatternChange(BackgroundPattern.BLANK) },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
                 ) {
-                    Text("Чистий")
+                    Text(stringResource(R.string.blank))
                 }
                 SegmentedButton(
                     selected = currentPattern == BackgroundPattern.DOTTED,
                     onClick = { onPatternChange(BackgroundPattern.DOTTED) },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
                 ) {
-                    Text("В крапку")
+                    Text(stringResource(R.string.dotted))
                 }
                 SegmentedButton(
                     selected = currentPattern == BackgroundPattern.LINED,
                     onClick = { onPatternChange(BackgroundPattern.LINED) },
                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
                 ) {
-                    Text("В лінійку")
+                    Text(stringResource(R.string.ruled))
                 }
             }
 
@@ -136,20 +127,20 @@ fun CanvasTopMenuBottomSheet(
 
             // 3. Canvas Size Preset Section
             Text(
-                text = "Розмір канви",
+                text = stringResource(R.string.canvas_size),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(8.dp))
 
             val presets = listOf(
-                Pair(PageSizePreset.UNLIMITED, "Безлімітна"),
-                Pair(PageSizePreset.A4_VERTICAL, "A4 (верт)"),
-                Pair(PageSizePreset.A4_HORIZONTAL, "A4 (гор)"),
-                Pair(PageSizePreset.RATIO_16_9_VERTICAL, "16:9 (верт)"),
-                Pair(PageSizePreset.RATIO_16_9_HORIZONTAL, "16:9 (гор)"),
-                Pair(PageSizePreset.LETTER_11X85, "Letter 11x8.5\""),
-                Pair(PageSizePreset.CUSTOM, "Власний розмір")
+                Pair(PageSizePreset.UNLIMITED, stringResource(R.string.unlimited)),
+                Pair(PageSizePreset.A4_VERTICAL, stringResource(R.string.a4_portrait_short)),
+                Pair(PageSizePreset.A4_HORIZONTAL, stringResource(R.string.a4_landscape_short)),
+                Pair(PageSizePreset.RATIO_16_9_VERTICAL, stringResource(R.string.ratio_portrait)),
+                Pair(PageSizePreset.RATIO_16_9_HORIZONTAL, stringResource(R.string.ratio_landscape)),
+                Pair(PageSizePreset.LETTER_11X85, stringResource(R.string.letter_size)),
+                Pair(PageSizePreset.CUSTOM, stringResource(R.string.custom_size))
             )
 
             var customW by remember { mutableStateOf("1200") }
@@ -187,7 +178,7 @@ fun CanvasTopMenuBottomSheet(
                             val h = customH.toFloatOrNull()
                             if (w != null && h != null) onPresetChange(PageSizePreset.CUSTOM, w, h)
                         },
-                        label = { Text("Ширина (px)") },
+                        label = { Text(stringResource(R.string.width_px)) },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
@@ -198,7 +189,7 @@ fun CanvasTopMenuBottomSheet(
                             val h = it.toFloatOrNull()
                             if (w != null && h != null) onPresetChange(PageSizePreset.CUSTOM, w, h)
                         },
-                        label = { Text("Висота (px)") },
+                        label = { Text(stringResource(R.string.height_px)) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -215,7 +206,7 @@ fun CanvasTopMenuBottomSheet(
                 ) {
                     Icon(imageVector = Icons.Default.Palette, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Теми й оформлення додатка")
+                    Text(stringResource(R.string.app_themes_and_appearance))
                 }
             }
 

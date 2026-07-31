@@ -8,6 +8,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.data.models.CanvasEntity
 import com.example.data.models.ImageElementEntity
 import com.example.data.models.PageEntity
@@ -43,7 +44,7 @@ class HomeViewModel(
     val userName: StateFlow<String?> = userPrefsRepository.userName.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "Студент"
+        initialValue = null
     )
 
     val userAvatar: StateFlow<String?> = userPrefsRepository.userAvatar.stateIn(
@@ -85,7 +86,7 @@ class HomeViewModel(
     }
 
     fun createNewCanvas(
-        title: String = "Нова канва",
+        title: String,
         pageSizePreset: com.example.data.models.PageSizePreset = com.example.data.models.PageSizePreset.UNLIMITED,
         pattern: com.example.data.models.BackgroundPattern = com.example.data.models.BackgroundPattern.DOTTED,
         bgColor: Int = 0xFFFFFFFF.toInt(),
@@ -131,7 +132,9 @@ class HomeViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val mimeType = context.contentResolver.getType(uri) ?: ""
             val isPdf = mimeType.contains("pdf", ignoreCase = true) || uri.toString().lowercase().contains(".pdf")
-            val title = if (isPdf) "Імпортована лекція (PDF)" else "Імпортоване фото"
+            val title = context.getString(
+                if (isPdf) R.string.imported_lecture_pdf else R.string.imported_photo
+            )
             val canvasId = repository.createNewCanvas(title = title)
 
             if (isPdf) {

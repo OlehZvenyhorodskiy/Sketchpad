@@ -3,6 +3,7 @@ package com.example.data.repository
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import com.example.R
 import com.example.data.db.AppDatabase
 import com.example.data.models.AudioRecordingEntity
 import com.example.data.models.BackgroundPattern
@@ -52,7 +53,7 @@ class CanvasRepository(private val context: Context) {
         audioDao.getRecordingsForCanvas(canvasId)
 
     suspend fun createNewCanvas(
-        title: String = "Нова канва",
+        title: String = context.getString(R.string.new_canvas_default_title),
         pageSizePreset: PageSizePreset = PageSizePreset.UNLIMITED,
         pattern: BackgroundPattern = BackgroundPattern.BLANK,
         bgColor: Int = 0xFFFFFFFF.toInt()
@@ -79,7 +80,7 @@ class CanvasRepository(private val context: Context) {
 
     suspend fun createTemplateCanvas(templateType: String): String = withContext(Dispatchers.IO) {
         val canvasId = UUID.randomUUID().toString()
-        var title = "Чистий аркуш"
+        var title = context.getString(R.string.template_blank_canvas_title)
         var pattern = BackgroundPattern.BLANK
         var shapes = emptyList<ShapeEntity>()
         var charts = emptyList<ChartElementEntity>()
@@ -87,7 +88,7 @@ class CanvasRepository(private val context: Context) {
 
         when (templateType) {
             "GRID_CHART" -> {
-                title = "Шаблон з графіком"
+                title = context.getString(R.string.template_graph_canvas_title)
                 pattern = BackgroundPattern.DOTTED
                 val chart = ChartElementEntity(
                     x = 100f,
@@ -97,12 +98,12 @@ class CanvasRepository(private val context: Context) {
                     axisRangeX = 10f,
                     axisRangeY = 10f,
                     gridStep = 25f,
-                    title = "Функція y = f(x)"
+                    title = context.getString(R.string.template_function_title)
                 )
                 charts = listOf(chart)
             }
             "LECTURE_NOTES" -> {
-                title = "Конспект Корнелла"
+                title = context.getString(R.string.template_cornell_canvas_title)
                 pattern = BackgroundPattern.LINED
                 val shape = ShapeEntity(
                     shapeType = ShapeType.SQUARE,
@@ -115,7 +116,7 @@ class CanvasRepository(private val context: Context) {
                     strokeWidth = 2f
                 )
                 val text = TextBlockEntity(
-                    text = "Поля для ключових слів / запитань",
+                    text = context.getString(R.string.template_cornell_cues),
                     x = 50f,
                     y = 60f,
                     width = 160f,
@@ -205,7 +206,7 @@ class CanvasRepository(private val context: Context) {
         val newCanvasId = UUID.randomUUID().toString()
         val newCanvas = original.copy(
             id = newCanvasId,
-            title = "${original.title} (копія)",
+            title = context.getString(R.string.canvas_copy_title, original.title),
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis(),
             driveFileId = null

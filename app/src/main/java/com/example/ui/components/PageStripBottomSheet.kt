@@ -30,8 +30,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.models.PageEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +61,7 @@ fun PageStripBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Сторінки канви (${pages.size})",
+                    text = stringResource(R.string.canvas_pages_count, pages.size),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -67,7 +69,7 @@ fun PageStripBottomSheet(
                 Button(onClick = onAddPageClick) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Додати сторінку")
+                    Text(stringResource(R.string.add_page))
                 }
             }
 
@@ -102,7 +104,7 @@ fun PageStripBottomSheet(
                             ) {
                                 val totalStrokes = page.getEffectiveLayers().sumOf { it.strokes.size }
                                 Text(
-                                    text = "Сторінка ${index + 1}\n($totalStrokes штрихів)",
+                                    text = stringResource(R.string.page_strokes_summary, index + 1, totalStrokes),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -126,7 +128,7 @@ fun PageStripBottomSheet(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
-                                        contentDescription = "Видалити",
+                                        contentDescription = stringResource(R.string.delete),
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(18.dp)
                                     )

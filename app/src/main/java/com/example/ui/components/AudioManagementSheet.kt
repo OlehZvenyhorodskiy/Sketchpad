@@ -13,10 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.models.AudioRecordingEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,14 +53,14 @@ fun AudioManagementSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(Icons.Default.Mic, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                Text("Аудіонотатки (${recordings.size})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.audio_notes_count, recordings.size), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             if (recordings.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                    Text("Немає записаних аудіонотаток.\nНатисніть 🎤 для запису.",
+                    Text(stringResource(R.string.no_audio_notes),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -85,7 +87,7 @@ fun AudioManagementSheet(
                                 ) {
                                     Icon(
                                         if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        "Відтворити",
+                                        stringResource(R.string.play),
                                         tint = if (isThisPlaying) MaterialTheme.colorScheme.onPrimary
                                                else MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier.size(22.dp)
@@ -101,9 +103,9 @@ fun AudioManagementSheet(
                                         )
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             TextButton(onClick = { onRenameClick(recording, renameText.trim()); renamingId = null }) {
-                                                Text("Зберегти", fontSize = 12.sp)
+                                                Text(stringResource(R.string.save), fontSize = 12.sp)
                                             }
-                                            TextButton(onClick = { renamingId = null }) { Text("Скасувати", fontSize = 12.sp) }
+                                            TextButton(onClick = { renamingId = null }) { Text(stringResource(R.string.cancel), fontSize = 12.sp) }
                                         }
                                     } else {
                                         Text(recording.displayName(), style = MaterialTheme.typography.bodyMedium,
@@ -115,11 +117,11 @@ fun AudioManagementSheet(
                                 }
 
                                 IconButton(onClick = { renamingId = recording.id; renameText = recording.displayName() }) {
-                                    Icon(Icons.Default.Edit, "Перейменувати", modifier = Modifier.size(18.dp),
+                                    Icon(Icons.Default.Edit, stringResource(R.string.rename), modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 IconButton(onClick = { onDeleteClick(recording) }) {
-                                    Icon(Icons.Default.Delete, "Видалити", modifier = Modifier.size(18.dp),
+                                    Icon(Icons.Default.Delete, stringResource(R.string.delete), modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.error)
                                 }
                             }

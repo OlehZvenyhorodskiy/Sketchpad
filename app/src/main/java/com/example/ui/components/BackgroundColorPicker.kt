@@ -32,7 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.models.HslaColor
 
 val CANVAS_BACKGROUND_PRESETS = listOf(
@@ -54,7 +56,7 @@ fun BackgroundColorPicker(
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Фон сторінки",
+            text = stringResource(R.string.page_background),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -95,7 +97,7 @@ fun BackgroundColorPicker(
             ) {
                 Icon(
                     imageVector = Icons.Default.ColorLens,
-                    contentDescription = "Власний колір",
+                    contentDescription = stringResource(R.string.custom_color),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
