@@ -1544,14 +1544,7 @@ class CanvasEditorViewModel(
     fun copySelectedElements() {
         val ids = _selectedElementIds.value
         if (ids.isEmpty()) return
-        clipboard = currentPage?.getEffectiveLayers()?.flatMap { layer ->
-            buildList {
-                layer.shapes.filter { it.id in ids }.forEach { add(ClipboardElement.Shape(it)) }
-                layer.images.filter { it.id in ids }.forEach { add(ClipboardElement.Image(it)) }
-                layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
-                layer.charts.filter { it.id in ids }.forEach { add(ClipboardElement.Chart(it)) }
-            }
-        }.orEmpty()
+        clipboard = currentPage?.let { copyElementsFromPage(it, ids) }.orEmpty()
     }
 
     fun pasteElements(offsetX: Float = 20f, offsetY: Float = 20f) {
@@ -1597,17 +1590,9 @@ class CanvasEditorViewModel(
         if (ids.isEmpty()) return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
-        val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(
-                shapes = layer.shapes.filterNot { it.id in ids },
-                images = layer.images.filterNot { it.id in ids },
-                textBlocks = layer.textBlocks.filterNot { it.id in ids },
-                charts = layer.charts.filterNot { it.id in ids }
-            )
-        }
         _selectedElementIds.value = emptySet()
         _canvasVersion.value++
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
+        updateCurrentPage(deleteElementsFromPage(migrated, ids))
     }
 
     fun saveCanvasThumbnail(bitmap: android.graphics.Bitmap) {
@@ -1744,7 +1729,7 @@ class CanvasEditorViewModel(
     }
 }
 
-private sealed interface ClipboardElement {
+internal sealed interface ClipboardElement {
     val id: String
 
     data class Shape(val value: ShapeEntity) : ClipboardElement { override val id: String = value.id }
@@ -1752,6 +1737,27 @@ private sealed interface ClipboardElement {
     data class Text(val value: TextBlockEntity) : ClipboardElement { override val id: String = value.id }
     data class Chart(val value: ChartElementEntity) : ClipboardElement { override val id: String = value.id }
 }
+
+internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<ClipboardElement> =
+    page.getEffectiveLayers().flatMap { layer ->
+        buildList {
+            layer.shapes.filter { it.id in ids }.forEach { add(ClipboardElement.Shape(it)) }
+            layer.images.filter { it.id in ids }.forEach { add(ClipboardElement.Image(it)) }
+            layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
+            layer.charts.filter { it.id in ids }.forEach { add(ClipboardElement.Chart(it)) }
+        }
+    }
+
+internal fun deleteElementsFromPage(page: PageEntity, ids: Set<String>): PageEntity = page.copy(
+    layers = page.getEffectiveLayers().map { layer ->
+        layer.copy(
+            shapes = layer.shapes.filterNot { it.id in ids },
+            images = layer.images.filterNot { it.id in ids },
+            textBlocks = layer.textBlocks.filterNot { it.id in ids },
+            charts = layer.charts.filterNot { it.id in ids }
+        )
+    }
+)
 
 internal fun doesRectIntersectPolygon(rect: Rect, polygon: List<Offset>): Boolean {
     if (polygon.size < 3) return false
