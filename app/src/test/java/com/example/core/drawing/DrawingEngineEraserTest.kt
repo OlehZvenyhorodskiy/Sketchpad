@@ -20,7 +20,7 @@ class DrawingEngineEraserTest {
     )
 
     @Test
-    fun `pixel eraser cuts a sparse segment into two rounded chunks`() {
+    fun `pixel eraser cuts a sparse segment with flat cut edges`() {
         val chunks = DrawingEngine.eraseStrokeAlongPath(
             horizontalStroke(),
             eraserPoints = listOf(StrokePoint(50f, 0f)),
@@ -32,6 +32,10 @@ class DrawingEngineEraserTest {
         assertTrue(chunks[1].points.first().x > 50f)
         assertEquals("stroke", chunks.first().id)
         assertTrue(chunks.all { it.points.size > 2 })
+        assertTrue(chunks.first().startCapRound)
+        assertTrue(!chunks.first().endCapRound)
+        assertTrue(!chunks.last().startCapRound)
+        assertTrue(chunks.last().endCapRound)
     }
 
     @Test

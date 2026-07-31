@@ -5,6 +5,10 @@ import com.example.data.models.LayerEntity
 import com.example.data.models.PageEntity
 import com.example.data.models.ShapeEntity
 import com.example.data.models.ShapeType
+import com.example.data.models.HslaColor
+import com.example.data.models.StrokeEntity
+import com.example.data.models.StrokePoint
+import com.example.data.models.ToolType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,6 +29,13 @@ class SelectionClipboardTest {
         x = 40f,
         y = 50f
     )
+    private val selectedStroke = StrokeEntity(
+        id = "stroke-selected",
+        tool = ToolType.PEN,
+        colorHsla = HslaColor.BLACK,
+        baseWidth = 3f,
+        points = listOf(StrokePoint(0f, 0f), StrokePoint(20f, 20f))
+    )
     private val page = PageEntity(
         canvasId = "canvas",
         pageIndex = 0,
@@ -32,6 +43,7 @@ class SelectionClipboardTest {
             LayerEntity(
                 id = "layer",
                 shapes = listOf(selectedShape),
+                strokes = listOf(selectedStroke),
                 images = listOf(unselectedImage)
             )
         ),
@@ -54,5 +66,15 @@ class SelectionClipboardTest {
 
         assertTrue(layer.shapes.isEmpty())
         assertEquals(listOf(unselectedImage), layer.images)
+    }
+
+    @Test
+    fun `copy and delete support selected handwritten strokes`() {
+        val clipboard = copyElementsFromPage(page, setOf(selectedStroke.id))
+        val updated = deleteElementsFromPage(page, setOf(selectedStroke.id))
+
+        assertTrue(clipboard.single() is ClipboardElement.Stroke)
+        assertTrue(updated.getEffectiveLayers().single().strokes.isEmpty())
+        assertEquals(listOf(selectedShape), updated.getEffectiveLayers().single().shapes)
     }
 }

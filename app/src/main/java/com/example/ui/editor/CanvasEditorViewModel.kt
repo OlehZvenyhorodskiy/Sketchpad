@@ -125,6 +125,7 @@ class CanvasEditorViewModel(
     private val localPageOverrides = mutableMapOf<String, PageEntity>()
     private val pendingPageWrites = mutableMapOf<String, PageEntity>()
     private val pageWriteJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+    private var thumbnailJob: kotlinx.coroutines.Job? = null
 
     fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
         _selectionMode.value = mode
@@ -562,6 +563,16 @@ class CanvasEditorViewModel(
         }
         if (page.id !in deferredPersistencePageIds) {
             schedulePagePersistence(page)
+        }
+        scheduleThumbnailRefresh(page)
+    }
+
+    private fun scheduleThumbnailRefresh(page: PageEntity) {
+        thumbnailJob?.cancel()
+        thumbnailJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(900)
+            runCatching { repository.generateThumbnail(canvasId, page) }
+                .onFailure { error -> android.util.Log.w("CanvasVM", "Thumbnail refresh failed", error) }
         }
     }
 
@@ -1145,10 +1156,25 @@ class CanvasEditorViewModel(
     fun updateChartPosition(chartId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        val original = migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == chartId }
+            ?: return
+        val originalBounds = Rect(original.x, original.y, original.x + original.width, original.y + original.height)
+        val attachedIds = migrated.getEffectiveLayers().flatMap { it.strokes }
+            .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, originalBounds) } == true }
+            .mapTo(mutableSetOf()) { it.id }
+        val dx = newX - original.x
+        val dy = newY - original.y
         val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(charts = layer.charts.map {
-                if (it.id == chartId) it.copy(x = newX, y = newY) else it
-            })
+            layer.copy(
+                charts = layer.charts.map {
+                    if (it.id == chartId) it.copy(x = newX, y = newY) else it
+                },
+                strokes = layer.strokes.map { stroke ->
+                    if (stroke.id in attachedIds) stroke.copy(points = stroke.points.map { point ->
+                        point.copy(x = point.x + dx, y = point.y + dy)
+                    }) else stroke
+                }
+            )
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
@@ -1165,6 +1191,15 @@ class CanvasEditorViewModel(
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
+        val originalChart = if (type == "CHART") {
+            migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
+        } else null
+        val attachedStrokeIds = originalChart?.let { chart ->
+            val bounds = Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height)
+            migrated.getEffectiveLayers().flatMap { it.strokes }
+                .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, bounds) } == true }
+                .mapTo(mutableSetOf()) { it.id }
+        }.orEmpty()
         val updatedLayers = migrated.layers.map { layer ->
             when (type) {
                 "SHAPE" -> layer.copy(shapes = layer.shapes.map {
@@ -1176,20 +1211,38 @@ class CanvasEditorViewModel(
                 "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map {
                     if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(60f), height = newH.coerceAtLeast(30f)) else it
                 })
-                "CHART" -> layer.copy(charts = layer.charts.map { chart ->
-                    if (chart.id == id) {
-                        val clampedW = newW.coerceAtLeast(100f)
-                        val clampedH = newH.coerceAtLeast(100f)
-                        val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
-                        val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
-                        chart.copy(
-                            x = newX, y = newY,
-                            width = clampedW, height = clampedH,
-                            pixelsPerUnitX = clampedW / xSpan,
-                            pixelsPerUnitY = clampedH / ySpan
-                        )
-                    } else chart
-                })
+                "CHART" -> {
+                    val clampedW = newW.coerceAtLeast(100f)
+                    val clampedH = newH.coerceAtLeast(100f)
+                    layer.copy(
+                        charts = layer.charts.map { chart ->
+                            if (chart.id == id) {
+                                val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
+                                val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
+                                chart.copy(
+                                    x = newX, y = newY,
+                                    width = clampedW, height = clampedH,
+                                    pixelsPerUnitX = clampedW / xSpan,
+                                    pixelsPerUnitY = clampedH / ySpan
+                                )
+                            } else chart
+                        },
+                        strokes = layer.strokes.map { stroke ->
+                            if (stroke.id !in attachedStrokeIds || originalChart == null) {
+                                stroke
+                            } else {
+                                val oldWidth = originalChart.width.coerceAtLeast(1f)
+                                val oldHeight = originalChart.height.coerceAtLeast(1f)
+                                stroke.copy(points = stroke.points.map { point ->
+                                    point.copy(
+                                        x = newX + (point.x - originalChart.x) / oldWidth * clampedW,
+                                        y = newY + (point.y - originalChart.y) / oldHeight * clampedH
+                                    )
+                                })
+                            }
+                        }
+                    )
+                }
                 else -> layer
             }
         }
@@ -1203,6 +1256,9 @@ class CanvasEditorViewModel(
         val hitIds = mutableSetOf<String>()
 
         page.getEffectiveLayers().filter { it.isVisible }.forEach { layer ->
+            layer.strokes.forEach { stroke ->
+                if (doesStrokeIntersectPolygon(stroke, lassoWorldPoints)) hitIds.add(stroke.id)
+            }
             layer.shapes.forEach { shape ->
                 if (doesRectIntersectPolygon(
                         Rect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height),
@@ -1255,6 +1311,13 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(
+                strokes = layer.strokes.map { stroke ->
+                    if (stroke.id in ids) {
+                        stroke.copy(points = stroke.points.map { point ->
+                            point.copy(x = point.x + dx, y = point.y + dy)
+                        })
+                    } else stroke
+                },
                 shapes = layer.shapes.map {
                     if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
                 },
@@ -1300,6 +1363,9 @@ class CanvasEditorViewModel(
 
         val centers = mutableListOf<Offset>()
         migrated.getEffectiveLayers().forEach { layer ->
+            layer.strokes.filter { it.id in ids }.forEach { stroke ->
+                strokeBounds(stroke)?.center?.let(centers::add)
+            }
             layer.shapes.filter { it.id in ids }.forEach {
                 centers.add(Offset(it.x + it.width / 2f, it.y + it.height / 2f))
             }
@@ -1324,6 +1390,19 @@ class CanvasEditorViewModel(
 
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(
+                strokes = layer.strokes.map { stroke ->
+                    if (stroke.id in ids) {
+                        stroke.copy(
+                            points = stroke.points.map { point ->
+                                point.copy(
+                                    x = centroid.x + (point.x - centroid.x) * factor,
+                                    y = centroid.y + (point.y - centroid.y) * factor
+                                )
+                            },
+                            baseWidth = (stroke.baseWidth * factor).coerceAtLeast(0.5f)
+                        )
+                    } else stroke
+                },
                 shapes = layer.shapes.map { s ->
                     if (s.id in ids) {
                         val newW = s.width * factor; val newH = s.height * factor
@@ -1700,6 +1779,24 @@ class CanvasEditorViewModel(
         _selectedElementIds.value = ids
     }
 
+    fun selectElementWithAttachments(id: String, type: String) {
+        val page = currentPage ?: return
+        if (type != "CHART") {
+            _selectedElementIds.value = setOf(id)
+            return
+        }
+        val chart = page.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
+            ?: return
+        val chartBounds = Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height)
+        val attachedStrokeIds = page.getEffectiveLayers()
+            .filter { it.isVisible }
+            .flatMap { it.strokes }
+            .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, chartBounds) } == true }
+            .mapTo(mutableSetOf()) { it.id }
+        attachedStrokeIds += id
+        _selectedElementIds.value = attachedStrokeIds
+    }
+
     fun copySelectedElements() {
         val ids = _selectedElementIds.value
         if (ids.isEmpty()) return
@@ -1714,6 +1811,14 @@ class CanvasEditorViewModel(
         val pastedIds = mutableSetOf<String>()
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id != targetLayerId) return@map layer
+            val pastedStrokes = clipboard.filterIsInstance<ClipboardElement.Stroke>().map {
+                it.value.copy(
+                    id = UUID.randomUUID().toString(),
+                    points = it.value.points.map { point ->
+                        point.copy(x = point.x + offsetX, y = point.y + offsetY)
+                    }
+                ).also { stroke -> pastedIds.add(stroke.id) }
+            }
             val pastedShapes = clipboard.filterIsInstance<ClipboardElement.Shape>().map {
                 it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
                     .also { shape -> pastedIds.add(shape.id) }
@@ -1735,6 +1840,7 @@ class CanvasEditorViewModel(
                     .also { codeBlock -> pastedIds.add(codeBlock.id) }
             }
             layer.copy(
+                strokes = layer.strokes + pastedStrokes,
                 shapes = layer.shapes + pastedShapes,
                 images = layer.images + pastedImages,
                 textBlocks = layer.textBlocks + pastedText,
@@ -1868,6 +1974,7 @@ class CanvasEditorViewModel(
 internal sealed interface ClipboardElement {
     val id: String
 
+    data class Stroke(val value: StrokeEntity) : ClipboardElement { override val id: String = value.id }
     data class Shape(val value: ShapeEntity) : ClipboardElement { override val id: String = value.id }
     data class Image(val value: ImageElementEntity) : ClipboardElement { override val id: String = value.id }
     data class Text(val value: TextBlockEntity) : ClipboardElement { override val id: String = value.id }
@@ -1878,6 +1985,7 @@ internal sealed interface ClipboardElement {
 internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<ClipboardElement> =
     page.getEffectiveLayers().flatMap { layer ->
         buildList {
+            layer.strokes.filter { it.id in ids }.forEach { add(ClipboardElement.Stroke(it)) }
             layer.shapes.filter { it.id in ids }.forEach { add(ClipboardElement.Shape(it)) }
             layer.images.filter { it.id in ids }.forEach { add(ClipboardElement.Image(it)) }
             layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
@@ -1889,6 +1997,7 @@ internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<Clip
 internal fun deleteElementsFromPage(page: PageEntity, ids: Set<String>): PageEntity = page.copy(
     layers = page.getEffectiveLayers().map { layer ->
         layer.copy(
+            strokes = layer.strokes.filterNot { it.id in ids },
             shapes = layer.shapes.filterNot { it.id in ids },
             images = layer.images.filterNot { it.id in ids },
             textBlocks = layer.textBlocks.filterNot { it.id in ids },
@@ -1897,6 +2006,40 @@ internal fun deleteElementsFromPage(page: PageEntity, ids: Set<String>): PageEnt
         )
     }
 )
+
+internal fun strokeBounds(stroke: StrokeEntity): Rect? {
+    if (stroke.points.isEmpty()) return null
+    val padding = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth) / 2f
+    return Rect(
+        left = stroke.points.minOf { it.x } - padding,
+        top = stroke.points.minOf { it.y } - padding,
+        right = stroke.points.maxOf { it.x } + padding,
+        bottom = stroke.points.maxOf { it.y } + padding
+    )
+}
+
+internal fun rectanglesOverlap(first: Rect, second: Rect): Boolean =
+    first.left <= second.right && first.right >= second.left &&
+        first.top <= second.bottom && first.bottom >= second.top
+
+internal fun doesStrokeIntersectPolygon(stroke: StrokeEntity, polygon: List<Offset>): Boolean {
+    if (stroke.points.isEmpty() || polygon.size < 3) return false
+    val bounds = strokeBounds(stroke) ?: return false
+    if (!doesRectIntersectPolygon(bounds, polygon)) return false
+    if (stroke.points.any { isPointInPolygon(Offset(it.x, it.y), polygon) }) return true
+    if (stroke.points.size == 1) return true
+
+    val polygonEdges = polygon.zipWithNext() + listOf(polygon.last() to polygon.first())
+    for (index in 0 until stroke.points.lastIndex) {
+        val start = Offset(stroke.points[index].x, stroke.points[index].y)
+        val end = Offset(stroke.points[index + 1].x, stroke.points[index + 1].y)
+        if (polygonEdges.any { (polygonStart, polygonEnd) ->
+                doLineSegmentsIntersect(start, end, polygonStart, polygonEnd)
+            }
+        ) return true
+    }
+    return polygon.any { point -> DrawingEngine.isPointInStroke(point, stroke, radius = 0f) }
+}
 
 internal fun doesRectIntersectPolygon(rect: Rect, polygon: List<Offset>): Boolean {
     if (polygon.size < 3) return false

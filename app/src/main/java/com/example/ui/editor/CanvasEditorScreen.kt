@@ -231,7 +231,7 @@ fun CanvasEditorScreen(
     var showChartDialog by remember { mutableStateOf(false) }
     var chartWithSteps by remember { mutableStateOf(false) }
     var chartXStepVal by remember { mutableStateOf("1.0") }
-    var chartYStepVal by remember { mutableStateOf("5.0") }
+    var chartYStepVal by remember { mutableStateOf("1.0") }
     var showCodeLab by remember { mutableStateOf(false) }
     var showStudyDeck by remember { mutableStateOf(false) }
     var selectedStudyDeckId by remember { mutableStateOf<String?>(null) }
@@ -554,6 +554,7 @@ fun CanvasEditorScreen(
                 },
                 selectionMode = selectionMode,
                 selectedElementIds = selectedElementIds,
+                onElementSelected = { id, type -> viewModel.selectElementWithAttachments(id, type) },
                 onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) },
                 onBeginMoveSelectedGroup = { viewModel.beginMoveSelectedElements() },
                 onMoveSelectedGroup = { dx, dy -> viewModel.moveSelectedElements(dx, dy) },
@@ -991,6 +992,7 @@ fun CanvasEditorScreen(
         CanvasReferenceDestinationDialog(
             destinations = referenceDestinations,
             sourceSelectionSize = selectedElementIds.size,
+            preferredCanvasId = canvas!!.id,
             onDestinationSelected = { destination ->
                 val source = CanvasReferenceSource(
                     canvasId = canvas!!.id,

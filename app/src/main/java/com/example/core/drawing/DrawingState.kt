@@ -165,9 +165,16 @@ object DrawingEngine {
         if (stroke.points.isEmpty() || eraserPoints.isEmpty() || radius <= 0f) return listOf(stroke)
 
         val effectiveRadius = radius + strokeRenderWidth(stroke.tool, stroke.baseWidth) / 2f
-        val sampleStep = (effectiveRadius / 3f).coerceIn(0.75f, 2.5f)
-        val denseStroke = densify(stroke.points, sampleStep)
-        val denseEraser = densify(eraserPoints, sampleStep)
+        val sampleStep = (effectiveRadius / 2f).coerceIn(1f, 4f)
+        val simplifiedStroke = simplifyPolyline(stroke.points, tolerance = 0.35f)
+        val simplifiedEraser = simplifyPolyline(
+            eraserPoints,
+            tolerance = (radius * 0.12f).coerceIn(0.6f, 1.8f)
+        )
+        val denseStroke = densify(simplifiedStroke, sampleStep)
+        // Distance-to-segment already treats the pointer path as a continuous sweep. Densifying
+        // the eraser path only multiplied work and caused visible pauses on long gestures.
+        val denseEraser = simplifiedEraser
         val radiusSq = effectiveRadius * effectiveRadius
 
         val strokeMinX = denseStroke.minOf { it.x }
@@ -213,12 +220,48 @@ object DrawingEngine {
         if (chunk.size >= 2) chunks += chunk
         if (!erasedAnyPoint) return listOf(stroke)
 
+        val originalStart = denseStroke.first()
+        val originalEnd = denseStroke.last()
         return chunks.mapIndexed { index, points ->
+            val keepsOriginalStart = squaredDistance(points.first(), originalStart) < 0.0001f
+            val keepsOriginalEnd = squaredDistance(points.last(), originalEnd) < 0.0001f
             stroke.copy(
                 id = if (index == 0) stroke.id else java.util.UUID.randomUUID().toString(),
-                points = points
+                points = points,
+                startCapRound = keepsOriginalStart && stroke.startCapRound,
+                endCapRound = keepsOriginalEnd && stroke.endCapRound
             )
         }
+    }
+
+    /** Iterative Ramer-Douglas-Peucker simplification keeps corners while removing pointer noise. */
+    private fun simplifyPolyline(points: List<StrokePoint>, tolerance: Float): List<StrokePoint> {
+        if (points.size <= 2 || tolerance <= 0f) return points
+        val keep = BooleanArray(points.size)
+        keep[0] = true
+        keep[points.lastIndex] = true
+        val ranges = ArrayDeque<Pair<Int, Int>>()
+        ranges.add(0 to points.lastIndex)
+        val toleranceSq = tolerance * tolerance
+        while (ranges.isNotEmpty()) {
+            val (startIndex, endIndex) = ranges.removeLast()
+            if (endIndex - startIndex <= 1) continue
+            var farthestIndex = -1
+            var farthestDistanceSq = 0f
+            for (index in startIndex + 1 until endIndex) {
+                val distanceSq = squaredDistanceToSegment(points[index], points[startIndex], points[endIndex])
+                if (distanceSq > farthestDistanceSq) {
+                    farthestDistanceSq = distanceSq
+                    farthestIndex = index
+                }
+            }
+            if (farthestIndex >= 0 && farthestDistanceSq > toleranceSq) {
+                keep[farthestIndex] = true
+                ranges.add(startIndex to farthestIndex)
+                ranges.add(farthestIndex to endIndex)
+            }
+        }
+        return points.filterIndexed { index, _ -> keep[index] }
     }
 
     private fun densify(points: List<StrokePoint>, maxStep: Float): List<StrokePoint> {

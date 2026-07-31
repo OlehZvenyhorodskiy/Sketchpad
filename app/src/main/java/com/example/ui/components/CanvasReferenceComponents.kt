@@ -75,6 +75,7 @@ data class CanvasReferenceUiText(
 fun CanvasReferenceDestinationDialog(
     destinations: List<CanvasReferenceDestination>,
     sourceSelectionSize: Int,
+    preferredCanvasId: String? = null,
     onDestinationSelected: (CanvasReferenceDestinationPage) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -140,7 +141,7 @@ fun CanvasReferenceDestinationDialog(
                         filteredDestinations.forEach { destination ->
                             item(key = "canvas-${destination.canvasId}") {
                                 val isExpanded = expanded[destination.canvasId]
-                                    ?: (filteredDestinations.size == 1)
+                                    ?: (destination.canvasId == preferredCanvasId || filteredDestinations.size == 1)
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -180,7 +181,9 @@ fun CanvasReferenceDestinationDialog(
                                     }
                                 }
                             }
-                            if (expanded[destination.canvasId] == true || filteredDestinations.size == 1) {
+                            if (expanded[destination.canvasId]
+                                    ?: (destination.canvasId == preferredCanvasId || filteredDestinations.size == 1)
+                            ) {
                                 items(
                                     items = destination.pages,
                                     key = { page -> "page-${page.pageId}" }

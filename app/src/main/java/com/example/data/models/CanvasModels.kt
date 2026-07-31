@@ -146,7 +146,10 @@ data class StrokeEntity(
     val colorHsla: HslaColor,
     val baseWidth: Float, // 1..22
     val points: List<StrokePoint>,
-    val snappedToRuler: Boolean = false
+    val snappedToRuler: Boolean = false,
+    /** Natural stroke tips stay round; pixel-erased cut edges are rendered flat. */
+    val startCapRound: Boolean = true,
+    val endCapRound: Boolean = true
 )
 
 @JsonClass(generateAdapter = true)

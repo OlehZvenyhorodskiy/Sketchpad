@@ -105,6 +105,7 @@ fun InteractiveCanvas(
     onResizeElement: (String, String, Float, Float, String) -> Unit = { _, _, _, _, _ -> },
     selectionMode: com.example.data.models.SelectionMode = com.example.data.models.SelectionMode.SINGLE,
     selectedElementIds: Set<String> = emptySet(),
+    onElementSelected: (id: String, type: String) -> Unit = { _, _ -> },
     onLassoComplete: (List<Offset>) -> Unit = {},
     onBeginMoveSelectedGroup: () -> Unit = {},
     onMoveSelectedGroup: (Float, Float) -> Unit = { _, _ -> },
@@ -233,7 +234,6 @@ fun InteractiveCanvas(
                 strokeOpacity,
                 currentColor,
                 currentScale,
-                selectedElementIds,
                 rulerState,
                 panOffset
             ) {
@@ -514,13 +514,20 @@ fun InteractiveCanvas(
                                         }
                                     }
                                 }
+                                val hitId = selectedElementId
+                                val hitType = selectedElementType
+                                if (hitId != null && hitType != null) {
+                                    onElementSelected(hitId, hitType)
+                                }
                             }
                             ToolType.ERASER -> {
                                 cursorPos = rawPoint
                                 eraserTouchPos = rawPoint
                                 if (eraserMode == EraserMode.PIXEL) {
                                     val last = activeEraserPoints.lastOrNull()
-                                    val minDistance = (strokeWidth * 0.12f).coerceIn(0.5f, 2f)
+                                    // Keep a roughly constant screen-space sampling distance. A one-pixel
+                                    // eraser previously recorded hundreds of nearly identical points.
+                                    val minDistance = (3.5f / safeScale).coerceIn(0.8f, 3f)
                                     if (last == null || Offset(last.x - rawPoint.x, last.y - rawPoint.y).getDistance() >= minDistance) {
                                         activeEraserPoints.add(
                                             StrokePoint(rawPoint.x, rawPoint.y, pressure, tilt, System.currentTimeMillis())
@@ -929,7 +936,7 @@ fun InteractiveCanvas(
                             val lineScreenX = cx + relX * cw
                             if (lineScreenX in (cx - 1f)..(cx + cw + 1f)) {
                                 drawLine(
-                                    color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                    color = (if (isDarkBackground) Color(0x42FFFFFF) else Color(0x30000000)).copy(alpha = layerAlpha),
                                     start = Offset(lineScreenX, cy),
                                     end = Offset(lineScreenX, cy + ch),
                                     strokeWidth = (1f * currentScale).coerceAtLeast(1f)
@@ -943,7 +950,7 @@ fun InteractiveCanvas(
                             val lineScreenY = cy + relY * ch
                             if (lineScreenY in (cy - 1f)..(cy + ch + 1f)) {
                                 drawLine(
-                                    color = (if (isDarkBackground) Color(0x33FFFFFF) else Color(0x22000000)).copy(alpha = layerAlpha),
+                                    color = (if (isDarkBackground) Color(0x42FFFFFF) else Color(0x30000000)).copy(alpha = layerAlpha),
                                     start = Offset(cx, lineScreenY),
                                     end = Offset(cx + cw, lineScreenY),
                                     strokeWidth = (1f * currentScale).coerceAtLeast(1f)
@@ -1054,23 +1061,45 @@ fun InteractiveCanvas(
 
                                 val drawColor = stroke.colorHsla.copy(alpha = strokeAlpha).toColor()
 
-                                if (stroke.tool == ToolType.LASER) {
+                                fun drawWithCutCaps(color: Color, width: Float) {
+                                    if (stroke.points.isEmpty()) return
+                                    if (stroke.tool == ToolType.MARKER) {
+                                        drawPath(
+                                            path = path,
+                                            color = color,
+                                            style = Stroke(width = width, cap = StrokeCap.Square, join = StrokeJoin.Round)
+                                        )
+                                        return
+                                    }
                                     drawPath(
                                         path = path,
-                                        color = drawColor.copy(alpha = 0.4f * layerAlpha),
-                                        style = Stroke(width = sw * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                                        color = color,
+                                        style = Stroke(width = width, cap = StrokeCap.Butt, join = StrokeJoin.Round)
                                     )
+                                    val capRadius = width / 2f
+                                    if (stroke.startCapRound) {
+                                        val first = stroke.points.first()
+                                        drawCircle(
+                                            color = color,
+                                            radius = capRadius,
+                                            center = Offset(first.x * currentScale + panOffset.x, first.y * currentScale + panOffset.y)
+                                        )
+                                    }
+                                    if (stroke.endCapRound && stroke.points.size > 1) {
+                                        val last = stroke.points.last()
+                                        drawCircle(
+                                            color = color,
+                                            radius = capRadius,
+                                            center = Offset(last.x * currentScale + panOffset.x, last.y * currentScale + panOffset.y)
+                                        )
+                                    }
                                 }
 
-                                drawPath(
-                                    path = path,
-                                    color = drawColor,
-                                    style = Stroke(
-                                        width = sw,
-                                        cap = if (stroke.tool == ToolType.MARKER) StrokeCap.Square else StrokeCap.Round,
-                                        join = StrokeJoin.Round
-                                    )
-                                )
+                                if (stroke.tool == ToolType.LASER) {
+                                    drawWithCutCaps(drawColor.copy(alpha = 0.4f * layerAlpha), sw * 2.2f)
+                                }
+
+                                drawWithCutCaps(drawColor, sw)
                             }
 
                             // Render legacy masks and the current gesture with a real round CLEAR brush.
@@ -1096,7 +1125,14 @@ fun InteractiveCanvas(
                                         )
                                         clearPaint.style = android.graphics.Paint.Style.STROKE
                                     } else if (points.isNotEmpty()) {
-                                        val path = DrawingEngine.createSmoothPath(points, scale = currentScale, panX = panOffset.x, panY = panOffset.y).asAndroidPath()
+                                        val path = android.graphics.Path().apply {
+                                            val first = points.first()
+                                            moveTo(first.x * currentScale + panOffset.x, first.y * currentScale + panOffset.y)
+                                            for (index in 1 until points.size) {
+                                                val point = points[index]
+                                                lineTo(point.x * currentScale + panOffset.x, point.y * currentScale + panOffset.y)
+                                            }
+                                        }
                                         nativeCanvas.drawPath(path, clearPaint)
                                     }
                                 }
@@ -1554,6 +1590,7 @@ private fun PageEntity.selectionBounds(ids: Set<String>): Rect? {
     if (ids.isEmpty()) return null
     val bounds = getEffectiveLayers().flatMap { layer ->
         buildList {
+            layer.strokes.filter { it.id in ids }.forEach { strokeBounds(it)?.let(::add) }
             layer.shapes.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
             layer.images.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
             layer.textBlocks.filter { it.id in ids }.forEach { add(Rect(it.x, it.y, it.x + it.width, it.y + it.height)) }
