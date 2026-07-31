@@ -1529,8 +1529,16 @@ class CanvasEditorViewModel(
     ) {
         val page = currentPage ?: return
         val shapes = page.getEffectiveLayers().flatMap { it.shapes }
+        val pageName = "${_canvas.value?.title ?: "Sketchpad"} — сторінка ${page.pageIndex + 1}"
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val result = ExportManager.exportToObsidian(page, shapes, vaultUri, context, format)
+            val result = ExportManager.exportToObsidian(
+                page = page,
+                shapes = shapes,
+                vaultUri = vaultUri,
+                context = context,
+                format = format,
+                pageName = pageName
+            )
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onComplete(result)
             }

@@ -532,12 +532,16 @@ object ExportManager {
         shapes: List<ShapeEntity>,
         vaultUri: Uri,
         context: Context,
-        format: ObsidianFormat = ObsidianFormat.PNG
+        format: ObsidianFormat = ObsidianFormat.PNG,
+        pageName: String = "Sketchpad page ${page.pageIndex + 1}",
+        aiSummary: String? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val timestamp = System.currentTimeMillis()
-            val pageName = "Sketchpad page ${page.pageIndex + 1}"
-            val safeName = pageName.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val safeName = pageName
+                .replace(Regex("[\\/:*?\"<>|#^\\[\\]]"), "_")
+                .trim()
+                .ifBlank { "Sketchpad_page_${page.pageIndex + 1}" }
             val extension = if (format == ObsidianFormat.PNG) "png" else "svg"
             val attachmentName = "sketchpad_${safeName}_$timestamp.$extension"
             val tempFile = File(context.cacheDir, attachmentName)
@@ -574,6 +578,7 @@ object ExportManager {
                     ![[$attachmentName]]
 
                     ## Нотатки
+                    ${aiSummary.orEmpty()}
                 """.trimIndent() + "\n"
                 val noteUri = createDocument(context, sketchpadUri, "$safeName.md", "text/markdown")
                 context.contentResolver.openOutputStream(noteUri)?.bufferedWriter()?.use { it.write(markdown) }
