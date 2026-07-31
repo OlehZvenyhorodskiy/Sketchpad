@@ -13,10 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import com.example.ui.theme.ThemedPanel
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -217,54 +214,6 @@ fun TopFloatingToolbar(
                     )
                 }
 
-                if (isLandscape) {
-                    var showExtraToolsMenu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(
-                            onClick = { showExtraToolsMenu = !showExtraToolsMenu },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Додати утиліти",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showExtraToolsMenu,
-                            onDismissRequest = { showExtraToolsMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Лінійка") },
-                                onClick = {
-                                    onToolSelect(ToolType.RULER)
-                                    showExtraToolsMenu = false
-                                },
-                                leadingIcon = { Icon(Icons.Default.Straighten, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Швидкі кольори") },
-                                onClick = {
-                                    onColorPickerClick()
-                                    showExtraToolsMenu = false
-                                },
-                                leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Ласо виділення") },
-                                onClick = {
-                                    onSelectionModeToggle()
-                                    showExtraToolsMenu = false
-                                },
-                                leadingIcon = { Icon(Icons.Default.Gesture, contentDescription = null) }
-                            )
-                        }
-                    }
-                }
             }
         }
 
