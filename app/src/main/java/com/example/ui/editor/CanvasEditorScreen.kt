@@ -426,6 +426,8 @@ fun CanvasEditorScreen(
                 onStrokeAdded = { stroke -> viewModel.addStrokeToCurrentPage(stroke) },
                 onEraserMarkAdded = { mark -> viewModel.addEraserMarkToCurrentPage(mark) },
                 onEraseAtPoint = { pt, radius -> viewModel.eraseAtPoint(pt, radius) },
+                onBeginEraserGesture = { viewModel.beginEraserGesture() },
+                onEndEraserGesture = { viewModel.endEraserGesture() },
                 onTwoFingerTap = { viewModel.undo() },
                 onMoveShape = { id, x, y -> viewModel.updateShapePosition(id, x, y) },
                 onMoveText = { id, x, y -> viewModel.updateTextPosition(id, x, y) },

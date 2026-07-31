@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -87,6 +88,8 @@ fun InteractiveCanvas(
     onStrokeAdded: (StrokeEntity) -> Unit,
     onEraserMarkAdded: (com.example.data.models.EraserMark) -> Unit = {},
     onEraseAtPoint: (Offset, Float) -> Unit,
+    onBeginEraserGesture: () -> Unit = {},
+    onEndEraserGesture: () -> Unit = {},
     onTwoFingerTap: () -> Unit,
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onMoveText: (String, Float, Float) -> Unit = { _, _, _ -> },
@@ -126,9 +129,12 @@ fun InteractiveCanvas(
     var dragStartOffset by remember { mutableStateOf(Offset.Zero) }
     var elementOriginalPos by remember { mutableStateOf(Offset.Zero) }
     var elementOriginalSize by remember { mutableStateOf(Offset.Zero) }
+    var elementOriginalRotation by remember { mutableStateOf(0f) }
     var isResizingCorner by remember { mutableStateOf(false) }
     var resizingCorner by remember { mutableStateOf<String?>(null) }
     var isDraggingGroup by remember { mutableStateOf(false) }
+    var isObjectEraserGesture by remember { mutableStateOf(false) }
+    var transformPreview by remember { mutableStateOf<ElementTransform?>(null) }
 
     var rulerGuideEdge by remember { mutableStateOf<Pair<Offset, Offset>?>(null) }
     var cursorPos by remember { mutableStateOf<Offset?>(null) }
@@ -160,6 +166,8 @@ fun InteractiveCanvas(
     val selectedGroupBounds = remember(pageEntity, selectedElementIds) {
         pageEntity?.selectionBounds(selectedElementIds)
     }
+    val latestPageEntity by rememberUpdatedState(pageEntity)
+    val latestSelectedGroupBounds by rememberUpdatedState(selectedGroupBounds)
     imageUris.forEach { uri ->
         if (getCachedBitmap(uri) == null) {
             LaunchedEffect(uri) {
@@ -213,7 +221,6 @@ fun InteractiveCanvas(
                 strokeOpacity,
                 currentColor,
                 currentScale,
-                pageEntity,
                 selectedElementIds,
                 rulerState,
                 panOffset
@@ -250,6 +257,8 @@ fun InteractiveCanvas(
                 if (pointerEvent.changes.count { it.pressed } > 1) {
                     activeStrokePoints.clear()
                     activeEraserPoints.clear()
+                    if (isObjectEraserGesture) onEndEraserGesture()
+                    isObjectEraserGesture = false
                     eraserTouchPos = null
                     cursorPos = null
                     continue
@@ -266,6 +275,8 @@ fun InteractiveCanvas(
                 when (action) {
                     PointerAction.DOWN -> {
                         activeStrokePoints.clear()
+                        activeEraserPoints.clear()
+                        transformPreview = null
                         if (currentTool != ToolType.SELECTOR && currentTool != ToolType.ERASER) {
                             if (rulerState.isVisible) {
                                 val g = rulerState.nearestEdge(rawPoint, guideZone = (40f / safeScale + rulerState.width / 2f))
@@ -289,7 +300,7 @@ fun InteractiveCanvas(
                             dragStartOffset = rawPoint
                             isResizingCorner = false
                             resizingCorner = null
-                            isDraggingGroup = selectedElementIds.isNotEmpty() && selectedGroupBounds?.contains(rawPoint) == true
+                            isDraggingGroup = selectedElementIds.isNotEmpty() && latestSelectedGroupBounds?.contains(rawPoint) == true
 
                             if (isDraggingGroup) {
                                 selectedElementId = null
@@ -300,20 +311,21 @@ fun InteractiveCanvas(
                             val selId = selectedElementId
                             val selType = selectedElementType
                             var cornerHit = false
-                            if (selId != null && selType != null && pageEntity != null) {
+                            val inputPage = latestPageEntity
+                            if (selId != null && selType != null && inputPage != null) {
                                 var cornerRect: Rect? = null
                                 var elemRotation = 0f
                                 when (selType) {
-                                    "SHAPE" -> pageEntity.findShape(selId)?.let {
+                                    "SHAPE" -> inputPage.findShape(selId)?.let {
                                         cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                                         elemRotation = it.rotation
                                     }
-                                    "IMAGE" -> pageEntity.findImage(selId)?.let {
+                                    "IMAGE" -> inputPage.findImage(selId)?.let {
                                         cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                                         elemRotation = it.rotation
                                     }
-                                    "TEXT" -> pageEntity.findText(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
-                                    "CHART" -> pageEntity.findChart(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "TEXT" -> inputPage.findText(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+                                    "CHART" -> inputPage.findChart(selId)?.let { cornerRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
                                 }
                                 cornerRect?.let { r ->
                                     val center = Offset((r.left + r.right) / 2f, (r.top + r.bottom) / 2f)
@@ -347,6 +359,7 @@ fun InteractiveCanvas(
                                         resizingCorner = hitCorner
                                         elementOriginalSize = Offset(r.width, r.height)
                                         elementOriginalPos = Offset(r.left, r.top)
+                                        elementOriginalRotation = elemRotation
                                     }
                                 }
                             }
@@ -355,7 +368,7 @@ fun InteractiveCanvas(
                                 selectedElementId = null
                                 selectedElementType = null
 
-                                pageEntity?.let { page ->
+                                inputPage?.let { page ->
                                     val margin = 30f / currentScale
                                     page.getEffectiveLayers().reversed().forEach { layer ->
                                         if (selectedElementId == null) {
@@ -376,6 +389,7 @@ fun InteractiveCanvas(
                                                     selectedElementType = "SHAPE"
                                                     elementOriginalPos = Offset(shape.x, shape.y)
                                                     elementOriginalSize = Offset(shape.width, shape.height)
+                                                    elementOriginalRotation = shape.rotation
                                                 }
                                             }
                                             layer.images.reversed().forEach { img ->
@@ -395,6 +409,7 @@ fun InteractiveCanvas(
                                                     selectedElementType = "IMAGE"
                                                     elementOriginalPos = Offset(img.x, img.y)
                                                     elementOriginalSize = Offset(img.width, img.height)
+                                                    elementOriginalRotation = img.rotation
                                                 }
                                             }
                                             layer.textBlocks.reversed().forEach { text ->
@@ -404,6 +419,7 @@ fun InteractiveCanvas(
                                                     selectedElementType = "TEXT"
                                                     elementOriginalPos = Offset(text.x, text.y)
                                                     elementOriginalSize = Offset(text.width, text.height)
+                                                    elementOriginalRotation = 0f
                                                 }
                                             }
                                             layer.charts.reversed().forEach { chart ->
@@ -413,6 +429,7 @@ fun InteractiveCanvas(
                                                     selectedElementType = "CHART"
                                                     elementOriginalPos = Offset(chart.x, chart.y)
                                                     elementOriginalSize = Offset(chart.width, chart.height)
+                                                    elementOriginalRotation = 0f
                                                 }
                                             }
                                         }
@@ -424,9 +441,10 @@ fun InteractiveCanvas(
                             cursorPos = rawPoint
                             eraserTouchPos = rawPoint
                             if (eraserMode == EraserMode.PIXEL) {
-                                activeEraserPoints.clear()
                                 activeEraserPoints.add(StrokePoint(x = rawPoint.x, y = rawPoint.y, pressure = pressure, tilt = tilt, timestampMs = System.currentTimeMillis()))
                             } else {
+                                onBeginEraserGesture()
+                                isObjectEraserGesture = true
                                 onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
                             }
                         } else {
@@ -452,71 +470,53 @@ fun InteractiveCanvas(
                                         dragStartOffset = rawPoint
                                     }
                                 } else {
-                                val id = selectedElementId
-                                val type = selectedElementType
-                                if (id != null && type != null) {
-                                    val dx = rawPoint.x - dragStartOffset.x
-                                    val dy = rawPoint.y - dragStartOffset.y
-                                    if (isResizingCorner) {
-                                        val origW = elementOriginalSize.x
-                                        val origH = elementOriginalSize.y
-                                        val origX = elementOriginalPos.x
-                                        val origY = elementOriginalPos.y
-
-                                        var newW = origW
-                                        var newH = origH
-                                        var newX = origX
-                                        var newY = origY
-
-                                        when (resizingCorner) {
-                                            "BR" -> {
-                                                newW = (origW + dx).coerceAtLeast(60f)
-                                                newH = (origH + dy).coerceAtLeast(60f)
+                                    val id = selectedElementId
+                                    val type = selectedElementType
+                                    if (id != null && type != null) {
+                                        val delta = rawPoint - dragStartOffset
+                                        if (delta.getDistanceSquared() > 0.01f) {
+                                            transformPreview = if (isResizingCorner) {
+                                                val (minimumWidth, minimumHeight) = minimumElementSize(type)
+                                                calculateResizeTransform(
+                                                    id = id,
+                                                    type = type,
+                                                    originalPosition = elementOriginalPos,
+                                                    originalSize = elementOriginalSize,
+                                                    rotationDegrees = elementOriginalRotation,
+                                                    dragDelta = delta,
+                                                    corner = resizingCorner ?: "BR",
+                                                    minimumWidth = minimumWidth,
+                                                    minimumHeight = minimumHeight
+                                                )
+                                            } else {
+                                                ElementTransform(
+                                                    id = id,
+                                                    type = type,
+                                                    x = elementOriginalPos.x + delta.x,
+                                                    y = elementOriginalPos.y + delta.y,
+                                                    width = elementOriginalSize.x,
+                                                    height = elementOriginalSize.y,
+                                                    anchor = "BR"
+                                                )
                                             }
-                                            "BL" -> {
-                                                newW = (origW - dx).coerceAtLeast(60f)
-                                                newH = (origH + dy).coerceAtLeast(60f)
-                                                newX = origX + (origW - newW)
-                                            }
-                                            "TR" -> {
-                                                newW = (origW + dx).coerceAtLeast(60f)
-                                                newH = (origH - dy).coerceAtLeast(60f)
-                                                newY = origY + (origH - newH)
-                                            }
-                                            "TL" -> {
-                                                newW = (origW - dx).coerceAtLeast(60f)
-                                                newH = (origH - dy).coerceAtLeast(60f)
-                                                newX = origX + (origW - newW)
-                                                newY = origY + (origH - newH)
-                                            }
-                                        }
-
-                                        onResizeElement(id, type, newW, newH, resizingCorner ?: "BR")
-                                        if (newX != origX || newY != origY) {
-                                            when (type) {
-                                                "SHAPE" -> onMoveShape(id, newX, newY)
-                                                "IMAGE" -> onMoveImage(id, newX, newY)
-                                                "TEXT" -> onMoveText(id, newX, newY)
-                                                "CHART" -> onMoveChart(id, newX, newY)
-                                            }
-                                        }
-                                    } else {
-                                        val newX = elementOriginalPos.x + dx
-                                        val newY = elementOriginalPos.y + dy
-                                        when (type) {
-                                            "SHAPE" -> onMoveShape(id, newX, newY)
-                                            "IMAGE" -> onMoveImage(id, newX, newY)
-                                            "TEXT" -> onMoveText(id, newX, newY)
-                                            "CHART" -> onMoveChart(id, newX, newY)
                                         }
                                     }
-                                }
                                 }
                             }
                             ToolType.ERASER -> {
                                 cursorPos = rawPoint
                                 eraserTouchPos = rawPoint
-                                onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
+                                if (eraserMode == EraserMode.PIXEL) {
+                                    val last = activeEraserPoints.lastOrNull()
+                                    val minDistance = (strokeWidth * 0.12f).coerceIn(0.5f, 2f)
+                                    if (last == null || Offset(last.x - rawPoint.x, last.y - rawPoint.y).getDistance() >= minDistance) {
+                                        activeEraserPoints.add(
+                                            StrokePoint(rawPoint.x, rawPoint.y, pressure, tilt, System.currentTimeMillis())
+                                        )
+                                    }
+                                } else {
+                                    onEraseAtPoint(rawPoint, strokeWidth * 2.5f)
+                                }
                             }
                             else -> {
                                 rulerGuideEdge?.let { edge ->
@@ -548,6 +548,31 @@ fun InteractiveCanvas(
                             pendingCommittedStroke = newStroke
                             onStrokeAdded(newStroke)
                         }
+                        if (currentTool == ToolType.ERASER) {
+                            if (eraserMode == EraserMode.PIXEL && activeEraserPoints.isNotEmpty()) {
+                                onEraserMarkAdded(
+                                    com.example.data.models.EraserMark(
+                                        points = activeEraserPoints.toList(),
+                                        width = strokeWidth * 5f
+                                    )
+                                )
+                            } else if (isObjectEraserGesture) {
+                                onEndEraserGesture()
+                            }
+                        }
+                        transformPreview?.let { preview ->
+                            onResizeAndMoveElement(
+                                preview.id,
+                                preview.type,
+                                preview.width,
+                                preview.height,
+                                preview.x,
+                                preview.y,
+                                preview.anchor
+                            )
+                        }
+                        transformPreview = null
+                        isObjectEraserGesture = false
                         activeStrokePoints.clear()
                         activeEraserPoints.clear()
                         eraserTouchPos = null
@@ -780,24 +805,28 @@ fun InteractiveCanvas(
 
                     // ─── 2a. IMAGES (зображення) ───
                     layer.images.forEach { image ->
-                        val pivotX = image.x * currentScale + panOffset.x + (image.width * currentScale) / 2f
-                        val pivotY = image.y * currentScale + panOffset.y + (image.height * currentScale) / 2f
+                        val renderedImage = transformPreview
+                            ?.takeIf { it.id == image.id && it.type == "IMAGE" }
+                            ?.let { image.copy(x = it.x, y = it.y, width = it.width, height = it.height) }
+                            ?: image
+                        val pivotX = renderedImage.x * currentScale + panOffset.x + (renderedImage.width * currentScale) / 2f
+                        val pivotY = renderedImage.y * currentScale + panOffset.y + (renderedImage.height * currentScale) / 2f
 
-                        rotate(degrees = image.rotation, pivot = Offset(pivotX, pivotY)) {
+                        rotate(degrees = renderedImage.rotation, pivot = Offset(pivotX, pivotY)) {
                             drawIntoCanvas { canvas ->
                                 try {
-                                    val bitmap = getCachedBitmap(image.sourceUri)
+                                    val bitmap = getCachedBitmap(renderedImage.sourceUri)
                                     if (bitmap != null) {
                                         val paint = android.graphics.Paint().apply {
-                                            alpha = (image.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
+                                            alpha = (renderedImage.opacity.coerceIn(0.1f, 1.0f) * layerAlpha * 255).toInt()
                                             isAntiAlias = true
                                             isFilterBitmap = true
                                         }
                                         val dstRect = android.graphics.RectF(
-                                            image.x * currentScale + panOffset.x,
-                                            image.y * currentScale + panOffset.y,
-                                            (image.x + image.width) * currentScale + panOffset.x,
-                                            (image.y + image.height) * currentScale + panOffset.y
+                                            renderedImage.x * currentScale + panOffset.x,
+                                            renderedImage.y * currentScale + panOffset.y,
+                                            (renderedImage.x + renderedImage.width) * currentScale + panOffset.x,
+                                            (renderedImage.y + renderedImage.height) * currentScale + panOffset.y
                                         )
                                         canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
                                     }
@@ -805,16 +834,16 @@ fun InteractiveCanvas(
                                     android.util.Log.w("InteractiveCanvas", "Error rendering image bitmap", e)
                                 }
                             }
-                            if (getCachedBitmap(image.sourceUri) == null) {
+                            if (getCachedBitmap(renderedImage.sourceUri) == null) {
                                 drawRect(
                                     color = Color(0x4438BDF8),
                                     topLeft = Offset(
-                                        image.x * currentScale + panOffset.x,
-                                        image.y * currentScale + panOffset.y
+                                        renderedImage.x * currentScale + panOffset.x,
+                                        renderedImage.y * currentScale + panOffset.y
                                     ),
                                     size = androidx.compose.ui.geometry.Size(
-                                        image.width * currentScale,
-                                        image.height * currentScale
+                                        renderedImage.width * currentScale,
+                                        renderedImage.height * currentScale
                                     ),
                                     style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f))
                                 )
@@ -824,28 +853,36 @@ fun InteractiveCanvas(
 
                     // ─── 2b. SHAPES (фігури) ───
                     layer.shapes.forEach { shape ->
-                        val pivotX = shape.x * currentScale + panOffset.x + (shape.width * currentScale) / 2f
-                        val pivotY = shape.y * currentScale + panOffset.y + (shape.height * currentScale) / 2f
+                        val renderedShape = transformPreview
+                            ?.takeIf { it.id == shape.id && it.type == "SHAPE" }
+                            ?.let { shape.copy(x = it.x, y = it.y, width = it.width, height = it.height) }
+                            ?: shape
+                        val pivotX = renderedShape.x * currentScale + panOffset.x + (renderedShape.width * currentScale) / 2f
+                        val pivotY = renderedShape.y * currentScale + panOffset.y + (renderedShape.height * currentScale) / 2f
 
-                        rotate(degrees = shape.rotation, pivot = Offset(pivotX, pivotY)) {
+                        rotate(degrees = renderedShape.rotation, pivot = Offset(pivotX, pivotY)) {
                             val path = DrawingEngine.createShapePath(
-                                shape.shapeType,
+                                renderedShape.shapeType,
                                 Rect(
-                                    shape.x * currentScale + panOffset.x,
-                                    shape.y * currentScale + panOffset.y,
-                                    (shape.x + shape.width) * currentScale + panOffset.x,
-                                    (shape.y + shape.height) * currentScale + panOffset.y
+                                    renderedShape.x * currentScale + panOffset.x,
+                                    renderedShape.y * currentScale + panOffset.y,
+                                    (renderedShape.x + renderedShape.width) * currentScale + panOffset.x,
+                                    (renderedShape.y + renderedShape.height) * currentScale + panOffset.y
                                 )
                             )
-                            val fillColor = Color(shape.fillColor)
-                            val strokeColor = Color(shape.strokeColor)
+                            val fillColor = Color(renderedShape.fillColor)
+                            val strokeColor = Color(renderedShape.strokeColor)
                             drawPath(path, fillColor.copy(alpha = fillColor.alpha * layerAlpha))
-                            drawPath(path, strokeColor.copy(alpha = strokeColor.alpha * layerAlpha), style = Stroke(shape.strokeWidth * currentScale))
+                            drawPath(path, strokeColor.copy(alpha = strokeColor.alpha * layerAlpha), style = Stroke(renderedShape.strokeWidth * currentScale))
                         }
                     }
 
                     // ─── 2c. CHARTS (графіки / координатна сітка) ───
-                    layer.charts.forEach { chart ->
+                    layer.charts.forEach { storedChart ->
+                        val chart = transformPreview
+                            ?.takeIf { it.id == storedChart.id && it.type == "CHART" }
+                            ?.let { storedChart.copy(x = it.x, y = it.y, width = it.width, height = it.height) }
+                            ?: storedChart
                         val cx = chart.x * currentScale + panOffset.x
                         val cy = chart.y * currentScale + panOffset.y
                         val cw = chart.width * currentScale
@@ -871,10 +908,11 @@ fun InteractiveCanvas(
                         val ySpan = (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }
                         val stepX = if (chart.xStep > 0f) chart.xStep else 1f
                         val stepY = if (chart.yStep > 0f) chart.yStep else 1f
+                        val xTicks = axisTickValues(chart.xMin, chart.xMax, stepX)
+                        val yTicks = axisTickValues(chart.yMin, chart.yMax, stepY)
 
                         // Grid lines (vertical) based on xStep
-                        var currWorldX = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
-                        while (currWorldX <= chart.xMax + 0.0001f) {
+                        xTicks.forEach { currWorldX ->
                             val relX = (currWorldX - chart.xMin) / xSpan
                             val lineScreenX = cx + relX * cw
                             if (lineScreenX in (cx - 1f)..(cx + cw + 1f)) {
@@ -885,12 +923,10 @@ fun InteractiveCanvas(
                                     strokeWidth = (1f * currentScale).coerceAtLeast(1f)
                                 )
                             }
-                            currWorldX += stepX
                         }
 
                         // Grid lines (horizontal) based on yStep
-                        var currWorldY = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
-                        while (currWorldY <= chart.yMax + 0.0001f) {
+                        yTicks.forEach { currWorldY ->
                             val relY = 1f - (currWorldY - chart.yMin) / ySpan
                             val lineScreenY = cy + relY * ch
                             if (lineScreenY in (cy - 1f)..(cy + ch + 1f)) {
@@ -901,7 +937,6 @@ fun InteractiveCanvas(
                                     strokeWidth = (1f * currentScale).coerceAtLeast(1f)
                                 )
                             }
-                            currWorldY += stepY
                         }
 
                         // Axes (X and Y through origin 0,0)
@@ -914,6 +949,15 @@ fun InteractiveCanvas(
                         val axisColor = if (isDarkBackground) Color(0xFFCBD5E1) else Color(0xFF475569)
                         drawLine(axisColor, Offset(cx, axisXScreenY), Offset(cx + cw, axisXScreenY), strokeWidth = axisStrokeWidth)
                         drawLine(axisColor, Offset(axisYScreenX, cy), Offset(axisYScreenX, cy + ch), strokeWidth = axisStrokeWidth)
+                        val tickHalfLength = (4f * currentScale).coerceIn(3f, 10f)
+                        xTicks.forEach { value ->
+                            val tickX = cx + (value - chart.xMin) / xSpan * cw
+                            drawLine(axisColor, Offset(tickX, axisXScreenY - tickHalfLength), Offset(tickX, axisXScreenY + tickHalfLength), strokeWidth = axisStrokeWidth * 0.65f)
+                        }
+                        yTicks.forEach { value ->
+                            val tickY = cy + (1f - (value - chart.yMin) / ySpan) * ch
+                            drawLine(axisColor, Offset(axisYScreenX - tickHalfLength, tickY), Offset(axisYScreenX + tickHalfLength, tickY), strokeWidth = axisStrokeWidth * 0.65f)
+                        }
 
                         // Axis labels
                         if (chart.showAxisLabels && chart.axisLabelsVisible) {
@@ -925,19 +969,16 @@ fun InteractiveCanvas(
                                     isAntiAlias = true
                                 }
                                 // X-axis labels
-                                var wx = Math.ceil((chart.xMin / stepX).toDouble()).toFloat() * stepX
-                                while (wx <= chart.xMax + 0.0001f) {
+                                xTicks.forEach { wx ->
                                     val relX = (wx - chart.xMin) / xSpan
                                     val screenX = cx + relX * cw
                                     if (screenX in cx..cx + cw) {
                                         val labelText = if (wx == wx.toInt().toFloat()) wx.toInt().toString() else String.format(java.util.Locale.US, "%.1f", wx)
                                         canvas.nativeCanvas.drawText(labelText, screenX - 6f * currentScale, (axisXScreenY + 14f * currentScale).coerceAtMost(cy + ch - 4f), textPaint)
                                     }
-                                    wx += stepX
                                 }
                                 // Y-axis labels
-                                var wy = Math.ceil((chart.yMin / stepY).toDouble()).toFloat() * stepY
-                                while (wy <= chart.yMax + 0.0001f) {
+                                yTicks.forEach { wy ->
                                     if (wy != 0f) {
                                         val relY = 1f - (wy - chart.yMin) / ySpan
                                         val screenY = cy + relY * ch
@@ -946,14 +987,17 @@ fun InteractiveCanvas(
                                             canvas.nativeCanvas.drawText(labelText, (axisYScreenX + 4f * currentScale).coerceAtMost(cx + cw - 12f), screenY + 4f * currentScale, textPaint)
                                         }
                                     }
-                                    wy += stepY
                                 }
                             }
                         }
                     }
 
                     // ─── 2d. TEXT BLOCKS (текстові блоки) ───
-                    layer.textBlocks.forEach { textBlock ->
+                    layer.textBlocks.forEach { storedTextBlock ->
+                        val textBlock = transformPreview
+                            ?.takeIf { it.id == storedTextBlock.id && it.type == "TEXT" }
+                            ?.let { storedTextBlock.copy(x = it.x, y = it.y, width = it.width, height = it.height) }
+                            ?: storedTextBlock
                         drawIntoCanvas { canvas ->
                             val textPaint = android.text.TextPaint().apply {
                                 val baseColor = if (textBlock.color == 0xFF000000.toInt() && isDarkBackground)
@@ -984,8 +1028,7 @@ fun InteractiveCanvas(
                     }
 
                     // ─── 2e. STROKES & ERASER MARKS (через saveLayer + PorterDuff CLEAR) ───
-                    val targetLayerId = page.activeLayerId ?: page.getEffectiveLayers().lastOrNull()?.id ?: "default"
-                    if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty() || (layer.id == targetLayerId && activeEraserPoints.isNotEmpty())) {
+                    if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty() || (activeEraserPoints.isNotEmpty() && !layer.isLocked)) {
                         drawIntoCanvas { canvas ->
                             val nativeCanvas = canvas.nativeCanvas
                             val rect = android.graphics.RectF(0f, 0f, size.width, size.height)
@@ -1018,8 +1061,8 @@ fun InteractiveCanvas(
                                 )
                             }
 
-                            // Render eraser marks with Clear blend mode (for legacy saved marks)
-                            if (layer.eraserMarks.isNotEmpty()) {
+                            // Render legacy masks and the current gesture with a real round CLEAR brush.
+                            if (layer.eraserMarks.isNotEmpty() || (activeEraserPoints.isNotEmpty() && !layer.isLocked)) {
                                 val clearPaint = android.graphics.Paint().apply {
                                     isAntiAlias = true
                                     style = android.graphics.Paint.Style.STROKE
@@ -1028,10 +1071,27 @@ fun InteractiveCanvas(
                                     xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
                                 }
 
-                                layer.eraserMarks.forEach { mark ->
-                                    val path = DrawingEngine.createSmoothPath(mark.points, scale = currentScale, panX = panOffset.x, panY = panOffset.y).asAndroidPath()
-                                    clearPaint.strokeWidth = mark.width * currentScale
-                                    nativeCanvas.drawPath(path, clearPaint)
+                                fun drawClearStroke(points: List<StrokePoint>, width: Float) {
+                                    clearPaint.strokeWidth = width * currentScale
+                                    if (points.size == 1) {
+                                        clearPaint.style = android.graphics.Paint.Style.FILL
+                                        val point = points.first()
+                                        nativeCanvas.drawCircle(
+                                            point.x * currentScale + panOffset.x,
+                                            point.y * currentScale + panOffset.y,
+                                            width * currentScale / 2f,
+                                            clearPaint
+                                        )
+                                        clearPaint.style = android.graphics.Paint.Style.STROKE
+                                    } else if (points.isNotEmpty()) {
+                                        val path = DrawingEngine.createSmoothPath(points, scale = currentScale, panX = panOffset.x, panY = panOffset.y).asAndroidPath()
+                                        nativeCanvas.drawPath(path, clearPaint)
+                                    }
+                                }
+
+                                layer.eraserMarks.forEach { mark -> drawClearStroke(mark.points, mark.width) }
+                                if (activeEraserPoints.isNotEmpty() && !layer.isLocked) {
+                                    drawClearStroke(activeEraserPoints, strokeWidth * 5f)
                                 }
                             }
 
@@ -1089,21 +1149,26 @@ fun InteractiveCanvas(
             if (selectedGroupBounds == null && selId != null && selType != null && pageEntity != null) {
                 var elemRect: Rect? = null
                 var elemRotation = 0f
+                val preview = transformPreview?.takeIf { it.id == selId && it.type == selType }
 
                 when (selType) {
                     "SHAPE" -> pageEntity.findShape(selId)?.let {
-                        elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRect = preview?.let { p -> Rect(p.x, p.y, p.x + p.width, p.y + p.height) }
+                            ?: Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                         elemRotation = it.rotation
                     }
                     "IMAGE" -> pageEntity.findImage(selId)?.let {
-                        elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRect = preview?.let { p -> Rect(p.x, p.y, p.x + p.width, p.y + p.height) }
+                            ?: Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                         elemRotation = it.rotation
                     }
                     "TEXT" -> pageEntity.findText(selId)?.let {
-                        elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRect = preview?.let { p -> Rect(p.x, p.y, p.x + p.width, p.y + p.height) }
+                            ?: Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
                     "CHART" -> pageEntity.findChart(selId)?.let {
-                        elemRect = Rect(it.x, it.y, it.x + it.width, it.y + it.height)
+                        elemRect = preview?.let { p -> Rect(p.x, p.y, p.x + p.width, p.y + p.height) }
+                            ?: Rect(it.x, it.y, it.x + it.width, it.y + it.height)
                     }
                 }
 
@@ -1162,7 +1227,7 @@ fun InteractiveCanvas(
                 when (currentTool) {
                     ToolType.ERASER -> drawCircle(
                         color = Color.White.copy(alpha = 0.8f),
-                        radius = (strokeWidth * 2.5f / 2f) * currentScale,
+                        radius = strokeWidth * 2.5f * currentScale,
                         center = screen,
                         style = Stroke(2f)
                     )
@@ -1179,7 +1244,7 @@ fun InteractiveCanvas(
                     if (currentTool == ToolType.ERASER) {
                         drawCircle(
                             color = Color.White.copy(alpha = 0.85f),
-                            radius = (strokeWidth * 2.5f / 2f) * currentScale,
+                            radius = strokeWidth * 2.5f * currentScale,
                             center = viewportCenter,
                             style = Stroke(2f * currentScale)
                         )
@@ -1227,6 +1292,10 @@ fun InteractiveCanvas(
                     elemPos = Offset(it.x, it.y)
                     elemSize = Offset(it.width, it.height)
                 }
+            }
+            transformPreview?.takeIf { it.id == selId && it.type == selType }?.let { preview ->
+                elemPos = Offset(preview.x, preview.y)
+                elemSize = Offset(preview.width, preview.height)
             }
 
             if (elemPos != null && elemSize != null) {
@@ -1313,6 +1382,97 @@ fun InteractiveCanvas(
 }
 
 private enum class PointerAction { DOWN, MOVE, UP }
+
+internal data class ElementTransform(
+    val id: String,
+    val type: String,
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val height: Float,
+    val anchor: String
+)
+
+private fun minimumElementSize(type: String): Pair<Float, Float> = when (type) {
+    "SHAPE" -> 30f to 30f
+    "IMAGE" -> 50f to 50f
+    "TEXT" -> 60f to 30f
+    "CHART" -> 100f to 100f
+    else -> 30f to 30f
+}
+
+/** Keeps the opposite corner fixed, including for rotated shapes and images. */
+internal fun calculateResizeTransform(
+    id: String,
+    type: String,
+    originalPosition: Offset,
+    originalSize: Offset,
+    rotationDegrees: Float,
+    dragDelta: Offset,
+    corner: String,
+    minimumWidth: Float,
+    minimumHeight: Float
+): ElementTransform {
+    val angle = Math.toRadians(rotationDegrees.toDouble())
+    val cosine = kotlin.math.cos(angle).toFloat()
+    val sine = kotlin.math.sin(angle).toFloat()
+    val localDx = dragDelta.x * cosine + dragDelta.y * sine
+    val localDy = -dragDelta.x * sine + dragDelta.y * cosine
+    val widthDelta = if (corner == "TL" || corner == "BL") -localDx else localDx
+    val heightDelta = if (corner == "TL" || corner == "TR") -localDy else localDy
+    val newWidth = (originalSize.x + widthDelta).coerceAtLeast(minimumWidth)
+    val newHeight = (originalSize.y + heightDelta).coerceAtLeast(minimumHeight)
+
+    val centerShiftX = (newWidth - originalSize.x) / 2f *
+        if (corner == "TL" || corner == "BL") -1f else 1f
+    val centerShiftY = (newHeight - originalSize.y) / 2f *
+        if (corner == "TL" || corner == "TR") -1f else 1f
+    val worldShiftX = centerShiftX * cosine - centerShiftY * sine
+    val worldShiftY = centerShiftX * sine + centerShiftY * cosine
+    val originalCenterX = originalPosition.x + originalSize.x / 2f
+    val originalCenterY = originalPosition.y + originalSize.y / 2f
+
+    return ElementTransform(
+        id = id,
+        type = type,
+        x = originalCenterX + worldShiftX - newWidth / 2f,
+        y = originalCenterY + worldShiftY - newHeight / 2f,
+        width = newWidth,
+        height = newHeight,
+        anchor = corner
+    )
+}
+
+/** Generates ticks from integer indices to avoid accumulated Float error dropping grid lines. */
+internal fun axisTickValues(
+    minimum: Float,
+    maximum: Float,
+    step: Float,
+    maximumTickCount: Int = 501
+): List<Float> {
+    if (!minimum.isFinite() || !maximum.isFinite() || !step.isFinite() ||
+        maximum < minimum || step <= 0f || maximumTickCount <= 0
+    ) return emptyList()
+    val endpointTolerance = step.toDouble() * 0.0001
+    val firstIndex = kotlin.math.ceil((minimum.toDouble() - endpointTolerance) / step.toDouble()).toLong()
+    val lastIndex = kotlin.math.floor((maximum.toDouble() + endpointTolerance) / step.toDouble()).toLong()
+    if (firstIndex > lastIndex) return emptyList()
+    val count = lastIndex - firstIndex + 1L
+    val stride = kotlin.math.ceil(count.toDouble() / maximumTickCount).toLong().coerceAtLeast(1L)
+    val ticks = mutableListOf<Float>()
+    var index = firstIndex
+    while (index <= lastIndex) {
+        val value = (index.toFloat() * step).let { if (kotlin.math.abs(it) < step * 0.0001f) 0f else it }
+        ticks += value
+        if (lastIndex - index < stride) break
+        index += stride
+    }
+    if (minimum <= 0f && maximum >= 0f && ticks.none { kotlin.math.abs(it) < step * 0.0001f }) {
+        ticks += 0f
+        ticks.sort()
+    }
+    return ticks
+}
 
 private fun isTouchInsideRuler(point: Offset, ruler: RulerState): Boolean {
     val touchX = point.x

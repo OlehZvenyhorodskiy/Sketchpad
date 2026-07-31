@@ -114,6 +114,14 @@ class CanvasEditorViewModel(
     val selectedElementIds: StateFlow<Set<String>> = _selectedElementIds.asStateFlow()
     private var clipboard: List<ClipboardElement> = emptyList()
     private var groupMoveUndoPushed = false
+    private var eraserGestureUndoPushed = false
+
+    // Pointer gestures update the in-memory page immediately. Room writes are serialized and
+    // conflated per page so old pointer samples can never replay as a visible delayed trail.
+    private val deferredPersistencePageIds = mutableSetOf<String>()
+    private val localPageOverrides = mutableMapOf<String, PageEntity>()
+    private val pendingPageWrites = mutableMapOf<String, PageEntity>()
+    private val pageWriteJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
 
     fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
         _selectionMode.value = mode
@@ -247,7 +255,9 @@ class CanvasEditorViewModel(
         }
         viewModelScope.launch {
             repository.getPagesForCanvas(canvasId).collect { pList ->
-                _pages.value = pList
+                _pages.value = pList.map { persisted ->
+                    localPageOverrides[persisted.id] ?: persisted
+                }
                 if (pList.isNotEmpty() && _currentPageIndex.value >= pList.size) {
                     _currentPageIndex.value = 0
                 }
@@ -436,7 +446,7 @@ class CanvasEditorViewModel(
     fun eraseAtPoint(point: Offset, radius: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
-        pushUndoState(migrated)
+        if (!eraserGestureUndoPushed) pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.isVisible && !layer.isLocked) {
                 if (_eraserMode.value == EraserMode.OBJECT) {
@@ -455,18 +465,34 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun beginEraserGesture() {
+        val page = currentPage ?: return
+        if (eraserGestureUndoPushed) return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        eraserGestureUndoPushed = true
+        deferredPersistencePageIds += migrated.id
+        localPageOverrides[migrated.id] = migrated
+    }
+
+    fun endEraserGesture() {
+        val page = currentPage
+        eraserGestureUndoPushed = false
+        if (page != null) finishDeferredPersistence(page.id)
+    }
+
     fun addEraserMarkToCurrentPage(mark: com.example.data.models.EraserMark) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
-        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id ?: "default"
+        val radius = (mark.width / 2f).coerceAtLeast(0.5f)
         val updatedLayers = migrated.layers.map { layer ->
-            if (layer.id == targetLayerId) {
-                layer.copy(eraserMarks = layer.eraserMarks + mark)
-            } else layer
+            if (!layer.isVisible || layer.isLocked) return@map layer
+            layer.copy(strokes = layer.strokes.flatMap { stroke ->
+                DrawingEngine.eraseStrokeAlongPath(stroke, mark.points, radius)
+            })
         }
-        _canvasVersion.value++
-        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     companion object {
@@ -540,9 +566,37 @@ class CanvasEditorViewModel(
 
     private fun updateCurrentPage(page: PageEntity) {
         _canvasVersion.value++
-        viewModelScope.launch {
-            repository.updatePage(page)
+        localPageOverrides[page.id] = page
+        val currentPages = _pages.value
+        val pageIndex = currentPages.indexOfFirst { it.id == page.id }
+        if (pageIndex >= 0) {
+            _pages.value = currentPages.toMutableList().also { it[pageIndex] = page }
         }
+        if (page.id !in deferredPersistencePageIds) {
+            schedulePagePersistence(page)
+        }
+    }
+
+    private fun schedulePagePersistence(page: PageEntity) {
+        pendingPageWrites[page.id] = page
+        if (pageWriteJobs[page.id]?.isActive == true) return
+        pageWriteJobs[page.id] = viewModelScope.launch {
+            var lastWritten: PageEntity? = null
+            while (true) {
+                val next = pendingPageWrites.remove(page.id) ?: break
+                repository.updatePage(next)
+                lastWritten = next
+            }
+            if (lastWritten != null && localPageOverrides[page.id] == lastWritten) {
+                localPageOverrides.remove(page.id)
+            }
+            pageWriteJobs.remove(page.id)
+        }
+    }
+
+    private fun finishDeferredPersistence(pageId: String) {
+        deferredPersistencePageIds.remove(pageId)
+        localPageOverrides[pageId]?.let(::schedulePagePersistence)
     }
 
     fun updateBackgroundColor(colorInt: Int) {
@@ -913,6 +967,7 @@ class CanvasEditorViewModel(
     fun updateImageSize(imageId: String, width: Float, height: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(images = layer.images.map {
                 if (it.id == imageId) it.copy(width = width.coerceAtLeast(50f), height = height.coerceAtLeast(50f)) else it
@@ -924,6 +979,7 @@ class CanvasEditorViewModel(
     fun updateShapeSize(shapeId: String, width: Float, height: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(shapes = layer.shapes.map {
                 if (it.id == shapeId) it.copy(width = width.coerceAtLeast(30f), height = height.coerceAtLeast(30f)) else it
@@ -935,6 +991,7 @@ class CanvasEditorViewModel(
     fun updateTextSize(textId: String, width: Float, height: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(textBlocks = layer.textBlocks.map {
                 if (it.id == textId) it.copy(width = width.coerceAtLeast(60f), height = height.coerceAtLeast(30f)) else it
@@ -952,39 +1009,19 @@ class CanvasEditorViewModel(
     fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchorStr: String = "BR") {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             layer.copy(charts = layer.charts.map { chart ->
                 if (chart.id == chartId) {
                     val clampedW = newWidth.coerceAtLeast(100f)
                     val clampedH = newHeight.coerceAtLeast(100f)
-
-                    var ppuX = chart.pixelsPerUnitX
-                    var ppuY = chart.pixelsPerUnitY
-                    if (ppuX <= 0f) ppuX = (chart.width / (chart.xMax - chart.xMin).let { if (it <= 0f) 20f else it }).let { if (it <= 0f) 20f else it }
-                    if (ppuY <= 0f) ppuY = (chart.height / (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }).let { if (it <= 0f) 20f else it }
-
-                    val newRangeX = clampedW / ppuX
-                    val newRangeY = clampedH / ppuY
-
-                    val (newXMin, newXMax) = when (anchorStr) {
-                        "BL", "TL" -> Pair(chart.xMax - newRangeX, chart.xMax)
-                        else -> Pair(chart.xMin, chart.xMin + newRangeX)
-                    }
-
-                    val (newYMin, newYMax) = when (anchorStr) {
-                        "BL", "BR" -> Pair(chart.yMax - newRangeY, chart.yMax)
-                        else -> Pair(chart.yMin, chart.yMin + newRangeY)
-                    }
-
+                    val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
+                    val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
                     chart.copy(
                         width = clampedW,
                         height = clampedH,
-                        xMin = newXMin,
-                        xMax = newXMax,
-                        yMin = newYMin,
-                        yMax = newYMax,
-                        pixelsPerUnitX = ppuX,
-                        pixelsPerUnitY = ppuY
+                        pixelsPerUnitX = clampedW / xSpan,
+                        pixelsPerUnitY = clampedH / ySpan
                     )
                 } else chart
             })
@@ -1057,6 +1094,7 @@ class CanvasEditorViewModel(
     ) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             when (type) {
                 "SHAPE" -> layer.copy(shapes = layer.shapes.map {
@@ -1072,26 +1110,13 @@ class CanvasEditorViewModel(
                     if (chart.id == id) {
                         val clampedW = newW.coerceAtLeast(100f)
                         val clampedH = newH.coerceAtLeast(100f)
-                        var ppuX = chart.pixelsPerUnitX
-                        var ppuY = chart.pixelsPerUnitY
-                        if (ppuX <= 0f) ppuX = clampedW / (chart.xMax - chart.xMin).let { if (it <= 0f) 20f else it }
-                        if (ppuY <= 0f) ppuY = clampedH / (chart.yMax - chart.yMin).let { if (it <= 0f) 20f else it }
-                        val newRangeX = clampedW / ppuX
-                        val newRangeY = clampedH / ppuY
-                        val (nxMin, nxMax) = when (anchor) {
-                            "BL", "TL" -> Pair(chart.xMax - newRangeX, chart.xMax)
-                            else -> Pair(chart.xMin, chart.xMin + newRangeX)
-                        }
-                        val (nyMin, nyMax) = when (anchor) {
-                            "BL", "BR" -> Pair(chart.yMax - newRangeY, chart.yMax)
-                            else -> Pair(chart.yMin, chart.yMin + newRangeY)
-                        }
+                        val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
+                        val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
                         chart.copy(
                             x = newX, y = newY,
                             width = clampedW, height = clampedH,
-                            xMin = nxMin, xMax = nxMax,
-                            yMin = nyMin, yMax = nyMax,
-                            pixelsPerUnitX = ppuX, pixelsPerUnitY = ppuY
+                            pixelsPerUnitX = clampedW / xSpan,
+                            pixelsPerUnitY = clampedH / ySpan
                         )
                     } else chart
                 })
@@ -1168,12 +1193,17 @@ class CanvasEditorViewModel(
     fun beginMoveSelectedElements() {
         val page = currentPage ?: return
         if (_selectedElementIds.value.isEmpty() || groupMoveUndoPushed) return
-        pushUndoState(ensureLayersExist(page))
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
         groupMoveUndoPushed = true
+        deferredPersistencePageIds += migrated.id
+        localPageOverrides[migrated.id] = migrated
     }
 
     fun endMoveSelectedElements() {
+        val page = currentPage
         groupMoveUndoPushed = false
+        if (page != null) finishDeferredPersistence(page.id)
     }
 
     fun scaleSelectedElements(factor: Float) {
