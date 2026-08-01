@@ -1293,14 +1293,7 @@ fun InteractiveCanvas(
                                 val stroke = if (attachedToPreview) {
                                     storedStroke.copy(points = storedStroke.points.map(::transformChartPoint))
                                 } else storedStroke
-                                val masksForStroke = layer.eraserMarks.filter { mark ->
-                                    storedStroke.id in mark.affectedStrokeIds ||
-                                        (mark.affectedStrokeIds.isEmpty() && DrawingEngine.doesEraserPathAffectStroke(
-                                            mark.points,
-                                            mark.width,
-                                            storedStroke
-                                        ))
-                                }.map { mark ->
+                                val masksForStroke = layer.eraserMarks.map { mark ->
                                     if (attachedToPreview) mark.copy(points = mark.points.map(::transformChartPoint)) else mark
                                 }
                                 val masksToRender = if (hasLiveMask) {

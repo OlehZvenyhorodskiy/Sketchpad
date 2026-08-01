@@ -284,10 +284,17 @@ class CanvasEditorViewModel(
         }
         viewModelScope.launch {
             repository.getPagesForCanvas(canvasId).collect { pList ->
-                _pages.value = pList.map { persisted ->
+                val pageList = if (pList.isEmpty()) {
+                    val defaultLayer = LayerEntity(id = "default", name = context.getString(R.string.layer_number, 1))
+                    val initialPage = PageEntity(id = java.util.UUID.randomUUID().toString(), canvasId = canvasId, pageIndex = 0, layers = listOf(defaultLayer), activeLayerId = "default")
+                    repository.updatePage(initialPage)
+                    listOf(initialPage)
+                } else pList
+
+                _pages.value = pageList.map { persisted ->
                     localPageOverrides[persisted.id] ?: persisted
                 }
-                if (pList.isNotEmpty() && _currentPageIndex.value >= pList.size) {
+                if (_pages.value.isNotEmpty() && _currentPageIndex.value >= _pages.value.size) {
                     _currentPageIndex.value = 0
                 }
                 currentPage?.let { page ->
