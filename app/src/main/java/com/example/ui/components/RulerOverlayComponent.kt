@@ -1,18 +1,12 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,7 +14,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.core.drawing.RulerState
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -60,16 +57,15 @@ fun RulerOverlayComponent(
 
     val rulerStateRef = rememberUpdatedState(rulerState)
     val onRulerChangeRef = rememberUpdatedState(onRulerChange)
-
     var isCenterDragging by remember { mutableStateOf(false) }
+    var isRightDragging by remember { mutableStateOf(false) }
     var localCenter by remember { mutableStateOf(rulerState.center) }
+    var localAngleRad by remember { mutableStateOf(rulerState.angleRad) }
+    var localLength by remember { mutableStateOf(rulerState.length) }
+
     LaunchedEffect(rulerState.center) {
         if (!isCenterDragging) localCenter = rulerState.center
     }
-
-    var isRightDragging by remember { mutableStateOf(false) }
-    var localAngleRad by remember { mutableStateOf(rulerState.angleRad) }
-    var localLength by remember { mutableStateOf(rulerState.length) }
     LaunchedEffect(rulerState.angleRad, rulerState.length) {
         if (!isRightDragging) {
             localAngleRad = rulerState.angleRad
@@ -80,258 +76,197 @@ fun RulerOverlayComponent(
     val displayCenter = if (isCenterDragging) localCenter else rulerState.center
     val displayAngleRad = if (isRightDragging) localAngleRad else rulerState.angleRad
     val displayLength = if (isRightDragging) localLength else rulerState.length
-
-    val angleDeg = (displayAngleRad * 180f / Math.PI).toFloat()
+    val angleDegrees = normalizedDegrees(displayAngleRad)
+    val accent = MaterialTheme.colorScheme.primary
+    val body = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+    val markings = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             translate(left = displayCenter.x, top = displayCenter.y) {
-                rotate(degrees = angleDeg, pivot = Offset.Zero) {
-                    val halfW = displayLength / 2f
-                    val halfH = rulerState.width / 2f
-
-                    // Semi-transparent ruler body
-                    drawRect(
-                        color = Color(0xD90F172A),
-                        topLeft = Offset(-halfW, -halfH),
-                        size = androidx.compose.ui.geometry.Size(displayLength, rulerState.width)
-                    )
-                    drawRect(
-                        color = Color(0xFF38BDF8),
-                        topLeft = Offset(-halfW, -halfH),
+                rotate(degrees = angleDegrees, pivot = Offset.Zero) {
+                    val halfLength = displayLength / 2f
+                    val halfHeight = rulerState.width / 2f
+                    drawRoundRect(
+                        color = body,
+                        topLeft = Offset(-halfLength, -halfHeight),
                         size = androidx.compose.ui.geometry.Size(displayLength, rulerState.width),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
+                    )
+                    drawRoundRect(
+                        color = accent.copy(alpha = 0.9f),
+                        topLeft = Offset(-halfLength, -halfHeight),
+                        size = androidx.compose.ui.geometry.Size(displayLength, rulerState.width),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f),
+                        style = Stroke(width = 2.2f)
                     )
 
-                    // Draw ruler millimeter and centimeter ticks
+                    // Five minor divisions form one labelled major unit.
                     val step = 16f
-                    var x = -halfW + 10f
-                    var count = 0
-                    while (x <= halfW - 10f) {
-                        val isMajor = count % 5 == 0
-                        val tickLen = if (isMajor) 24f else 12f
-
-                        // Top edge ticks
-                        drawLine(
-                            color = if (isMajor) Color(0xFF38BDF8) else Color.White,
-                            start = Offset(x, -halfH),
-                            end = Offset(x, -halfH + tickLen),
-                            strokeWidth = if (isMajor) 2.5f else 1.2f
+                    val inset = 14f
+                    val startX = -halfLength + inset
+                    val available = (displayLength - inset * 2f).coerceAtLeast(0f)
+                    val divisions = (available / step).toInt()
+                    val labelPaint = android.graphics.Paint().apply {
+                        isAntiAlias = true
+                        color = android.graphics.Color.argb(
+                            (markings.alpha * 255).roundToInt(),
+                            (markings.red * 255).roundToInt(),
+                            (markings.green * 255).roundToInt(),
+                            (markings.blue * 255).roundToInt()
                         )
-
-                        // Bottom edge ticks
+                        textSize = 12.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+                    for (index in 0..divisions) {
+                        val x = startX + index * step
+                        val major = index % 5 == 0
+                        val tickLength = if (major) 24f else if (index % 5 == 0) 20f else 12f
                         drawLine(
-                            color = if (isMajor) Color(0xFF38BDF8) else Color.White,
-                            start = Offset(x, halfH),
-                            end = Offset(x, halfH - tickLen),
-                            strokeWidth = if (isMajor) 2.5f else 1.2f
+                            color = if (major) accent else markings,
+                            start = Offset(x, -halfHeight),
+                            end = Offset(x, -halfHeight + tickLength),
+                            strokeWidth = if (major) 2.2f else 1.15f
                         )
-
-                        x += step
-                        count++
+                        drawLine(
+                            color = if (major) accent else markings,
+                            start = Offset(x, halfHeight),
+                            end = Offset(x, halfHeight - tickLength),
+                            strokeWidth = if (major) 2.2f else 1.15f
+                        )
+                        if (major) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                (index / 5).toString(),
+                                x,
+                                -halfHeight + tickLength + 15f,
+                                labelPaint
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Center Handle: Smooth Pan Dragging
+        // The small center grip moves the ruler without covering the drawing edge.
         Surface(
             shape = CircleShape,
-            color = Color(0xFF0284C7),
-            shadowElevation = 8.dp,
+            color = accent,
+            shadowElevation = 6.dp,
             modifier = Modifier
-                .offset {
-                    IntOffset(
-                        (displayCenter.x - 24.dp.toPx()).roundToInt(),
-                        (displayCenter.y - 24.dp.toPx()).roundToInt()
-                    )
-                }
-                .size(48.dp)
+                .offset { IntOffset((displayCenter.x - 20.dp.toPx()).roundToInt(), (displayCenter.y - 20.dp.toPx()).roundToInt()) }
+                .size(40.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = {
                             isCenterDragging = true
                             localCenter = rulerStateRef.value.center
                         },
-                        onDrag = { change, dragAmount ->
+                        onDrag = { change, amount ->
                             change.consume()
-                            localCenter += dragAmount
-                        },
-                        onDragEnd = {
-                            isCenterDragging = false
+                            localCenter += amount
                             onRulerChangeRef.value(rulerStateRef.value.copy(center = localCenter))
                         },
-                        onDragCancel = {
-                            isCenterDragging = false
-                            onRulerChangeRef.value(rulerStateRef.value.copy(center = localCenter))
-                        }
+                        onDragEnd = { isCenterDragging = false },
+                        onDragCancel = { isCenterDragging = false }
                     )
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.OpenWith,
-                    contentDescription = stringResource(R.string.move_ruler),
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+                Icon(Icons.Default.OpenWith, stringResource(R.string.move_ruler), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(21.dp))
             }
         }
 
-        // Right Handle: Rotate & Scale Length
-        val dx = cos(displayAngleRad) * (displayLength / 2f)
-        val dy = sin(displayAngleRad) * (displayLength / 2f)
-        val handleRightPos = Offset(displayCenter.x + dx, displayCenter.y + dy)
+        val directionX = cos(displayAngleRad)
+        val directionY = sin(displayAngleRad)
+        val rightHandle = Offset(
+            displayCenter.x + directionX * displayLength / 2f,
+            displayCenter.y + directionY * displayLength / 2f
+        )
+        val leftHandle = Offset(
+            displayCenter.x - directionX * displayLength / 2f,
+            displayCenter.y - directionY * displayLength / 2f
+        )
 
         Surface(
             shape = CircleShape,
-            color = Color(0xFF38BDF8),
-            shadowElevation = 8.dp,
+            color = accent,
+            shadowElevation = 6.dp,
             modifier = Modifier
-                .offset {
-                    IntOffset(
-                        (handleRightPos.x - 20.dp.toPx()).roundToInt(),
-                        (handleRightPos.y - 20.dp.toPx()).roundToInt()
-                    )
-                }
-                .size(40.dp)
+                .offset { IntOffset((rightHandle.x - 18.dp.toPx()).roundToInt(), (rightHandle.y - 18.dp.toPx()).roundToInt()) }
+                .size(36.dp)
                 .pointerInput(Unit) {
-                    var handleAccumulator = Offset.Zero
+                    var pointer = Offset.Zero
                     detectDragGestures(
                         onDragStart = {
                             isRightDragging = true
                             localAngleRad = rulerStateRef.value.angleRad
                             localLength = rulerStateRef.value.length
-                            handleAccumulator = handleRightPos
+                            pointer = rightHandle
                         },
-                        onDrag = { change, dragAmount ->
+                        onDrag = { change, amount ->
                             change.consume()
-                            handleAccumulator += dragAmount
-                            val vec = handleAccumulator - displayCenter
-                            val newDist = vec.getDistance().coerceIn(200f, 1400f)
-                            var newAngle = atan2(vec.y, vec.x)
-
-                            val currentDeg = (newAngle * 180f / Math.PI).toFloat()
-                            val snapAnglesDeg = floatArrayOf(-180f, -135f, -90f, -45f, 0f, 45f, 90f, 135f, 180f)
-                            for (snapDeg in snapAnglesDeg) {
-                                if (kotlin.math.abs(currentDeg - snapDeg) <= 6f) {
-                                    newAngle = (snapDeg * Math.PI / 180f).toFloat()
-                                    break
-                                }
-                            }
-                            localAngleRad = newAngle
-                            localLength = newDist * 2f
+                            pointer += amount
+                            val vector = pointer - displayCenter
+                            localLength = (vector.getDistance().coerceIn(160f, 1200f) * 2f)
+                            localAngleRad = snapAngle(atan2(vector.y, vector.x))
+                            onRulerChangeRef.value(
+                                rulerStateRef.value.copy(angleRad = localAngleRad, length = localLength)
+                            )
                         },
-                        onDragEnd = {
-                            isRightDragging = false
-                            onRulerChangeRef.value(rulerStateRef.value.copy(angleRad = localAngleRad, length = localLength))
-                        },
-                        onDragCancel = {
-                            isRightDragging = false
-                            onRulerChangeRef.value(rulerStateRef.value.copy(angleRad = localAngleRad, length = localLength))
-                        }
+                        onDragEnd = { isRightDragging = false },
+                        onDragCancel = { isRightDragging = false }
                     )
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.RotateRight,
-                    contentDescription = stringResource(R.string.rotate_scale_ruler),
-                    tint = Color.Black,
-                    modifier = Modifier.size(22.dp)
-                )
+                Icon(Icons.Default.RotateRight, stringResource(R.string.rotate_scale_ruler), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
             }
         }
 
-        // Control Panel Floating Overlay (Above Center)
+        // Angle readout follows the rotation grip instead of floating over the drawing.
         Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xF00F172A),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8)),
-            shadowElevation = 10.dp,
-            modifier = Modifier
-                .offset {
-                    IntOffset(
-                        (displayCenter.x - 130.dp.toPx()).roundToInt(),
-                        (displayCenter.y - 80.dp.toPx()).roundToInt()
-                    )
-                }
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+            shadowElevation = 3.dp,
+            modifier = Modifier.offset {
+                IntOffset((rightHandle.x - 30.dp.toPx()).roundToInt(), (rightHandle.y + 22.dp.toPx()).roundToInt())
+            }
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Angle Readout Text
-                Text(
-                    text = "${angleDeg.roundToInt()}°",
-                    color = Color(0xFF38BDF8),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+            Text(
+                text = "${angleDegrees.roundToInt()}°",
+                color = accent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+            )
+        }
 
-                // Quick Snap Angle Buttons
-                Surface(
-                    onClick = { onRulerChange(rulerState.copy(angleRad = 0f)) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF1E293B)
-                ) {
-                    Text(
-                        text = "0°",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Surface(
-                    onClick = { onRulerChange(rulerState.copy(angleRad = (Math.PI / 2).toFloat())) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF1E293B)
-                ) {
-                    Text(
-                        text = "90°",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Surface(
-                    onClick = { onRulerChange(rulerState.copy(angleRad = (Math.PI / 4).toFloat())) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF1E293B)
-                ) {
-                    Text(
-                        text = "45°",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Close Button
-                Surface(
-                    onClick = onCloseClick,
-                    shape = CircleShape,
-                    color = Color(0xFFEF4444),
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.hide_ruler),
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
+        Surface(
+            onClick = onCloseClick,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.error,
+            shadowElevation = 5.dp,
+            modifier = Modifier
+                .offset { IntOffset((leftHandle.x - 16.dp.toPx()).roundToInt(), (leftHandle.y - 16.dp.toPx()).roundToInt()) }
+                .size(32.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Close, stringResource(R.string.hide_ruler), tint = MaterialTheme.colorScheme.onError, modifier = Modifier.size(18.dp))
             }
         }
     }
+}
+
+private fun normalizedDegrees(angleRad: Float): Float {
+    val fullTurn = (2.0 * PI).toFloat()
+    val normalized = ((angleRad % fullTurn) + fullTurn) % fullTurn
+    val degrees = normalized * 180f / PI.toFloat()
+    return if (abs(degrees - 360f) < 0.05f) 0f else degrees
+}
+
+private fun snapAngle(rawAngle: Float): Float {
+    val snapStep = (PI / 4.0).toFloat()
+    val candidate = (rawAngle / snapStep).roundToInt() * snapStep
+    val snapDistance = abs(atan2(sin(rawAngle - candidate), cos(rawAngle - candidate)))
+    return if (snapDistance <= Math.toRadians(5.0).toFloat()) candidate else rawAngle
 }

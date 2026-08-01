@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CanvasReferenceDao {
+    @Query("SELECT * FROM canvas_references ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<CanvasReferenceEntity>>
+
     @Query("SELECT * FROM canvas_references WHERE sourcePageId = :pageId ORDER BY updatedAt DESC")
     fun observeOutgoingFromPage(pageId: String): Flow<List<CanvasReferenceEntity>>
 

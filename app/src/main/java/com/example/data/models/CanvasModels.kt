@@ -38,9 +38,15 @@ enum class ToolType {
     INK_PEN,
     FOUNTAIN_PEN,
     MARKER,
+    AIRBRUSH,
+    CRAYON,
+    WATERCOLOR_BRUSH,
     LASER,
+    POINTER,
     SELECTOR,
     ERASER,
+    FILL,
+    EYEDROPPER,
     RULER,
     TEXT
 }
@@ -149,7 +155,13 @@ data class StrokeEntity(
     val snappedToRuler: Boolean = false,
     /** Natural stroke tips stay round; pixel-erased cut edges are rendered flat. */
     val startCapRound: Boolean = true,
-    val endCapRound: Boolean = true
+    val endCapRound: Boolean = true,
+    /**
+     * The coordinate grid a stroke was started on. This is explicit instead of inferred from
+     * rectangle overlap, so handwriting on a graph keeps travelling with that graph.
+     * Null preserves the behaviour of notes created before graph attachments existed.
+     */
+    val parentChartId: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -177,8 +189,11 @@ data class TextBlockEntity(
     val fontSize: Float = 18f,
     val isBold: Boolean = false,
     val isItalic: Boolean = false,
+    val isUnderline: Boolean = false,
+    val fontFamily: String = "SANS",
     val color: Int = 0xFF1E293B.toInt(),
-    val alignment: String = "LEFT"
+    val alignment: String = "LEFT",
+    val rotation: Float = 0f
 )
 
 @JsonClass(generateAdapter = true)
@@ -197,7 +212,13 @@ data class ImageElementEntity(
 data class EraserMark(
     val id: String = UUID.randomUUID().toString(),
     val points: List<StrokePoint>,
-    val width: Float
+    val width: Float,
+    /**
+     * Strokes which existed when this mask was created. Keeping this list makes erasing behave
+     * like a raster paint app: a later stroke drawn over an erased area remains visible.
+     * Empty means "all strokes" for notes saved by older app versions.
+     */
+    val affectedStrokeIds: List<String> = emptyList()
 )
 
 @JsonClass(generateAdapter = true)
@@ -221,8 +242,81 @@ data class ChartElementEntity(
     val yMax: Float = 10f,
     val xStep: Float = 1f,
     val yStep: Float = 1f,
-    val backgroundColor: Int = 0
+    val backgroundColor: Int = 0,
+    val rotation: Float = 0f,
+    /**
+     * Position of (0, 0) inside the chart frame, in unscaled canvas pixels. Older charts use a
+     * negative value and are migrated visually to their centre. Keeping it independent of the
+     * frame means resizing reveals new cells without snapping the axes between them.
+     */
+    val originOffsetX: Float = -1f,
+    val originOffsetY: Float = -1f
 )
+
+/**
+ * A Cartesian plane has one physical unit size. Older documents stored independent X/Y values,
+ * which stretched cells into rectangles. Prefer the smaller valid legacy value: that normalises
+ * the grid without unexpectedly clipping more of a saved chart.
+ */
+fun ChartElementEntity.squarePixelsPerUnit(): Float {
+    val x = pixelsPerUnitX.takeIf { it.isFinite() && it > 0f }
+    val y = pixelsPerUnitY.takeIf { it.isFinite() && it > 0f }
+    return when {
+        x != null && y != null -> minOf(x, y)
+        x != null -> x
+        y != null -> y
+        else -> gridStep.takeIf { it.isFinite() && it > 0f }?.coerceAtLeast(8f) ?: 20f
+    }
+}
+
+/**
+ * Resizing changes the visible frame, never the underlying coordinate plane. The global origin
+ * therefore stays at the same canvas point while its local offset is recalculated for the frame.
+ */
+fun ChartElementEntity.resizeFramePreservingOrigin(
+    newX: Float,
+    newY: Float,
+    newWidth: Float,
+    newHeight: Float
+): ChartElementEntity {
+    val unitPixels = squarePixelsPerUnit()
+    val localOriginX = originOffsetX.takeIf { it >= 0f } ?: width / 2f
+    val localOriginY = originOffsetY.takeIf { it >= 0f } ?: height / 2f
+    val globalOriginX = x + localOriginX
+    val globalOriginY = y + localOriginY
+    return copy(
+        x = newX,
+        y = newY,
+        width = newWidth,
+        height = newHeight,
+        pixelsPerUnitX = unitPixels,
+        pixelsPerUnitY = unitPixels,
+        originOffsetX = globalOriginX - newX,
+        originOffsetY = globalOriginY - newY
+    )
+}
+
+/** Normalises legacy charts even when their frame is merely moved. */
+fun ChartElementEntity.withSquareGrid(): ChartElementEntity {
+    val unitPixels = squarePixelsPerUnit()
+    return if (pixelsPerUnitX == unitPixels && pixelsPerUnitY == unitPixels) this
+    else copy(pixelsPerUnitX = unitPixels, pixelsPerUnitY = unitPixels)
+}
+
+/**
+ * Strokes created on current builds carry an explicit chart ID. For notes created before that
+ * field existed, accept only strokes whose every recorded point lies inside the chart frame;
+ * overlap alone is too broad and makes unrelated handwriting travel with a graph.
+ */
+fun StrokeEntity.isAttachedToChart(chart: ChartElementEntity): Boolean {
+    if (parentChartId == chart.id) return true
+    if (parentChartId != null || points.isEmpty()) return false
+    val right = chart.x + chart.width
+    val bottom = chart.y + chart.height
+    return points.all { point ->
+        point.x in chart.x..right && point.y in chart.y..bottom
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class SyncMarker(
@@ -371,5 +465,6 @@ data class CanvasEntity(
     val customHeight: Float? = null,
     val backgroundColor: Int = 0xFFFFFFFF.toInt(), // white default
     val backgroundPattern: BackgroundPattern = BackgroundPattern.BLANK,
-    val driveFileId: String? = null
+    val driveFileId: String? = null,
+    val folderName: String? = null
 )

@@ -30,6 +30,7 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_THEME_STYLE_V2 = stringPreferencesKey("theme_style_v2")
         val KEY_ACCENT_COLOR = intPreferencesKey("accent_color") // ARGB int
         val KEY_LEFT_HANDED_MODE = booleanPreferencesKey("left_handed_mode")
+        val KEY_PALM_REJECTION = booleanPreferencesKey("palm_rejection")
         val KEY_SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
         val KEY_CURSOR_SHAPE = intPreferencesKey("cursor_shape") // 0: CIRCLE, 1: RING, 2: CROSSHAIR
         val KEY_CURSOR_SIZE = floatPreferencesKey("cursor_size") // dp
@@ -56,6 +57,15 @@ class UserPreferencesRepository(private val context: Context) {
 
     val leftHandedMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_LEFT_HANDED_MODE] ?: false
+    }
+
+    /**
+     * Lets stylus users opt into strict touch rejection while writing. It deliberately defaults
+     * to enabled: two-finger navigation remains available, but an incidental palm never becomes
+     * an ink, eraser, text, or selection gesture.
+     */
+    val palmRejectionEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PALM_REJECTION] ?: true
     }
 
     val cursorShape: Flow<Int> = context.dataStore.data.map { prefs ->
@@ -191,6 +201,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setPalmRejectionEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PALM_REJECTION] = enabled
+        }
+    }
+
     fun getEraserModeSync(): com.example.data.models.EraserMode {
         return try {
             val prefs = context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
@@ -205,6 +221,39 @@ class UserPreferencesRepository(private val context: Context) {
         try {
             context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
                 .edit().putString("eraser_mode", mode.name).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getVerticalSlidersSync(): Boolean = try {
+        context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            .getBoolean("vertical_canvas_sliders", false)
+    } catch (_: Exception) {
+        false
+    }
+
+    fun setVerticalSlidersSync(enabled: Boolean) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit().putBoolean("vertical_canvas_sliders", enabled).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getCanvasFoldersSync(): List<String> = try {
+        context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+            .getStringSet("canvas_folders", emptySet())
+            .orEmpty()
+            .filter(String::isNotBlank)
+            .sorted()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    fun setCanvasFoldersSync(folders: Collection<String>) {
+        try {
+            context.getSharedPreferences("user_prefs_sync", Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet("canvas_folders", folders.map(String::trim).filter(String::isNotBlank).toSet())
+                .apply()
         } catch (_: Exception) {}
     }
 

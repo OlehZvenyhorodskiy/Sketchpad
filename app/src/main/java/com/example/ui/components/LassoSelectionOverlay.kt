@@ -23,7 +23,7 @@ fun LassoSelectionOverlay(
 ) {
     if (!isActive) return
 
-    var screenPoints by remember { mutableStateOf(emptyList<Offset>()) }
+    val screenPoints = remember { mutableStateListOf<Offset>() }
     val currentScale by rememberUpdatedState(scale)
     val currentPanOffset by rememberUpdatedState(panOffset)
 
@@ -33,12 +33,16 @@ fun LassoSelectionOverlay(
             .pointerInput(isActive) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    screenPoints = listOf(down.position)
+                    screenPoints.clear()
+                    screenPoints.add(down.position)
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.first()
                         if (change.pressed) {
-                            screenPoints = screenPoints + change.position
+                            val previous = screenPoints.lastOrNull()
+                            if (previous == null || (change.position - previous).getDistanceSquared() >= 9f) {
+                                screenPoints.add(change.position)
+                            }
                             change.consume()
                         }
                     } while (change.pressed)
@@ -52,14 +56,24 @@ fun LassoSelectionOverlay(
                         }
                         onLassoComplete(worldPoints)
                     }
-                    screenPoints = emptyList()
+                    screenPoints.clear()
                 }
             }
     ) {
         if (screenPoints.size > 1) {
             val path = Path().apply {
                 moveTo(screenPoints[0].x, screenPoints[0].y)
-                screenPoints.forEach { lineTo(it.x, it.y) }
+                for (index in 1 until screenPoints.lastIndex) {
+                    val point = screenPoints[index]
+                    val next = screenPoints[index + 1]
+                    quadraticBezierTo(
+                        point.x,
+                        point.y,
+                        (point.x + next.x) / 2f,
+                        (point.y + next.y) / 2f
+                    )
+                }
+                lineTo(screenPoints.last().x, screenPoints.last().y)
                 close()
             }
             drawPath(path, Color(0x2238BDF8))

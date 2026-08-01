@@ -6,5 +6,9 @@ enum class AppThemeStyle {
     NEUMORPHISM,
     AMOLED_BLACK,
     CHALKBOARD,
-    SEPIA_EINK
+    SEPIA_EINK,
+    MIDNIGHT_INDIGO,
+    FOREST_STUDY,
+    ROSE_QUARTZ,
+    HIGH_CONTRAST
 }

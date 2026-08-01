@@ -94,6 +94,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -133,9 +134,12 @@ import com.example.ui.components.PageStripBottomSheet
 import com.example.ui.components.RightSideToolPanel
 import com.example.ui.components.RulerOverlayComponent
 import com.example.ui.components.StudyDeckDialog
+import com.example.ui.components.TextFormatting
+import com.example.ui.components.TextInputDialog
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,6 +147,7 @@ fun CanvasEditorScreen(
     viewModel: CanvasEditorViewModel,
     onBackClick: () -> Unit,
     onOpenThemeSettings: () -> Unit = {},
+    palmRejectionEnabled: Boolean = true,
     referenceCaptureSession: CanvasReferenceCaptureSession? = null,
     referenceNavigationRequest: CanvasReferenceNavigationRequest? = null,
     onReferenceCaptureStarted: (CanvasReferenceCaptureSession) -> Unit = {},
@@ -153,9 +158,6 @@ fun CanvasEditorScreen(
     val context = LocalContext.current
     val audioStartedText = stringResource(R.string.audio_started)
     val audioPermissionText = stringResource(R.string.audio_permission_required)
-    val obsidianExportDoneText = stringResource(R.string.obsidian_export_done)
-    val obsidianExportFailedText = stringResource(R.string.obsidian_export_failed)
-    val obsidianFolderDeniedText = stringResource(R.string.obsidian_folder_denied)
     val linkSavedText = stringResource(R.string.link_saved)
     val linkSaveFailedText = stringResource(R.string.link_save_failed)
     val referenceUiText = CanvasReferenceUiText(
@@ -223,7 +225,8 @@ fun CanvasEditorScreen(
     var showAudioSheet by remember { mutableStateOf(false) }
     var showAudioPill by remember { mutableStateOf(false) }
     var showTextInputDialog by remember { mutableStateOf(false) }
-    var textInputVal by remember { mutableStateOf("") }
+    var pendingTextPosition by remember { mutableStateOf<Offset?>(null) }
+    var editingTextBlockId by remember { mutableStateOf<String?>(null) }
     var showMathFunctionDialog by remember { mutableStateOf(false) }
     var mathFormulaVal by remember { mutableStateOf("sin(x)") }
     var mathXMinVal by remember { mutableStateOf("-10") }
@@ -240,6 +243,9 @@ fun CanvasEditorScreen(
     var showReferenceList by remember { mutableStateOf(false) }
     var referenceDestinations by remember { mutableStateOf<List<CanvasReferenceDestination>>(emptyList()) }
     var referencesForSelection by remember {
+        mutableStateOf<List<com.example.data.models.CanvasReferenceEntity>>(emptyList())
+    }
+    var outgoingReferences by remember {
         mutableStateOf<List<com.example.data.models.CanvasReferenceEntity>>(emptyList())
     }
     val studyDeckSummaries by remember(studyDeckRepository) {
@@ -272,6 +278,17 @@ fun CanvasEditorScreen(
             referencesForSelection = references.filter {
                 it.hasExactSourceSelection(selectedElementIds)
             }
+        }
+    }
+
+    LaunchedEffect(currentPage?.id) {
+        val pageId = currentPage?.id
+        if (pageId == null) {
+            outgoingReferences = emptyList()
+            return@LaunchedEffect
+        }
+        referenceRepository.observeOutgoingFromPage(pageId).collectLatest { references ->
+            outgoingReferences = references
         }
     }
 
@@ -333,41 +350,26 @@ fun CanvasEditorScreen(
         }
     }
 
-    val obsidianPreferences = remember(context) {
-        context.getSharedPreferences("obsidian_export", android.content.Context.MODE_PRIVATE)
-    }
-    val obsidianVaultLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
-    ) { uri: android.net.Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        try {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
-            obsidianPreferences.edit().putString("vault_uri", uri.toString()).apply()
-            viewModel.exportToObsidian(uri) { result ->
-                Toast.makeText(
-                    context,
-                    if (result.isSuccess) obsidianExportDoneText else obsidianExportFailedText,
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        } catch (_: SecurityException) {
-            Toast.makeText(context, obsidianFolderDeniedText, Toast.LENGTH_SHORT).show()
-        }
-    }
-    val exportToObsidian = {
-        val savedUri = obsidianPreferences.getString("vault_uri", null)?.let(android.net.Uri::parse)
-        if (savedUri == null) {
-            obsidianVaultLauncher.launch(null)
-        } else {
-            viewModel.exportToObsidian(savedUri) { result ->
-                Toast.makeText(
-                    context,
-                    if (result.isSuccess) obsidianExportDoneText else obsidianExportFailedText,
-                    Toast.LENGTH_SHORT
-                ).show()
+    var pendingFileSave by remember { mutableStateOf<java.io.File?>(null) }
+    val saveExportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { destination ->
+        val source = pendingFileSave
+        pendingFileSave = null
+        if (destination != null && source != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                val saved = runCatching {
+                    context.contentResolver.openOutputStream(destination)?.use { output ->
+                        source.inputStream().use { input -> input.copyTo(output) }
+                    } ?: error("No output stream for export destination")
+                }.isSuccess
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(if (saved) R.string.export_saved else R.string.export_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
     }
@@ -394,12 +396,20 @@ fun CanvasEditorScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = canvas?.title ?: stringResource(R.string.canvas_fallback),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
+                    Column(verticalArrangement = Arrangement.Center) {
+                        Text(
+                            text = canvas?.title ?: stringResource(R.string.canvas_fallback),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "${stringResource(R.string.page_number, currentPageIndex + 1)}  •  ${(zoomScale * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
@@ -481,7 +491,8 @@ fun CanvasEditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f),
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 )
             )
         },
@@ -520,12 +531,13 @@ fun CanvasEditorScreen(
             // 1. Interactive Canvas
             InteractiveCanvas(
                 canvasEntity = canvas,
-                pageEntity = viewModel.currentPage,
+                pageEntity = currentPage,
                 currentTool = currentTool,
                 strokeWidth = strokeWidth,
                 strokeOpacity = strokeOpacity,
                 currentColor = currentColor,
                 drawWithFingers = drawWithFingers,
+                palmRejectionEnabled = palmRejectionEnabled,
                 rulerState = rulerState,
                 zoomScale = zoomScale,
                 viewportPanOffset = panOffset,
@@ -550,17 +562,31 @@ fun CanvasEditorScreen(
                         "IMAGE" -> viewModel.updateImageSize(id, w, h)
                         "CHART" -> viewModel.updateChartSize(id, w, h, anchor)
                         "TEXT" -> viewModel.updateTextSize(id, w, h)
+                        "CODE" -> viewModel.updateCodeBlockSize(id, w, h)
                     }
                 },
                 selectionMode = selectionMode,
                 selectedElementIds = selectedElementIds,
+                linkedElementIds = outgoingReferences.flatMapTo(mutableSetOf()) { it.sourceElementIds },
                 onElementSelected = { id, type -> viewModel.selectElementWithAttachments(id, type) },
+                onLinkedElementActivated = { id ->
+                    outgoingReferences.firstOrNull { it.referencesElement(id) }?.let { reference ->
+                        onOpenCanvasReference(reference.toNavigationRequest())
+                    }
+                },
+                onFillElement = { id, type -> viewModel.fillElement(id, type) },
+                onColorSampled = { sampled -> viewModel.setColor(sampled) },
+                onTextPositionRequested = { position ->
+                    pendingTextPosition = position
+                    editingTextBlockId = null
+                    showTextInputDialog = true
+                },
                 onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) },
                 onBeginMoveSelectedGroup = { viewModel.beginMoveSelectedElements() },
                 onMoveSelectedGroup = { dx, dy -> viewModel.moveSelectedElements(dx, dy) },
                 onEndMoveSelectedGroup = { viewModel.endMoveSelectedElements() },
-                onResizeAndMoveElement = { id, type, w, h, x, y, anchor ->
-                    viewModel.resizeAndMoveElement(id, type, w, h, x, y, anchor)
+                onResizeAndMoveElement = { id, type, w, h, x, y, anchor, isResizing ->
+                    viewModel.resizeAndMoveElement(id, type, w, h, x, y, anchor, isResizing)
                 },
                 getCachedBitmap = { viewModel.getCachedBitmap(it) },
                 onPreloadImage = { viewModel.preloadImageBitmap(it) },
@@ -568,15 +594,19 @@ fun CanvasEditorScreen(
                     editingCodeBlockId = id
                     showCodeLab = true
                 },
-                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) }
+                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) },
+                onEditTextBlock = { id ->
+                    editingTextBlockId = id
+                    pendingTextPosition = null
+                    showTextInputDialog = true
+                }
             )
             }
 
             // 1b. Lasso Selection Overlay
             com.example.ui.components.LassoSelectionOverlay(
                 isActive = currentTool == com.example.data.models.ToolType.SELECTOR &&
-                    selectionMode == com.example.data.models.SelectionMode.LASSO &&
-                    selectedElementIds.isEmpty(),
+                    selectionMode == com.example.data.models.SelectionMode.LASSO,
                 scale = zoomScale,
                 panOffset = panOffset,
                 onLassoComplete = { worldPts -> viewModel.selectElementsInLasso(worldPts) }
@@ -627,7 +657,11 @@ fun CanvasEditorScreen(
                     panelType = PanelType.WIDTH,
                     value = strokeWidth,
                     valueRange = 1f..50f,
-                    displayText = "${strokeWidth.toInt()} px",
+                    displayText = if (currentTool == ToolType.ERASER) {
+                        "${com.example.core.drawing.DrawingEngine.eraserDiameter(strokeWidth).toInt()} px"
+                    } else {
+                        "${strokeWidth.toInt()} px"
+                    },
                     currentColor = currentColor,
                     opacity = strokeOpacity,
                     onValueChange = { viewModel.setStrokeWidth(it) },
@@ -1072,7 +1106,11 @@ fun CanvasEditorScreen(
             drawWithFingers = drawWithFingers,
             onDrawWithFingersChange = { viewModel.setDrawWithFingers(it) },
             onInsertImageClick = { insertImageLauncher.launch("image/*") },
-            onInsertTextClick = { showTextInputDialog = true },
+            onInsertTextClick = {
+                pendingTextPosition = null
+                editingTextBlockId = null
+                showTextInputDialog = true
+            },
             onInsertShapeClick = { shapeType ->
                 viewModel.insertShape(
                     shapeType = shapeType,
@@ -1253,39 +1291,59 @@ fun CanvasEditorScreen(
 
     // Text Input Dialog
     if (showTextInputDialog) {
-        AlertDialog(
-            onDismissRequest = { showTextInputDialog = false },
-            title = { Text(stringResource(R.string.insert_text)) },
-            text = {
-                OutlinedTextField(
-                    value = textInputVal,
-                    onValueChange = { textInputVal = it },
-                    label = { Text(stringResource(R.string.your_text)) },
-                    modifier = Modifier.fillMaxWidth()
+        val editingText = editingTextBlockId?.let(viewModel::getTextBlock)
+        TextInputDialog(
+            initialText = editingText?.text.orEmpty(),
+            initialFormatting = editingText?.let {
+                TextFormatting(
+                    fontSize = it.fontSize,
+                    isBold = it.isBold,
+                    isItalic = it.isItalic,
+                    isUnderline = it.isUnderline,
+                    fontFamily = it.fontFamily,
+                    alignment = it.alignment,
+                    width = it.width
                 )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (textInputVal.isNotBlank()) {
-                        viewModel.insertText(
-                            text = textInputVal.trim(),
-                            viewportWidth = viewportWidthPx,
-                            viewportHeight = viewportHeightPx,
-                            panOffsetX = panOffset.x,
-                            panOffsetY = panOffset.y,
-                            scale = zoomScale
-                        )
-                        textInputVal = ""
-                    }
-                    showTextInputDialog = false
-                }) {
-                    Text(stringResource(R.string.insert))
+            } ?: TextFormatting(),
+            onConfirm = { text, formatting ->
+                val editId = editingTextBlockId
+                if (editId != null) {
+                    viewModel.updateTextBlock(
+                        id = editId,
+                        text = text,
+                        fontSize = formatting.fontSize,
+                        isBold = formatting.isBold,
+                        isItalic = formatting.isItalic,
+                        isUnderline = formatting.isUnderline,
+                        fontFamily = formatting.fontFamily,
+                        alignment = formatting.alignment,
+                        width = formatting.width
+                    )
+                } else {
+                    val position = pendingTextPosition ?: Offset(
+                        (viewportWidthPx / 2f - panOffset.x) / zoomScale,
+                        (viewportHeightPx / 2f - panOffset.y) / zoomScale
+                    )
+                    viewModel.insertTextAt(
+                        text = text,
+                        worldPosition = position,
+                        fontSize = formatting.fontSize,
+                        isBold = formatting.isBold,
+                        isItalic = formatting.isItalic,
+                        isUnderline = formatting.isUnderline,
+                        fontFamily = formatting.fontFamily,
+                        alignment = formatting.alignment,
+                        width = formatting.width
+                    )
                 }
+                showTextInputDialog = false
+                pendingTextPosition = null
+                editingTextBlockId = null
             },
-            dismissButton = {
-                TextButton(onClick = { showTextInputDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
+            onDismiss = {
+                showTextInputDialog = false
+                pendingTextPosition = null
+                editingTextBlockId = null
             }
         )
     }
@@ -1359,11 +1417,14 @@ fun CanvasEditorScreen(
                     OutlinedButton(
                         onClick = {
                             showExportDialog = false
-                            exportToObsidian()
+                            viewModel.exportPng { file ->
+                                pendingFileSave = file
+                                saveExportLauncher.launch("${canvas?.title ?: "canvas"}.png")
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.export_obsidian))
+                        Text(stringResource(R.string.save_png_copy))
                     }
 
                     OutlinedButton(

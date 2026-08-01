@@ -20,5 +20,6 @@ data class CodeBlockEntity(
     val y: Float,
     val width: Float = 520f,
     val height: Float = 320f,
+    val rotation: Float = 0f,
     val lastRunAt: Long? = null
 )

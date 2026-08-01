@@ -24,6 +24,8 @@ class CanvasReferenceRepository private constructor(
     private val canvasDao: CanvasDao,
     private val pageDao: PageDao
 ) {
+    fun observeAllReferences(): Flow<List<CanvasReferenceEntity>> = referenceDao.observeAll()
+
     constructor(context: Context) : this(
         database = AppDatabase.getDatabase(context.applicationContext)
     )

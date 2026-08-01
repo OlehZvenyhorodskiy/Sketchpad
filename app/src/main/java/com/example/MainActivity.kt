@@ -93,11 +93,18 @@ fun SketchpadApp(
     val navController = rememberNavController()
     val context = LocalContext.current
     val repository = remember { CanvasRepository(context) }
-    val homeViewModel = remember { HomeViewModel(repository, userPrefsRepository) }
+    val homeViewModel = remember {
+        HomeViewModel(
+            repository,
+            userPrefsRepository,
+            com.example.di.AppModule.provideCanvasReferenceRepository(context)
+        )
+    }
 
     val themeStyleOrdinal = userPrefsRepository.themeStyle.collectAsState(initial = 0).value
     val accentColorArgb = userPrefsRepository.accentColor.collectAsState(initial = 0xFF38BDF8.toInt()).value
     val isLeftHanded = userPrefsRepository.leftHandedMode.collectAsState(initial = false).value
+    val palmRejectionEnabled = userPrefsRepository.palmRejectionEnabled.collectAsState(initial = true).value
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var pendingReferenceCapture by remember { mutableStateOf<CanvasReferenceCaptureSession?>(null) }
@@ -121,6 +128,7 @@ fun SketchpadApp(
                 currentThemeOrdinal = themeStyleOrdinal,
                 currentAccentArgb = accentColorArgb,
                 isLeftHanded = isLeftHanded,
+                palmRejectionEnabled = palmRejectionEnabled,
                 currentLanguage = currentLanguage,
                 onThemeSelected = { style ->
                     scope.launch {
@@ -135,6 +143,11 @@ fun SketchpadApp(
                 onLeftHandedChanged = { enabled ->
                     scope.launch {
                         userPrefsRepository.setLeftHandedMode(enabled)
+                    }
+                },
+                onPalmRejectionChanged = { enabled ->
+                    scope.launch {
+                        userPrefsRepository.setPalmRejectionEnabled(enabled)
                     }
                 },
                 onLanguageSelected = onLanguageSelected,
@@ -158,6 +171,7 @@ fun SketchpadApp(
                     navController.popBackStack()
                 },
                 onOpenThemeSettings = { navController.navigate("theme_settings") },
+                palmRejectionEnabled = palmRejectionEnabled,
                 referenceCaptureSession = pendingReferenceCapture?.takeIf {
                     it.destination.canvasId == canvasId
                 },

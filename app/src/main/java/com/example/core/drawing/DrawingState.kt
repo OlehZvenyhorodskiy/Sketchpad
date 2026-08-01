@@ -14,11 +14,8 @@ import com.example.data.models.StrokePoint
 import com.example.data.models.ToolType
 import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.ceil
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 enum class RulerMode {
     RULER,
@@ -61,6 +58,35 @@ data class RulerState(
 
     fun projectOn(edge: Pair<Offset, Offset>, point: Offset): Offset = projectPointToSegment(point, edge.first, edge.second)
 
+    /**
+     * Finds the first physical contact between a moving stylus and either ruler edge. Coordinates
+     * are deliberately screen-space because the ruler itself is a screen overlay.
+     */
+    fun edgeContact(
+        previousPoint: Offset,
+        currentPoint: Offset,
+        contactZone: Float = 18f
+    ): Pair<Offset, Pair<Offset, Offset>>? {
+        if (!isVisible) return null
+        nearestEdge(currentPoint, contactZone)?.let { return it }
+
+        val edges = getEdgeLines().let { listOf(it.first, it.second) }
+        return edges.mapNotNull { edge ->
+            segmentIntersection(previousPoint, currentPoint, edge.first, edge.second)
+                ?.let { contact -> Triple(contact, edge, (contact - previousPoint).getDistanceSquared()) }
+        }.minByOrNull { it.third }?.let { it.first to it.second }
+    }
+
+    fun contains(point: Offset, padding: Float = 0f): Boolean {
+        if (!isVisible) return false
+        val cosA = cos(angleRad)
+        val sinA = sin(angleRad)
+        val relative = point - center
+        val localX = relative.x * cosA + relative.y * sinA
+        val localY = -relative.x * sinA + relative.y * cosA
+        return abs(localX) <= length / 2f + padding && abs(localY) <= width / 2f + padding
+    }
+
     fun snapPointIfClose(point: Offset, thresholdDp: Float = 16f, scale: Float = 1f): Offset? {
         if (!isVisible) return null
         val (top, bottom) = getEdgeLines()
@@ -83,6 +109,17 @@ data class RulerState(
         val t = ((ap.x * ab.x + ap.y * ab.y) / abSq).coerceIn(0f, 1f)
         return Offset(a.x + t * ab.x, a.y + t * ab.y)
     }
+
+    private fun segmentIntersection(a: Offset, b: Offset, c: Offset, d: Offset): Offset? {
+        val r = b - a
+        val s = d - c
+        val denominator = r.x * s.y - r.y * s.x
+        if (abs(denominator) < 0.0001f) return null
+        val cMinusA = c - a
+        val t = (cMinusA.x * s.y - cMinusA.y * s.x) / denominator
+        val u = (cMinusA.x * r.y - cMinusA.y * r.x) / denominator
+        return if (t in 0f..1f && u in 0f..1f) a + r * t else null
+    }
 }
 
 object DrawingEngine {
@@ -93,6 +130,9 @@ object DrawingEngine {
             ToolType.FOUNTAIN_PEN -> 1.5f
             ToolType.MARKER -> 3.5f
             ToolType.INK_PEN -> 1.2f
+            ToolType.AIRBRUSH -> 3.8f
+            ToolType.CRAYON -> 1.7f
+            ToolType.WATERCOLOR_BRUSH -> 3.1f
             ToolType.LASER -> 2.0f
             else -> 1.0f
         }
@@ -103,10 +143,20 @@ object DrawingEngine {
         val toolAlpha = when (tool) {
             ToolType.MARKER -> 0.38f
             ToolType.PENCIL -> colorAlpha * 0.85f
+            ToolType.AIRBRUSH -> colorAlpha * 0.22f
+            ToolType.CRAYON -> colorAlpha * 0.78f
+            ToolType.WATERCOLOR_BRUSH -> colorAlpha * 0.24f
             else -> colorAlpha
         }
         return toolAlpha * layerAlpha
     }
+
+    /**
+     * Diameter in canvas pixels. The control value, cursor and persisted CLEAR mask are 1:1.
+     * Keeping the smallest diameter at one pixel lets the user shave either edge of a thick
+     * stroke instead of inevitably cutting through its full width.
+     */
+    fun eraserDiameter(controlWidth: Float): Float = controlWidth.coerceIn(1f, 50f)
 
     fun createSmoothPath(points: List<StrokePoint>, scale: Float = 1f, panX: Float = 0f, panY: Float = 0f): Path {
         if (points.isEmpty()) return Path()
@@ -134,7 +184,7 @@ object DrawingEngine {
 
     fun isPointInStroke(point: Offset, stroke: StrokeEntity, radius: Float): Boolean {
         if (stroke.points.isEmpty()) return false
-        val effectiveRadius = radius + strokeRenderWidth(stroke.tool, stroke.baseWidth) / 2f
+        val effectiveRadius = radius + strokeVisualRadius(stroke)
         val checkRadiusSq = effectiveRadius * effectiveRadius
         if (stroke.points.size == 1) {
             return squaredDistance(point, stroke.points.first()) <= checkRadiusSq
@@ -147,170 +197,47 @@ object DrawingEngine {
         return false
     }
 
-    fun erasePixelMode(stroke: StrokeEntity, eraserPos: Offset, radius: Float): List<StrokeEntity> {
-        return eraseStrokeAlongPath(stroke, listOf(StrokePoint(eraserPos.x, eraserPos.y)), radius)
-    }
-
     /**
-     * Cuts a stroke with a swept circular eraser. The original implementation only removed stored
-     * control points, so a long segment could survive even when the eraser visibly crossed it. It
-     * also left coarse, square-looking gaps. We densify the polyline, find the circle boundaries,
-     * and keep boundary points so the renderer's round caps produce a natural cut.
+     * Hit-tests the complete swept eraser capsule rather than only delivered pointer samples.
+     * This keeps a fast 2 px swipe persistent after UP instead of briefly clearing ink and then
+     * restoring it because no sampled point happened to land on the stroke.
      */
-    fun eraseStrokeAlongPath(
-        stroke: StrokeEntity,
+    fun doesEraserPathAffectStroke(
         eraserPoints: List<StrokePoint>,
-        radius: Float
-    ): List<StrokeEntity> {
-        if (stroke.points.isEmpty() || eraserPoints.isEmpty() || radius <= 0f) return listOf(stroke)
-
-        val effectiveRadius = radius + strokeRenderWidth(stroke.tool, stroke.baseWidth) / 2f
-        val sampleStep = (effectiveRadius / 2f).coerceIn(1f, 4f)
-        val simplifiedStroke = simplifyPolyline(stroke.points, tolerance = 0.35f)
-        val simplifiedEraser = simplifyPolyline(
-            eraserPoints,
-            tolerance = (radius * 0.12f).coerceIn(0.6f, 1.8f)
-        )
-        val denseStroke = densify(simplifiedStroke, sampleStep)
-        // Distance-to-segment already treats the pointer path as a continuous sweep. Densifying
-        // the eraser path only multiplied work and caused visible pauses on long gestures.
-        val denseEraser = simplifiedEraser
-        val radiusSq = effectiveRadius * effectiveRadius
-
-        val strokeMinX = denseStroke.minOf { it.x }
-        val strokeMaxX = denseStroke.maxOf { it.x }
-        val strokeMinY = denseStroke.minOf { it.y }
-        val strokeMaxY = denseStroke.maxOf { it.y }
-        val eraserMinX = denseEraser.minOf { it.x } - effectiveRadius
-        val eraserMaxX = denseEraser.maxOf { it.x } + effectiveRadius
-        val eraserMinY = denseEraser.minOf { it.y } - effectiveRadius
-        val eraserMaxY = denseEraser.maxOf { it.y } + effectiveRadius
-        if (strokeMaxX < eraserMinX || strokeMinX > eraserMaxX ||
-            strokeMaxY < eraserMinY || strokeMinY > eraserMaxY
-        ) return listOf(stroke)
-
-        fun isErased(point: StrokePoint): Boolean =
-            squaredDistanceToPath(point, denseEraser) <= radiusSq
-
-        val chunks = mutableListOf<List<StrokePoint>>()
-        var chunk = mutableListOf<StrokePoint>()
-        var previous = denseStroke.first()
-        var previousErased = isErased(previous)
-        var erasedAnyPoint = previousErased
-        if (!previousErased) chunk += previous
-
-        for (index in 1 until denseStroke.size) {
-            val current = denseStroke[index]
-            val currentErased = isErased(current)
-            erasedAnyPoint = erasedAnyPoint || currentErased
-            when {
-                !previousErased && !currentErased -> chunk += current
-                !previousErased && currentErased -> {
-                    chunk += findEraserBoundary(previous, current, ::isErased)
-                    if (chunk.size >= 2) chunks += chunk
-                    chunk = mutableListOf()
-                }
-                previousErased && !currentErased -> {
-                    chunk = mutableListOf(findEraserBoundary(current, previous, ::isErased), current)
-                }
-            }
-            previous = current
-            previousErased = currentErased
+        eraserWidth: Float,
+        stroke: StrokeEntity
+    ): Boolean {
+        if (eraserPoints.isEmpty() || stroke.points.isEmpty() || eraserWidth <= 0f) return false
+        // This radius is only a target-membership test. The actual cleared corridor still uses
+        // exactly eraserWidth pixels in RasterStrokeCompositor.
+        val radius = eraserWidth / 2f + strokeVisualRadius(stroke)
+        val radiusSq = radius * radius
+        if (eraserPoints.size == 1) {
+            return isPointInStroke(Offset(eraserPoints.first().x, eraserPoints.first().y), stroke, eraserWidth / 2f)
         }
-        if (chunk.size >= 2) chunks += chunk
-        if (!erasedAnyPoint) return listOf(stroke)
-
-        val originalStart = denseStroke.first()
-        val originalEnd = denseStroke.last()
-        return chunks.mapIndexed { index, points ->
-            val keepsOriginalStart = squaredDistance(points.first(), originalStart) < 0.0001f
-            val keepsOriginalEnd = squaredDistance(points.last(), originalEnd) < 0.0001f
-            stroke.copy(
-                id = if (index == 0) stroke.id else java.util.UUID.randomUUID().toString(),
-                points = points,
-                startCapRound = keepsOriginalStart && stroke.startCapRound,
-                endCapRound = keepsOriginalEnd && stroke.endCapRound
-            )
+        if (stroke.points.size == 1) {
+            val point = stroke.points.first()
+            return eraserPoints.zipWithNext().any { (start, end) ->
+                squaredDistanceToSegment(point, start, end) <= radiusSq
+            }
+        }
+        return eraserPoints.zipWithNext().any { (eraserStart, eraserEnd) ->
+            stroke.points.zipWithNext().any { (strokeStart, strokeEnd) ->
+                squaredDistanceBetweenSegments(eraserStart, eraserEnd, strokeStart, strokeEnd) <= radiusSq
+            }
         }
     }
 
-    /** Iterative Ramer-Douglas-Peucker simplification keeps corners while removing pointer noise. */
-    private fun simplifyPolyline(points: List<StrokePoint>, tolerance: Float): List<StrokePoint> {
-        if (points.size <= 2 || tolerance <= 0f) return points
-        val keep = BooleanArray(points.size)
-        keep[0] = true
-        keep[points.lastIndex] = true
-        val ranges = ArrayDeque<Pair<Int, Int>>()
-        ranges.add(0 to points.lastIndex)
-        val toleranceSq = tolerance * tolerance
-        while (ranges.isNotEmpty()) {
-            val (startIndex, endIndex) = ranges.removeLast()
-            if (endIndex - startIndex <= 1) continue
-            var farthestIndex = -1
-            var farthestDistanceSq = 0f
-            for (index in startIndex + 1 until endIndex) {
-                val distanceSq = squaredDistanceToSegment(points[index], points[startIndex], points[endIndex])
-                if (distanceSq > farthestDistanceSq) {
-                    farthestDistanceSq = distanceSq
-                    farthestIndex = index
-                }
-            }
-            if (farthestIndex >= 0 && farthestDistanceSq > toleranceSq) {
-                keep[farthestIndex] = true
-                ranges.add(startIndex to farthestIndex)
-                ranges.add(farthestIndex to endIndex)
-            }
+    private fun strokeVisualRadius(stroke: StrokeEntity): Float {
+        val outerPass = when (stroke.tool) {
+            ToolType.PENCIL -> 1.65f
+            ToolType.AIRBRUSH -> 1.75f
+            ToolType.CRAYON -> 1.2f
+            ToolType.WATERCOLOR_BRUSH -> 1.35f
+            ToolType.LASER -> 2.2f
+            else -> 1f
         }
-        return points.filterIndexed { index, _ -> keep[index] }
-    }
-
-    private fun densify(points: List<StrokePoint>, maxStep: Float): List<StrokePoint> {
-        if (points.size < 2) return points
-        val result = ArrayList<StrokePoint>()
-        result += points.first()
-        for (index in 0 until points.lastIndex) {
-            val start = points[index]
-            val end = points[index + 1]
-            val dx = end.x - start.x
-            val dy = end.y - start.y
-            val distance = sqrt(dx * dx + dy * dy)
-            val segments = max(1, ceil(distance / maxStep).toInt())
-            for (segment in 1..segments) {
-                result += interpolate(start, end, segment.toFloat() / segments)
-            }
-        }
-        return result
-    }
-
-    private fun findEraserBoundary(
-        outside: StrokePoint,
-        inside: StrokePoint,
-        isErased: (StrokePoint) -> Boolean
-    ): StrokePoint {
-        var outsideT = 0f
-        var insideT = 1f
-        repeat(10) {
-            val middle = (outsideT + insideT) / 2f
-            if (isErased(interpolate(outside, inside, middle))) insideT = middle else outsideT = middle
-        }
-        return interpolate(outside, inside, outsideT)
-    }
-
-    private fun interpolate(start: StrokePoint, end: StrokePoint, fraction: Float): StrokePoint = StrokePoint(
-        x = start.x + (end.x - start.x) * fraction,
-        y = start.y + (end.y - start.y) * fraction,
-        pressure = start.pressure + (end.pressure - start.pressure) * fraction,
-        tilt = start.tilt + (end.tilt - start.tilt) * fraction,
-        timestampMs = start.timestampMs + ((end.timestampMs - start.timestampMs) * fraction).toLong()
-    )
-
-    private fun squaredDistanceToPath(point: StrokePoint, path: List<StrokePoint>): Float {
-        if (path.size == 1) return squaredDistance(point, path.first())
-        var minimum = Float.POSITIVE_INFINITY
-        for (index in 0 until path.lastIndex) {
-            minimum = minOf(minimum, squaredDistanceToSegment(point, path[index], path[index + 1]))
-        }
-        return minimum
+        return strokeRenderWidth(stroke.tool, stroke.baseWidth) * outerPass / 2f
     }
 
     private fun squaredDistance(a: Offset, b: StrokePoint): Float {
@@ -339,6 +266,40 @@ object DrawingEngine {
         val distanceX = point.x - closestX
         val distanceY = point.y - closestY
         return distanceX * distanceX + distanceY * distanceY
+    }
+
+    private fun squaredDistanceBetweenSegments(
+        firstStart: StrokePoint,
+        firstEnd: StrokePoint,
+        secondStart: StrokePoint,
+        secondEnd: StrokePoint
+    ): Float {
+        if (segmentsIntersect(firstStart, firstEnd, secondStart, secondEnd)) return 0f
+        return minOf(
+            squaredDistanceToSegment(firstStart, secondStart, secondEnd),
+            squaredDistanceToSegment(firstEnd, secondStart, secondEnd),
+            squaredDistanceToSegment(secondStart, firstStart, firstEnd),
+            squaredDistanceToSegment(secondEnd, firstStart, firstEnd)
+        )
+    }
+
+    private fun segmentsIntersect(a: StrokePoint, b: StrokePoint, c: StrokePoint, d: StrokePoint): Boolean {
+        fun cross(from: StrokePoint, to: StrokePoint, point: StrokePoint): Float =
+            (to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x)
+        fun onSegment(start: StrokePoint, point: StrokePoint, end: StrokePoint): Boolean =
+            point.x in minOf(start.x, end.x)..maxOf(start.x, end.x) &&
+                point.y in minOf(start.y, end.y)..maxOf(start.y, end.y)
+
+        val abC = cross(a, b, c)
+        val abD = cross(a, b, d)
+        val cdA = cross(c, d, a)
+        val cdB = cross(c, d, b)
+        if ((abC > 0f) != (abD > 0f) && (cdA > 0f) != (cdB > 0f)) return true
+        val epsilon = 0.0001f
+        return (abs(abC) <= epsilon && onSegment(a, c, b)) ||
+            (abs(abD) <= epsilon && onSegment(a, d, b)) ||
+            (abs(cdA) <= epsilon && onSegment(c, a, d)) ||
+            (abs(cdB) <= epsilon && onSegment(c, b, d))
     }
 
     fun createShapePath(shapeType: ShapeType, rect: Rect): Path {

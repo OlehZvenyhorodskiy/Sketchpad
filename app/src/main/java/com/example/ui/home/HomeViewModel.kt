@@ -13,6 +13,7 @@ import com.example.data.models.CanvasEntity
 import com.example.data.models.ImageElementEntity
 import com.example.data.models.PageEntity
 import com.example.data.repository.CanvasRepository
+import com.example.data.repository.CanvasReferenceRepository
 import com.example.data.repository.UserPreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -20,8 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,7 +34,8 @@ import java.util.UUID
 @OptIn(FlowPreview::class)
 class HomeViewModel(
     private val repository: CanvasRepository,
-    private val userPrefsRepository: UserPreferencesRepository
+    private val userPrefsRepository: UserPreferencesRepository,
+    referenceRepository: CanvasReferenceRepository
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -40,6 +43,24 @@ class HomeViewModel(
 
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
+
+    private val _folders = MutableStateFlow(userPrefsRepository.getCanvasFoldersSync())
+    val folders: StateFlow<List<String>> = _folders.asStateFlow()
+
+    private val _selectedFolder = MutableStateFlow<String?>(null)
+    val selectedFolder: StateFlow<String?> = _selectedFolder.asStateFlow()
+
+    val allCanvases: StateFlow<List<CanvasEntity>> = repository.allCanvases.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val references = referenceRepository.observeAllReferences().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val userName: StateFlow<String?> = userPrefsRepository.userName.stateIn(
         scope = viewModelScope,
@@ -74,11 +95,16 @@ class HomeViewModel(
         }
     }
 
-    val canvases: StateFlow<List<CanvasEntity>> = _searchQuery
-        .debounce(300)
-        .flatMapLatest { query ->
-            repository.searchCanvases(query)
+    val canvases: StateFlow<List<CanvasEntity>> = combine(
+        repository.allCanvases,
+        _searchQuery.debounce(300),
+        _selectedFolder
+    ) { items, query, folder ->
+        items.filter { canvas ->
+            (query.isBlank() || canvas.title.contains(query, ignoreCase = true)) &&
+                (folder == null || canvas.folderName == folder)
         }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -92,6 +118,33 @@ class HomeViewModel(
     fun setSearchActive(active: Boolean) {
         _isSearchActive.value = active
         if (!active) _searchQuery.value = ""
+    }
+
+    fun selectFolder(folder: String?) {
+        _selectedFolder.value = folder
+    }
+
+    fun createFolder(name: String) {
+        val normalized = name.trim()
+        if (normalized.isBlank() || normalized in _folders.value) return
+        _folders.value = (_folders.value + normalized).sorted()
+        userPrefsRepository.setCanvasFoldersSync(_folders.value)
+        _selectedFolder.value = normalized
+    }
+
+    fun moveCanvasToFolder(canvas: CanvasEntity, folder: String?) {
+        viewModelScope.launch { repository.updateCanvas(canvas.copy(folderName = folder)) }
+    }
+
+    fun deleteFolder(folder: String) {
+        _folders.value = _folders.value - folder
+        userPrefsRepository.setCanvasFoldersSync(_folders.value)
+        if (_selectedFolder.value == folder) _selectedFolder.value = null
+        viewModelScope.launch {
+            repository.allCanvases.first().filter { it.folderName == folder }.forEach { canvas ->
+                repository.updateCanvas(canvas.copy(folderName = null))
+            }
+        }
     }
 
     fun createNewCanvas(
@@ -108,6 +161,9 @@ class HomeViewModel(
                 pattern = pattern,
                 bgColor = bgColor
             )
+            _selectedFolder.value?.let { folder ->
+                repository.getCanvasByIdSync(id)?.let { repository.updateCanvas(it.copy(folderName = folder)) }
+            }
             onCreated(id)
         }
     }
@@ -115,6 +171,9 @@ class HomeViewModel(
     fun createTemplateCanvas(templateType: String, onCreated: (String) -> Unit) {
         viewModelScope.launch {
             val id = repository.createTemplateCanvas(templateType)
+            _selectedFolder.value?.let { folder ->
+                repository.getCanvasByIdSync(id)?.let { repository.updateCanvas(it.copy(folderName = folder)) }
+            }
             onCreated(id)
         }
     }

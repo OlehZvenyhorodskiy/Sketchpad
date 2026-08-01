@@ -20,6 +20,7 @@ import com.example.data.models.ChartElementEntity
 import com.example.data.models.CodeBlockEntity
 import com.example.data.models.CodeLanguage
 import com.example.data.models.EraserMode
+import com.example.data.models.EraserMark
 import com.example.data.models.HslaColor
 import com.example.data.models.ImageElementEntity
 import com.example.data.models.LayerEntity
@@ -31,6 +32,9 @@ import com.example.data.models.StrokeEntity
 import com.example.data.models.StrokePoint
 import com.example.data.models.TextBlockEntity
 import com.example.data.models.ToolType
+import com.example.data.models.isAttachedToChart
+import com.example.data.models.resizeFramePreservingOrigin
+import com.example.data.models.withSquareGrid
 import com.example.data.repository.CanvasRepository
 import com.example.drive.ExportManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,7 +104,7 @@ class CanvasEditorViewModel(
     private val _rulerState = MutableStateFlow(RulerState())
     val rulerState: StateFlow<RulerState> = _rulerState.asStateFlow()
 
-    private val _isSlidersVertical = MutableStateFlow(false)
+    private val _isSlidersVertical = MutableStateFlow(userPrefs.getVerticalSlidersSync())
     val isSlidersVertical: StateFlow<Boolean> = _isSlidersVertical.asStateFlow()
 
     private val _activeLayerId = MutableStateFlow<String?>(null)
@@ -129,9 +133,7 @@ class CanvasEditorViewModel(
 
     fun setSelectionMode(mode: com.example.data.models.SelectionMode) {
         _selectionMode.value = mode
-        if (mode == com.example.data.models.SelectionMode.SINGLE) {
-            _selectedElementIds.value = emptySet()
-        }
+        _selectedElementIds.value = emptySet()
     }
 
     // AI dirty-cache: tracks canvas modifications
@@ -150,7 +152,9 @@ class CanvasEditorViewModel(
     fun toggleLayersPanel() { _showLayersPanel.value = !_showLayersPanel.value }
 
     fun toggleSliderOrientation() {
-        _isSlidersVertical.value = !_isSlidersVertical.value
+        val vertical = !_isSlidersVertical.value
+        _isSlidersVertical.value = vertical
+        userPrefs.setVerticalSlidersSync(vertical)
     }
 
     // Command Pattern Undo / Redo history
@@ -193,12 +197,45 @@ class CanvasEditorViewModel(
         bitmapCache.evictAll()
     }
 
-    // Gemini Messages
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    // AI conversation history is scoped to the canvas and survives closing the editor.
+    private val chatHistoryPrefs = context.getSharedPreferences("canvas_ai_chat_history", Context.MODE_PRIVATE)
+    private val _chatMessages = MutableStateFlow(loadChatHistory())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
     private val _isAiLoading = MutableStateFlow(false)
     val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
+
+    private fun loadChatHistory(): List<ChatMessage> = runCatching {
+        val raw = chatHistoryPrefs.getString(canvasId, null) ?: return@runCatching emptyList()
+        val array = org.json.JSONArray(raw)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(
+                    ChatMessage(
+                        id = item.optString("id", UUID.randomUUID().toString()),
+                        text = item.optString("text"),
+                        isUser = item.optBoolean("isUser"),
+                        timestampMs = item.optLong("timestampMs", System.currentTimeMillis())
+                    )
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private fun persistChatHistory(messages: List<ChatMessage>) {
+        val compact = messages.takeLast(80)
+        val array = org.json.JSONArray()
+        compact.forEach { message ->
+            array.put(org.json.JSONObject().apply {
+                put("id", message.id)
+                put("text", message.text)
+                put("isUser", message.isUser)
+                put("timestampMs", message.timestampMs)
+            })
+        }
+        chatHistoryPrefs.edit().putString(canvasId, array.toString()).apply()
+    }
 
     // Audio recordings
     val audioRecordings: StateFlow<List<AudioRecordingEntity>> = repository.getRecordingsForCanvas(canvasId)
@@ -226,6 +263,11 @@ class CanvasEditorViewModel(
 
     init {
         viewModelScope.launch {
+            userPrefs.drawWithFingers.collect { enabled ->
+                _drawWithFingers.value = enabled
+            }
+        }
+        viewModelScope.launch {
             try {
                 val initial = repository.getCanvasById(canvasId).first()
                 if (initial != null) {
@@ -248,6 +290,9 @@ class CanvasEditorViewModel(
                 if (pList.isNotEmpty() && _currentPageIndex.value >= pList.size) {
                     _currentPageIndex.value = 0
                 }
+                currentPage?.let { page ->
+                    _activeLayerId.value = resolveWritableLayerId(page, _activeLayerId.value)
+                }
             }
         }
     }
@@ -268,6 +313,9 @@ class CanvasEditorViewModel(
             }
             _rulerState.value = current.copy(isVisible = willBeVisible, center = newCenter)
         } else {
+            // Entering the eraser always starts in the Paint-like pixel mode. Object erase stays
+            // available only after an explicit second tap on the already selected eraser button.
+            if (tool == ToolType.ERASER) setEraserMode(EraserMode.PIXEL)
             _currentTool.value = tool
         }
     }
@@ -297,6 +345,7 @@ class CanvasEditorViewModel(
 
     fun setDrawWithFingers(enabled: Boolean) {
         _drawWithFingers.value = enabled
+        viewModelScope.launch { userPrefs.setDrawWithFingers(enabled) }
     }
 
     fun setZoomScale(scale: Float) {
@@ -311,11 +360,14 @@ class CanvasEditorViewModel(
         val hasTopLevelElements = page.strokes.isNotEmpty() || page.shapes.isNotEmpty() ||
                 page.textBlocks.isNotEmpty() || page.images.isNotEmpty() || page.charts.isNotEmpty()
 
-        if (page.layers.isEmpty() || hasTopLevelElements) {
-            val targetLayerId = _activeLayerId.value ?: page.activeLayerId ?: page.layers.firstOrNull()?.id ?: "default"
+        val layeredPage = if (page.layers.isEmpty() || hasTopLevelElements) {
             val baseLayers = if (page.layers.isEmpty()) {
                 listOf(LayerEntity(id = "default", name = context.getString(R.string.layer_number, 1)))
             } else page.layers
+
+            val targetLayerId = baseLayers.firstOrNull { it.id == _activeLayerId.value }?.id
+                ?: baseLayers.firstOrNull { it.id == page.activeLayerId }?.id
+                ?: baseLayers.first().id
 
             val updatedLayers = baseLayers.map { layer ->
                 if (layer.id == targetLayerId) {
@@ -329,7 +381,7 @@ class CanvasEditorViewModel(
                 } else layer
             }
 
-            return page.copy(
+            page.copy(
                 layers = updatedLayers,
                 activeLayerId = targetLayerId,
                 strokes = emptyList(),
@@ -338,8 +390,11 @@ class CanvasEditorViewModel(
                 images = emptyList(),
                 charts = emptyList()
             )
+        } else {
+            page
         }
-        return page
+
+        return normalizeLegacyEraserMarks(layeredPage)
     }
 
     fun addLayer() {
@@ -421,7 +476,8 @@ class CanvasEditorViewModel(
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
-        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id
+        val targetLayerId = resolveWritableLayerId(migrated, _activeLayerId.value) ?: return
+        _activeLayerId.value = targetLayerId
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) {
                 layer.copy(strokes = layer.strokes + stroke)
@@ -434,24 +490,45 @@ class CanvasEditorViewModel(
 
     fun eraseAtPoint(point: Offset, radius: Float) {
         val page = currentPage ?: return
+        if (_eraserMode.value != EraserMode.OBJECT) return
         val migrated = ensureLayersExist(page)
         if (!eraserGestureUndoPushed) pushUndoState(migrated)
+
+        fun inRect(x: Float, y: Float, w: Float, h: Float): Boolean {
+            val effectiveR = radius.coerceAtLeast(12f)
+            return point.x in (x - effectiveR)..(x + w + effectiveR) && point.y in (y - effectiveR)..(y + h + effectiveR)
+        }
+
+        var erasedAny = false
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.isVisible && !layer.isLocked) {
-                if (_eraserMode.value == EraserMode.OBJECT) {
-                    val updatedStrokes = layer.strokes.filterNot { stroke ->
-                        DrawingEngine.isPointInStroke(point, stroke, radius)
-                    }
-                    layer.copy(strokes = updatedStrokes)
-                } else {
-                    val updatedStrokes = layer.strokes.flatMap { stroke ->
-                        DrawingEngine.erasePixelMode(stroke, point, radius)
-                    }
-                    layer.copy(strokes = updatedStrokes)
+                val effectiveR = radius.coerceAtLeast(12f)
+                val erasedStrokeIds = layer.strokes.filter { DrawingEngine.isPointInStroke(point, it, effectiveR) }.map { it.id }.toSet()
+                val erasedShapeIds = layer.shapes.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
+                val erasedTextIds = layer.textBlocks.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
+                val erasedImageIds = layer.images.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
+                val erasedChartIds = layer.charts.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
+                val erasedCodeIds = layer.codeBlocks.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
+
+                val allErasedIds = erasedStrokeIds + erasedShapeIds + erasedTextIds + erasedImageIds + erasedChartIds + erasedCodeIds
+                if (allErasedIds.isNotEmpty()) {
+                    erasedAny = true
+                    _selectedElementIds.value = _selectedElementIds.value - allErasedIds
                 }
+
+                layer.copy(
+                    strokes = layer.strokes.filterNot { it.id in allErasedIds },
+                    shapes = layer.shapes.filterNot { it.id in allErasedIds },
+                    textBlocks = layer.textBlocks.filterNot { it.id in allErasedIds },
+                    images = layer.images.filterNot { it.id in allErasedIds },
+                    charts = layer.charts.filterNot { it.id in allErasedIds },
+                    codeBlocks = layer.codeBlocks.filterNot { it.id in allErasedIds }
+                )
             } else layer
         }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
+        if (erasedAny) {
+            updateCurrentPage(migrated.copy(layers = updatedLayers))
+        }
     }
 
     fun beginEraserGesture() {
@@ -473,14 +550,41 @@ class CanvasEditorViewModel(
     fun addEraserMarkToCurrentPage(mark: com.example.data.models.EraserMark) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
-        pushUndoState(migrated)
-        val radius = (mark.width / 2f).coerceAtLeast(0.5f)
+        if (!eraserGestureUndoPushed) pushUndoState(migrated)
         val updatedLayers = migrated.layers.map { layer ->
             if (!layer.isVisible || layer.isLocked) return@map layer
-            layer.copy(strokes = layer.strokes.flatMap { stroke ->
-                DrawingEngine.eraseStrokeAlongPath(stroke, mark.points, radius)
-            })
+            val affectedIds = layer.strokes.map(StrokeEntity::id)
+            layer.copy(
+                eraserMarks = layer.eraserMarks + mark.copy(affectedStrokeIds = affectedIds)
+            )
         }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun fillElement(elementId: String?, elementType: String?, color: HslaColor = _currentColor.value) {
+        if (elementId == null || elementType == null) {
+            updateBackgroundColor(color.toArgbInt())
+            return
+        }
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val argb = color.toArgbInt()
+        val updatedLayers = migrated.layers.map { layer ->
+            when (elementType) {
+                "STROKE" -> layer.copy(strokes = layer.strokes.map { stroke ->
+                    if (stroke.id == elementId) stroke.copy(colorHsla = color) else stroke
+                })
+                "SHAPE" -> layer.copy(shapes = layer.shapes.map { shape ->
+                    if (shape.id == elementId) shape.copy(fillColor = argb) else shape
+                })
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map { text ->
+                    if (text.id == elementId) text.copy(color = argb) else text
+                })
+                else -> layer
+            }
+        }
+        _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
@@ -600,8 +704,13 @@ class CanvasEditorViewModel(
 
     fun updateBackgroundColor(colorInt: Int) {
         val c = _canvas.value ?: return
+        val updated = c.copy(backgroundColor = colorInt, updatedAt = System.currentTimeMillis())
+        // Update the canvas synchronously so a zoom/pan frame cannot briefly restore a stale
+        // database value while Room is completing the write.
+        _canvas.value = updated
+        _canvasVersion.value++
         viewModelScope.launch {
-            repository.updateCanvas(c.copy(backgroundColor = colorInt))
+            repository.updateCanvas(updated)
         }
         ensureContrastingDefaultColor(colorInt)
     }
@@ -691,6 +800,81 @@ class CanvasEditorViewModel(
         }
         _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
+    }
+
+    fun insertTextAt(
+        text: String,
+        worldPosition: Offset,
+        fontSize: Float = 24f,
+        isBold: Boolean = false,
+        isItalic: Boolean = false,
+        isUnderline: Boolean = false,
+        fontFamily: String = "SANS",
+        alignment: String = "LEFT",
+        width: Float = 280f
+    ) {
+        if (text.isBlank()) return
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val newText = TextBlockEntity(
+            text = text,
+            x = worldPosition.x,
+            y = worldPosition.y,
+            width = width.coerceIn(120f, 900f),
+            fontSize = fontSize.coerceIn(10f, 120f),
+            isBold = isBold,
+            isItalic = isItalic,
+            isUnderline = isUnderline,
+            fontFamily = fontFamily,
+            alignment = alignment,
+            color = _currentColor.value.toArgbInt()
+        )
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(textBlocks = layer.textBlocks + newText) else layer
+        }
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
+    }
+
+    fun getTextBlock(id: String): TextBlockEntity? = currentPage
+        ?.getEffectiveLayers()
+        ?.asSequence()
+        ?.flatMap { it.textBlocks.asSequence() }
+        ?.firstOrNull { it.id == id }
+
+    fun updateTextBlock(
+        id: String,
+        text: String,
+        fontSize: Float,
+        isBold: Boolean,
+        isItalic: Boolean,
+        isUnderline: Boolean,
+        fontFamily: String,
+        alignment: String,
+        width: Float
+    ) {
+        if (text.isBlank()) return
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(textBlocks = layer.textBlocks.map { block ->
+                if (block.id == id) block.copy(
+                    text = text,
+                    fontSize = fontSize.coerceIn(10f, 120f),
+                    isBold = isBold,
+                    isItalic = isItalic,
+                    isUnderline = isUnderline,
+                    fontFamily = fontFamily,
+                    alignment = alignment,
+                    width = width.coerceIn(120f, 900f)
+                ) else block
+            })
+        }
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
     fun insertCodeBlock(
@@ -820,24 +1004,21 @@ class CanvasEditorViewModel(
             maxY = 1.0
         }
 
+        val xSpan = (xMax - xMin).toFloat().coerceAtLeast(0.001f)
+        val ySpan = (maxY - minY).toFloat().coerceAtLeast(0.001f)
+        // One logical unit must occupy the same number of canvas pixels on both axes. Centre the
+        // fitted plotting area inside the chart frame rather than stretching one axis to fit it.
+        val unitPixels = minOf(graphW / xSpan, graphH / ySpan).coerceAtLeast(1f)
+        val plotOffsetX = (graphW - xSpan * unitPixels) / 2f
+        val plotOffsetY = (graphH - ySpan * unitPixels) / 2f
         val points = mutableListOf<StrokePoint>()
         for (i in yValues.indices) {
             val xVal = xMin + i * step
             val yVal = yValues[i]
-            val normX = (xVal - xMin) / (xMax - xMin)
-            val normY = 1.0 - ((yVal - minY) / (maxY - minY).coerceAtLeast(0.001))
-
-            val canvasX = useTargetX + normX.toFloat() * graphW
-            val canvasY = useTargetY + normY.toFloat() * graphH
+            val canvasX = useTargetX + plotOffsetX + (xVal - xMin).toFloat() * unitPixels
+            val canvasY = useTargetY + plotOffsetY + (maxY - yVal).toFloat() * unitPixels
             points.add(StrokePoint(canvasX, canvasY))
         }
-
-        val chartStroke = StrokeEntity(
-            tool = ToolType.INK_PEN,
-            colorHsla = _currentColor.value,
-            baseWidth = 3.5f,
-            points = points
-        )
 
         val textLabel = TextBlockEntity(
             text = "f(x) = $formula [$xMin .. $xMax]",
@@ -851,7 +1032,19 @@ class CanvasEditorViewModel(
             x = useTargetX,
             y = useTargetY,
             width = graphW,
-            height = graphH
+            height = graphH,
+            pixelsPerUnitX = unitPixels,
+            pixelsPerUnitY = unitPixels,
+            originOffsetX = plotOffsetX + (-xMin).toFloat() * unitPixels,
+            originOffsetY = plotOffsetY + maxY.toFloat() * unitPixels
+        )
+
+        val chartStroke = StrokeEntity(
+            tool = ToolType.INK_PEN,
+            colorHsla = _currentColor.value,
+            baseWidth = 3.5f,
+            points = points,
+            parentChartId = gridChart.id
         )
 
         val updatedLayers = migrated.layers.map { layer ->
@@ -899,8 +1092,8 @@ class CanvasEditorViewModel(
         val xMax = 10f
         val yMin = -10f
         val yMax = 10f
-        val ppuX = (elemW / (xMax - xMin)).let { if (it.isNaN() || it <= 0f) 20f else it }
-        val ppuY = (elemH / (yMax - yMin)).let { if (it.isNaN() || it <= 0f) 20f else it }
+        val ppu = minOf(elemW / (xMax - xMin), elemH / (yMax - yMin))
+            .let { if (it.isNaN() || it <= 0f) 20f else it }
         val newChart = ChartElementEntity(
             x = finalX,
             y = finalY,
@@ -914,8 +1107,10 @@ class CanvasEditorViewModel(
             yMax = yMax,
             xStep = xStep,
             yStep = yStep,
-            pixelsPerUnitX = ppuX,
-            pixelsPerUnitY = ppuY
+            pixelsPerUnitX = ppu,
+            pixelsPerUnitY = ppu,
+            originOffsetX = elemW / 2f,
+            originOffsetY = elemH / 2f
         )
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) layer.copy(charts = layer.charts + newChart)
@@ -1026,8 +1221,27 @@ class CanvasEditorViewModel(
             when (type) {
                 "IMAGE" -> layer.copy(images = layer.images.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
                 "SHAPE" -> layer.copy(shapes = layer.shapes.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
-                "CHART" -> layer.copy(charts = layer.charts.map { if (it.id == id) it.copy(width = it.height, height = it.width) else it })
-                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map { if (it.id == id) it.copy(width = it.height, height = it.width) else it })
+                "CHART" -> {
+                    val chart = migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
+                    if (chart == null) layer else {
+                        val attached = migrated.getEffectiveLayers().flatMap { it.strokes }
+                            .filter { stroke -> stroke.isAttachedToChart(chart) }
+                            .mapTo(mutableSetOf()) { it.id }
+                        val center = Offset(chart.x + chart.width / 2f, chart.y + chart.height / 2f)
+                        layer.copy(
+                            charts = layer.charts.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it },
+                            strokes = layer.strokes.map { stroke ->
+                                if (stroke.id !in attached) stroke else stroke.copy(points = stroke.points.map { point ->
+                                    val dx = point.x - center.x
+                                    val dy = point.y - center.y
+                                    point.copy(x = center.x - dy, y = center.y + dx)
+                                })
+                            }
+                        )
+                    }
+                }
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
+                "CODE" -> layer.copy(codeBlocks = layer.codeBlocks.map { if (it.id == id) it.copy(rotation = (it.rotation + 90f) % 360f) else it })
                 else -> layer
             }
         }
@@ -1081,33 +1295,42 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun updateCodeBlockSize(codeBlockId: String, width: Float, height: Float) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(codeBlocks = layer.codeBlocks.map {
+                if (it.id == codeBlockId) it.copy(
+                    width = width.coerceAtLeast(180f),
+                    height = height.coerceAtLeast(120f)
+                ) else it
+            })
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
     fun updateChartSize(chartId: String, width: Float, height: Float, anchorStr: String = "BR") {
-        resizeChart(chartId, width, height, anchorStr)
+        val chart = currentPage?.getEffectiveLayers()?.flatMap { it.charts }?.firstOrNull { it.id == chartId } ?: return
+        val newWidth = width.coerceAtLeast(100f)
+        val newHeight = height.coerceAtLeast(100f)
+        val newX = when (anchorStr) {
+            "TL", "BL" -> chart.x + chart.width - newWidth
+            "CENTER" -> chart.x + (chart.width - newWidth) / 2f
+            else -> chart.x
+        }
+        val newY = when (anchorStr) {
+            "TL", "TR" -> chart.y + chart.height - newHeight
+            "CENTER" -> chart.y + (chart.height - newHeight) / 2f
+            else -> chart.y
+        }
+        resizeAndMoveElement(chartId, "CHART", newWidth, newHeight, newX, newY, anchorStr)
     }
 
     enum class Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
     fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchorStr: String = "BR") {
-        val page = currentPage ?: return
-        val migrated = ensureLayersExist(page)
-        pushUndoState(migrated)
-        val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(charts = layer.charts.map { chart ->
-                if (chart.id == chartId) {
-                    val clampedW = newWidth.coerceAtLeast(100f)
-                    val clampedH = newHeight.coerceAtLeast(100f)
-                    val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
-                    val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
-                    chart.copy(
-                        width = clampedW,
-                        height = clampedH,
-                        pixelsPerUnitX = clampedW / xSpan,
-                        pixelsPerUnitY = clampedH / ySpan
-                    )
-                } else chart
-            })
-        }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
+        updateChartSize(chartId, newWidth, newHeight, anchorStr)
     }
 
     fun resizeChart(chartId: String, newWidth: Float, newHeight: Float, anchor: Corner) {
@@ -1142,6 +1365,17 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
+    fun updateCodeBlockPosition(codeBlockId: String, newX: Float, newY: Float) {
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        val updatedLayers = migrated.layers.map { layer ->
+            layer.copy(codeBlocks = layer.codeBlocks.map {
+                if (it.id == codeBlockId) it.copy(x = newX, y = newY) else it
+            })
+        }
+        updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
     fun updateImagePosition(imageId: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
@@ -1160,7 +1394,7 @@ class CanvasEditorViewModel(
             ?: return
         val originalBounds = Rect(original.x, original.y, original.x + original.width, original.y + original.height)
         val attachedIds = migrated.getEffectiveLayers().flatMap { it.strokes }
-            .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, originalBounds) } == true }
+            .filter { stroke -> stroke.isAttachedToChart(original) }
             .mapTo(mutableSetOf()) { it.id }
         val dx = newX - original.x
         val dy = newY - original.y
@@ -1173,6 +1407,11 @@ class CanvasEditorViewModel(
                     if (stroke.id in attachedIds) stroke.copy(points = stroke.points.map { point ->
                         point.copy(x = point.x + dx, y = point.y + dy)
                     }) else stroke
+                },
+                eraserMarks = layer.eraserMarks.map { mark ->
+                    if (markMovesWithChart(mark, attachedIds, originalBounds)) {
+                        mark.copy(points = mark.points.map { point -> point.copy(x = point.x + dx, y = point.y + dy) })
+                    } else mark
                 }
             )
         }
@@ -1186,7 +1425,8 @@ class CanvasEditorViewModel(
         newH: Float,
         newX: Float,
         newY: Float,
-        anchor: String
+        anchor: String,
+        isResizing: Boolean = true
     ) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
@@ -1195,9 +1435,8 @@ class CanvasEditorViewModel(
             migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
         } else null
         val attachedStrokeIds = originalChart?.let { chart ->
-            val bounds = Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height)
             migrated.getEffectiveLayers().flatMap { it.strokes }
-                .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, bounds) } == true }
+                .filter { stroke -> stroke.isAttachedToChart(chart) }
                 .mapTo(mutableSetOf()) { it.id }
         }.orEmpty()
         val updatedLayers = migrated.layers.map { layer ->
@@ -1211,35 +1450,55 @@ class CanvasEditorViewModel(
                 "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map {
                     if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(60f), height = newH.coerceAtLeast(30f)) else it
                 })
+                "CODE" -> layer.copy(codeBlocks = layer.codeBlocks.map {
+                    if (it.id == id) it.copy(
+                        x = newX,
+                        y = newY,
+                        width = newW.coerceAtLeast(180f),
+                        height = newH.coerceAtLeast(120f)
+                    ) else it
+                })
                 "CHART" -> {
                     val clampedW = newW.coerceAtLeast(100f)
                     val clampedH = newH.coerceAtLeast(100f)
                     layer.copy(
                         charts = layer.charts.map { chart ->
                             if (chart.id == id) {
-                                val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
-                                val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
-                                chart.copy(
-                                    x = newX, y = newY,
-                                    width = clampedW, height = clampedH,
-                                    pixelsPerUnitX = clampedW / xSpan,
-                                    pixelsPerUnitY = clampedH / ySpan
-                                )
+                                if (isResizing) {
+                                    chart.resizeFramePreservingOrigin(newX, newY, clampedW, clampedH)
+                                } else {
+                                    chart.withSquareGrid().copy(
+                                        x = newX,
+                                        y = newY,
+                                        width = clampedW,
+                                        height = clampedH
+                                    )
+                                }
                             } else chart
                         },
                         strokes = layer.strokes.map { stroke ->
-                            if (stroke.id !in attachedStrokeIds || originalChart == null) {
+                            if (stroke.id !in attachedStrokeIds || originalChart == null || isResizing) {
                                 stroke
                             } else {
-                                val oldWidth = originalChart.width.coerceAtLeast(1f)
-                                val oldHeight = originalChart.height.coerceAtLeast(1f)
                                 stroke.copy(points = stroke.points.map { point ->
                                     point.copy(
-                                        x = newX + (point.x - originalChart.x) / oldWidth * clampedW,
-                                        y = newY + (point.y - originalChart.y) / oldHeight * clampedH
+                                        x = point.x + newX - originalChart.x,
+                                        y = point.y + newY - originalChart.y
                                     )
                                 })
                             }
+                        },
+                        eraserMarks = layer.eraserMarks.map { mark ->
+                            if (!isResizing && originalChart != null && markMovesWithChart(
+                                    mark,
+                                    attachedStrokeIds,
+                                    Rect(originalChart.x, originalChart.y, originalChart.x + originalChart.width, originalChart.y + originalChart.height)
+                                )
+                            ) {
+                                mark.copy(points = mark.points.map { point ->
+                                    point.copy(x = point.x + newX - originalChart.x, y = point.y + newY - originalChart.y)
+                                })
+                            } else mark
                         }
                     )
                 }
@@ -1317,6 +1576,11 @@ class CanvasEditorViewModel(
                             point.copy(x = point.x + dx, y = point.y + dy)
                         })
                     } else stroke
+                },
+                eraserMarks = layer.eraserMarks.map { mark ->
+                    if (mark.affectedStrokeIds.any { it in ids }) {
+                        mark.copy(points = mark.points.map { point -> point.copy(x = point.x + dx, y = point.y + dy) })
+                    } else mark
                 },
                 shapes = layer.shapes.map {
                     if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
@@ -1476,6 +1740,9 @@ class CanvasEditorViewModel(
     fun setCurrentPage(index: Int) {
         if (index in 0 until _pages.value.size) {
             _currentPageIndex.value = index
+            currentPage?.let { page ->
+                _activeLayerId.value = resolveWritableLayerId(page, _activeLayerId.value)
+            }
         }
     }
 
@@ -1637,6 +1904,7 @@ class CanvasEditorViewModel(
     fun sendAiPrompt(prompt: String) {
         val userMsg = ChatMessage(text = prompt, isUser = true)
         _chatMessages.value = _chatMessages.value + userMsg
+        persistChatHistory(_chatMessages.value)
         _isAiLoading.value = true
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -1653,6 +1921,7 @@ class CanvasEditorViewModel(
                     isUser = false
                 )
                 _chatMessages.value = _chatMessages.value + aiMsg
+                persistChatHistory(_chatMessages.value)
                 return@launch
             }
 
@@ -1681,7 +1950,14 @@ class CanvasEditorViewModel(
                 }
             } else null
 
-            val fullPrompt = buildCanvasContextPrompt(prompt, _pages.value, title)
+            val recentConversation = _chatMessages.value
+                .dropLast(1)
+                .takeLast(12)
+                .joinToString("\n") { message ->
+                    "${if (message.isUser) "User" else "Assistant"}: ${message.text}"
+                }
+            val fullPrompt = buildCanvasContextPrompt(prompt, _pages.value, title) +
+                if (recentConversation.isBlank()) "" else "\n\nRecent conversation:\n$recentConversation"
 
             val response = provider.query(
                 text = fullPrompt,
@@ -1694,6 +1970,7 @@ class CanvasEditorViewModel(
             _isAiLoading.value = false
             val aiMsg = ChatMessage(text = response, isUser = false)
             _chatMessages.value = _chatMessages.value + aiMsg
+            persistChatHistory(_chatMessages.value)
         }
     }
 
@@ -1787,11 +2064,10 @@ class CanvasEditorViewModel(
         }
         val chart = page.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
             ?: return
-        val chartBounds = Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height)
         val attachedStrokeIds = page.getEffectiveLayers()
             .filter { it.isVisible }
             .flatMap { it.strokes }
-            .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, chartBounds) } == true }
+            .filter { stroke -> stroke.isAttachedToChart(chart) }
             .mapTo(mutableSetOf()) { it.id }
         attachedStrokeIds += id
         _selectedElementIds.value = attachedStrokeIds
@@ -1809,12 +2085,17 @@ class CanvasEditorViewModel(
         val migrated = ensureLayersExist(page)
         val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: migrated.layers.lastOrNull()?.id ?: return
         val pastedIds = mutableSetOf<String>()
+        val sourceCharts = clipboard.filterIsInstance<ClipboardElement.Chart>()
+        val sourceStrokes = clipboard.filterIsInstance<ClipboardElement.Stroke>()
+        val chartIdMap = sourceCharts.associate { it.value.id to UUID.randomUUID().toString() }
+        val strokeIdMap = sourceStrokes.associate { it.value.id to UUID.randomUUID().toString() }
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id != targetLayerId) return@map layer
-            val pastedStrokes = clipboard.filterIsInstance<ClipboardElement.Stroke>().map {
-                it.value.copy(
-                    id = UUID.randomUUID().toString(),
-                    points = it.value.points.map { point ->
+            val pastedStrokes = sourceStrokes.map { source ->
+                source.value.copy(
+                    id = strokeIdMap.getValue(source.value.id),
+                    parentChartId = source.value.parentChartId?.let(chartIdMap::get),
+                    points = source.value.points.map { point ->
                         point.copy(x = point.x + offsetX, y = point.y + offsetY)
                     }
                 ).also { stroke -> pastedIds.add(stroke.id) }
@@ -1831,16 +2112,33 @@ class CanvasEditorViewModel(
                 it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
                     .also { text -> pastedIds.add(text.id) }
             }
-            val pastedCharts = clipboard.filterIsInstance<ClipboardElement.Chart>().map {
-                it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
+            val pastedCharts = sourceCharts.map { source ->
+                source.value.copy(
+                    id = chartIdMap.getValue(source.value.id),
+                    x = source.value.x + offsetX,
+                    y = source.value.y + offsetY
+                )
                     .also { chart -> pastedIds.add(chart.id) }
             }
             val pastedCodeBlocks = clipboard.filterIsInstance<ClipboardElement.CodeBlock>().map {
                 it.value.copy(id = UUID.randomUUID().toString(), x = it.value.x + offsetX, y = it.value.y + offsetY)
                     .also { codeBlock -> pastedIds.add(codeBlock.id) }
             }
+            val pastedEraserMarks = clipboard.filterIsInstance<ClipboardElement.EraserMarkElement>().mapNotNull { source ->
+                val mappedStrokeIds = source.value.affectedStrokeIds.mapNotNull(strokeIdMap::get)
+                if (mappedStrokeIds.size != source.value.affectedStrokeIds.size || mappedStrokeIds.isEmpty()) {
+                    null
+                } else {
+                    source.value.copy(
+                        id = UUID.randomUUID().toString(),
+                        points = source.value.points.map { point -> point.copy(x = point.x + offsetX, y = point.y + offsetY) },
+                        affectedStrokeIds = mappedStrokeIds
+                    )
+                }
+            }
             layer.copy(
                 strokes = layer.strokes + pastedStrokes,
+                eraserMarks = layer.eraserMarks + pastedEraserMarks,
                 shapes = layer.shapes + pastedShapes,
                 images = layer.images + pastedImages,
                 textBlocks = layer.textBlocks + pastedText,
@@ -1980,6 +2278,7 @@ internal sealed interface ClipboardElement {
     data class Text(val value: TextBlockEntity) : ClipboardElement { override val id: String = value.id }
     data class Chart(val value: ChartElementEntity) : ClipboardElement { override val id: String = value.id }
     data class CodeBlock(val value: CodeBlockEntity) : ClipboardElement { override val id: String = value.id }
+    data class EraserMarkElement(val value: EraserMark) : ClipboardElement { override val id: String = value.id }
 }
 
 internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<ClipboardElement> =
@@ -1991,6 +2290,9 @@ internal fun copyElementsFromPage(page: PageEntity, ids: Set<String>): List<Clip
             layer.textBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.Text(it)) }
             layer.charts.filter { it.id in ids }.forEach { add(ClipboardElement.Chart(it)) }
             layer.codeBlocks.filter { it.id in ids }.forEach { add(ClipboardElement.CodeBlock(it)) }
+            layer.eraserMarks
+                .filter { mark -> mark.affectedStrokeIds.isNotEmpty() && mark.affectedStrokeIds.all { it in ids } }
+                .forEach { add(ClipboardElement.EraserMarkElement(it)) }
         }
     }
 
@@ -2002,10 +2304,47 @@ internal fun deleteElementsFromPage(page: PageEntity, ids: Set<String>): PageEnt
             images = layer.images.filterNot { it.id in ids },
             textBlocks = layer.textBlocks.filterNot { it.id in ids },
             charts = layer.charts.filterNot { it.id in ids },
-            codeBlocks = layer.codeBlocks.filterNot { it.id in ids }
+            codeBlocks = layer.codeBlocks.filterNot { it.id in ids },
+            eraserMarks = layer.eraserMarks.filter { mark ->
+                mark.affectedStrokeIds.isEmpty() || mark.affectedStrokeIds.none { it in ids }
+            }
         )
     }
 )
+
+/** Binds pre-target-ID erase paths to the strokes that existed when the page was opened. */
+internal fun normalizeLegacyEraserMarks(page: PageEntity): PageEntity {
+    val normalizedLayers = page.getEffectiveLayers().map { layer ->
+        val normalizedMarks = layer.eraserMarks.flatMap { mark ->
+            if (mark.affectedStrokeIds.isNotEmpty()) {
+                listOf(mark)
+            } else {
+                layer.strokes
+                    .filter { stroke -> DrawingEngine.doesEraserPathAffectStroke(mark.points, mark.width, stroke) }
+                    .mapIndexed { index, stroke ->
+                        mark.copy(
+                            id = if (index == 0) mark.id else UUID.randomUUID().toString(),
+                            affectedStrokeIds = listOf(stroke.id)
+                        )
+                    }
+            }
+        }
+        if (normalizedMarks == layer.eraserMarks) layer else layer.copy(eraserMarks = normalizedMarks)
+    }
+    return if (normalizedLayers == page.layers) page else page.copy(layers = normalizedLayers)
+}
+
+/** Never let a layer ID retained from another page silently discard a committed stroke. */
+internal fun resolveWritableLayerId(page: PageEntity, requestedLayerId: String?): String? {
+    val layers = page.getEffectiveLayers()
+    val requested = layers.firstOrNull { it.id == requestedLayerId }
+    if (requested != null && requested.isVisible && !requested.isLocked) return requested.id
+    val pageActive = layers.firstOrNull { it.id == page.activeLayerId }
+    if (pageActive != null && pageActive.isVisible && !pageActive.isLocked) return pageActive.id
+    return layers.lastOrNull { it.isVisible && !it.isLocked }?.id
+        ?: layers.lastOrNull { it.isVisible }?.id
+        ?: layers.lastOrNull()?.id
+}
 
 internal fun strokeBounds(stroke: StrokeEntity): Rect? {
     if (stroke.points.isEmpty()) return null
@@ -2016,6 +2355,20 @@ internal fun strokeBounds(stroke: StrokeEntity): Rect? {
         right = stroke.points.maxOf { it.x } + padding,
         bottom = stroke.points.maxOf { it.y } + padding
     )
+}
+
+/** A clear-mask follows the graph when it erased one of that graph's attached strokes. */
+private fun markMovesWithChart(
+    mark: com.example.data.models.EraserMark,
+    attachedStrokeIds: Set<String>,
+    chartBounds: Rect
+): Boolean {
+    if (attachedStrokeIds.isEmpty()) return false
+    if (mark.affectedStrokeIds.isNotEmpty()) {
+        return mark.affectedStrokeIds.any { it in attachedStrokeIds }
+    }
+    // Older notes do not record affected ids, so use only their actual clear path as a fallback.
+    return mark.points.any { point -> point.x in chartBounds.left..chartBounds.right && point.y in chartBounds.top..chartBounds.bottom }
 }
 
 internal fun rectanglesOverlap(first: Rect, second: Rect): Boolean =

@@ -10,6 +10,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Create
@@ -36,6 +39,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
@@ -44,6 +50,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import com.example.ui.components.BackgroundColorPicker
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -105,12 +113,20 @@ fun HomeScreen(
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val userName by viewModel.userName.collectAsState()
     val userAvatar by viewModel.userAvatar.collectAsState()
+    val folders by viewModel.folders.collectAsState()
+    val selectedFolder by viewModel.selectedFolder.collectAsState()
+    val allCanvases by viewModel.allCanvases.collectAsState()
+    val references by viewModel.references.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Мої канви, 1: Шаблони
     var canvasToRename by remember { mutableStateOf<CanvasEntity?>(null) }
     var renameInputText by remember { mutableStateOf("") }
     var showAccountMenu by remember { mutableStateOf(false) }
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
+    var canvasToMove by remember { mutableStateOf<CanvasEntity?>(null) }
+    var showLinkGraph by remember { mutableStateOf(false) }
     var profileNameInput by remember { mutableStateOf("") }
     var profileAvatarInput by remember { mutableStateOf("🎓") }
 
@@ -198,6 +214,10 @@ fun HomeScreen(
 
                         IconButton(onClick = onOpenThemeSettings) {
                             Icon(imageVector = Icons.Default.Palette, contentDescription = stringResource(R.string.theme_and_appearance))
+                        }
+
+                        IconButton(onClick = { showLinkGraph = true }) {
+                            Icon(imageVector = Icons.Default.AccountTree, contentDescription = "Граф зв’язків")
                         }
 
                         OutlinedButton(
@@ -325,6 +345,34 @@ fun HomeScreen(
         ) {
             if (selectedTabIndex == 0) {
                 // My Canvases Tab
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(top = 10.dp, bottom = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.FilterChip(
+                        selected = selectedFolder == null,
+                        onClick = { viewModel.selectFolder(null) },
+                        label = { Text("Усі") },
+                        leadingIcon = { Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp)) }
+                    )
+                    folders.forEach { folder ->
+                        androidx.compose.material3.FilterChip(
+                            selected = selectedFolder == folder,
+                            onClick = { viewModel.selectFolder(folder) },
+                            label = { Text(folder) },
+                            leadingIcon = { Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp)) }
+                        )
+                    }
+                    androidx.compose.material3.AssistChip(
+                        onClick = { showCreateFolderDialog = true },
+                        label = { Text("Нова папка") },
+                        leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, modifier = Modifier.size(18.dp)) }
+                    )
+                }
                 if (canvases.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -368,6 +416,7 @@ fun HomeScreen(
                                     renameInputText = canvas.title
                                 },
                                 onDuplicateClick = { viewModel.duplicateCanvas(canvas.id) },
+                                onMoveClick = { canvasToMove = canvas },
                                 onDeleteClick = { viewModel.deleteCanvas(canvas.id) }
                             )
                         }
@@ -613,6 +662,154 @@ fun HomeScreen(
             }
         )
     }
+
+    if (showCreateFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFolderDialog = false },
+            title = { Text("Створити папку") },
+            text = {
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    label = { Text("Назва папки") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = newFolderName.isNotBlank(),
+                    onClick = {
+                        viewModel.createFolder(newFolderName)
+                        newFolderName = ""
+                        showCreateFolderDialog = false
+                    }
+                ) { Text("Створити") }
+            },
+            dismissButton = { TextButton(onClick = { showCreateFolderDialog = false }) { Text(stringResource(R.string.cancel)) } }
+        )
+    }
+
+    canvasToMove?.let { canvas ->
+        AlertDialog(
+            onDismissRequest = { canvasToMove = null },
+            title = { Text("Перемістити «${canvas.title}»") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = {
+                        viewModel.moveCanvasToFolder(canvas, null)
+                        canvasToMove = null
+                    }) { Text("Без папки") }
+                    folders.forEach { folder ->
+                        TextButton(onClick = {
+                            viewModel.moveCanvasToFolder(canvas, folder)
+                            canvasToMove = null
+                        }) {
+                            Icon(Icons.Default.Folder, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(folder)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { canvasToMove = null }) { Text(stringResource(R.string.cancel)) } }
+        )
+    }
+
+    if (showLinkGraph) {
+        CanvasLinkGraphDialog(
+            canvases = allCanvases,
+            references = references,
+            onCanvasClick = {
+                showLinkGraph = false
+                onCanvasClick(it)
+            },
+            onDismiss = { showLinkGraph = false }
+        )
+    }
+}
+
+@Composable
+private fun CanvasLinkGraphDialog(
+    canvases: List<CanvasEntity>,
+    references: List<com.example.data.models.CanvasReferenceEntity>,
+    onCanvasClick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val linkedIds = remember(references) {
+        references.flatMap { listOf(it.sourceCanvasId, it.targetCanvasId) }.toSet()
+    }
+    val graphCanvases = remember(canvases, linkedIds) {
+        if (linkedIds.isNotEmpty()) canvases.filter { it.id in linkedIds }.take(18)
+        else canvases.take(10)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountTree, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Граф зв’язків")
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val graphPrimary = MaterialTheme.colorScheme.primary
+                val graphSecondary = MaterialTheme.colorScheme.secondary
+                val graphLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    if (graphCanvases.isEmpty()) return@Canvas
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val orbit = minOf(size.width, size.height) * 0.34f
+                    val positions = graphCanvases.mapIndexed { index, canvas ->
+                        val angle = -Math.PI / 2.0 + 2.0 * Math.PI * index / graphCanvases.size.coerceAtLeast(1)
+                        canvas.id to Offset(
+                            center.x + kotlin.math.cos(angle).toFloat() * orbit,
+                            center.y + kotlin.math.sin(angle).toFloat() * orbit
+                        )
+                    }.toMap()
+                    references.distinctBy { it.sourceCanvasId to it.targetCanvasId }.forEach { reference ->
+                        val from = positions[reference.sourceCanvasId]
+                        val to = positions[reference.targetCanvasId]
+                        if (from != null && to != null) {
+                            drawLine(graphPrimary.copy(alpha = 0.55f), from, to, strokeWidth = 3f)
+                        }
+                    }
+                    graphCanvases.forEach { canvas ->
+                        val position = positions.getValue(canvas.id)
+                        val linked = references.any { it.sourceCanvasId == canvas.id || it.targetCanvasId == canvas.id }
+                        drawCircle(
+                            color = if (linked) graphPrimary else graphSecondary,
+                            radius = if (linked) 18f else 13f,
+                            center = position
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            canvas.title.take(11),
+                            position.x - 34f,
+                            position.y + 38f,
+                            android.graphics.Paint().apply {
+                                color = graphLabelColor
+                                textSize = 18f
+                                isAntiAlias = true
+                            }
+                        )
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    canvases.forEach { canvas ->
+                        TextButton(onClick = { onCanvasClick(canvas.id) }) { Text(canvas.title, maxLines = 1) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
+    )
 }
 
 @Composable
@@ -654,6 +851,7 @@ fun CanvasCardItem(
     onClick: () -> Unit,
     onRenameClick: () -> Unit,
     onDuplicateClick: () -> Unit,
+    onMoveClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -788,6 +986,14 @@ fun CanvasCardItem(
                             onClick = {
                                 showMenu = false
                                 onDuplicateClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Перемістити в папку") },
+                            leadingIcon = { Icon(Icons.Default.DriveFileMove, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onMoveClick()
                             }
                         )
                         DropdownMenuItem(

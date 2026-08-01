@@ -1,0 +1,11 @@
+{
+  "mode": "ralph",
+  "active": true,
+  "iteration": 1,
+  "max_iterations": 10,
+  "current_phase": "executing",
+  "started_at": "2026-08-01T10:41:19Z",
+  "state": {
+    "context_snapshot_path": ".omx/context/canvas-raster-graph-fixes-20260801T104119Z.md"
+  }
+}

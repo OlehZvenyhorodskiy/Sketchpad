@@ -6,8 +6,8 @@ import android.provider.DocumentsContract
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
-import androidx.compose.ui.graphics.asAndroidPath
 import com.example.core.drawing.DrawingEngine
+import com.example.core.drawing.RasterStrokeCompositor
 import com.example.data.models.*
 import java.io.File
 import java.io.FileOutputStream
@@ -36,23 +36,6 @@ object ExportManager {
         page.visibleLayersBottomUp().forEach { layer ->
             sb.appendLine("""  <g opacity="${layer.opacity}" ${if (!layer.isVisible) """visibility="hidden"""" else ""}>""")
 
-            // Strokes → <path>
-            layer.strokes.forEach { stroke ->
-                val pathData = buildSvgPathData(stroke.points)
-                val color = stroke.colorHsla.toHexColor()
-                val width = stroke.baseWidth
-                val opacity = stroke.colorHsla.alpha
-                sb.appendLine("""    <path d="$pathData" fill="none" stroke="$color" stroke-width="$width" stroke-opacity="$opacity" stroke-linecap="round" stroke-linejoin="round"/>""")
-            }
-
-            // Eraser marks → SVG fallback using canvas background color
-            layer.eraserMarks.forEach { mark ->
-                val pathData = buildSvgPathData(mark.points)
-                val bgColorHex = colorToHex(backgroundColor)
-                val width = mark.width
-                sb.appendLine("""    <path d="$pathData" fill="none" stroke="$bgColorHex" stroke-width="$width" stroke-linecap="round" stroke-linejoin="round"/>""")
-            }
-
             // Shapes → <rect>, <ellipse>, <line>
             layer.shapes.forEach { shape ->
                 when (shape.shapeType) {
@@ -74,8 +57,37 @@ object ExportManager {
             }
 
             // Text → <text>
+            layer.charts.forEach { chart -> appendChartSvg(sb, chart, backgroundColor) }
+
             layer.textBlocks.forEach { text ->
                 sb.appendLine("""    <text x="${text.x}" y="${text.y + text.fontSize}" font-size="${text.fontSize}" fill="${colorToHex(text.color)}">${escapeXml(text.text)}</text>""")
+            }
+
+            // A mask is local to one stroke, so erasing reveals the chart or page underneath
+            // instead of repainting the document background over later content.
+            layer.strokes.forEach { stroke ->
+                val pathData = buildSvgPathData(stroke.points)
+                val color = stroke.colorHsla.toHexColor()
+                val width = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth)
+                val masks = layer.eraserMarks.filter { mark ->
+                    stroke.id in mark.affectedStrokeIds ||
+                        (mark.affectedStrokeIds.isEmpty() && DrawingEngine.doesEraserPathAffectStroke(
+                            mark.points,
+                            mark.width,
+                            stroke
+                        ))
+                }
+                if (masks.isEmpty()) {
+                    sb.appendLine("""    <path d="$pathData" fill="none" stroke="$color" stroke-width="$width" stroke-opacity="${stroke.colorHsla.alpha}" stroke-linecap="round" stroke-linejoin="round"/>""")
+                } else {
+                    val maskId = "stroke-mask-${stroke.id}"
+                    sb.appendLine("""    <mask id="$maskId"><rect x="0" y="0" width="$pageWidth" height="$pageHeight" fill="white"/>""")
+                    masks.forEach { mark ->
+                        sb.appendLine("""      <path d="${buildSvgPathData(mark.points)}" fill="none" stroke="black" stroke-width="${mark.width}" stroke-linecap="round" stroke-linejoin="round"/>""")
+                    }
+                    sb.appendLine("""    </mask>""")
+                    sb.appendLine("""    <path d="$pathData" fill="none" stroke="$color" stroke-width="$width" stroke-opacity="${stroke.colorHsla.alpha}" stroke-linecap="round" stroke-linejoin="round" mask="url(#$maskId)"/>""")
+                }
             }
 
             layer.codeBlocks.forEach { codeBlock ->
@@ -136,35 +148,6 @@ object ExportManager {
                 // Render layer images
                 renderLayerImages(context, canvas, layer.images, layerAlpha)
 
-                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
-                    val saveCount = canvas.saveLayer(null, null)
-                    layer.strokes.forEach { stroke ->
-                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                        val sw = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth)
-                        val strokeAlpha = DrawingEngine.strokeRenderAlpha(stroke.tool, stroke.colorHsla.alpha, layer.opacity)
-                        paint.strokeWidth = sw
-                        paint.color = stroke.colorHsla.toAndroidColor()
-                        paint.alpha = (strokeAlpha * 255).toInt().coerceIn(0, 255)
-                        paint.style = Paint.Style.STROKE
-                        canvas.drawPath(path, paint)
-                    }
-                    if (layer.eraserMarks.isNotEmpty()) {
-                        val clearPaint = Paint().apply {
-                            isAntiAlias = true
-                            style = Paint.Style.STROKE
-                            strokeCap = Paint.Cap.ROUND
-                            strokeJoin = Paint.Join.ROUND
-                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                        }
-                        layer.eraserMarks.forEach { mark ->
-                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
-                            clearPaint.strokeWidth = mark.width
-                            canvas.drawPath(path, clearPaint)
-                        }
-                    }
-                    canvas.restoreToCount(saveCount)
-                }
-
                 layer.shapes.forEach { shape ->
                     if (shape.fillColor != 0) {
                         paint.style = Paint.Style.FILL
@@ -178,6 +161,8 @@ object ExportManager {
                     paint.style = Paint.Style.STROKE
                     canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
                 }
+
+                renderCharts(canvas, layer.charts, paint, layerAlpha, backgroundColor)
 
                 layer.textBlocks.forEach { text ->
                     val textPaint = android.text.TextPaint().apply {
@@ -197,6 +182,10 @@ object ExportManager {
                     canvas.translate(text.x, text.y)
                     staticLayout.draw(canvas)
                     canvas.restore()
+                }
+
+                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                    renderStrokeLayer(canvas, layer)
                 }
 
                 renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
@@ -258,35 +247,6 @@ object ExportManager {
                     renderLayerImages(ctx, canvas, layer.images, layerAlpha)
                 }
 
-                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
-                    val saveCount = canvas.saveLayer(null, null)
-                    layer.strokes.forEach { stroke ->
-                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                        val sw = DrawingEngine.strokeRenderWidth(stroke.tool, stroke.baseWidth)
-                        val strokeAlpha = DrawingEngine.strokeRenderAlpha(stroke.tool, stroke.colorHsla.alpha, layer.opacity)
-                        paint.strokeWidth = sw
-                        paint.color = stroke.colorHsla.toAndroidColor()
-                        paint.alpha = (strokeAlpha * 255).toInt().coerceIn(0, 255)
-                        paint.style = Paint.Style.STROKE
-                        canvas.drawPath(path, paint)
-                    }
-                    if (layer.eraserMarks.isNotEmpty()) {
-                        val clearPaint = Paint().apply {
-                            isAntiAlias = true
-                            style = Paint.Style.STROKE
-                            strokeCap = Paint.Cap.ROUND
-                            strokeJoin = Paint.Join.ROUND
-                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                        }
-                        layer.eraserMarks.forEach { mark ->
-                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
-                            clearPaint.strokeWidth = mark.width
-                            canvas.drawPath(path, clearPaint)
-                        }
-                    }
-                    canvas.restoreToCount(saveCount)
-                }
-
                 layer.shapes.forEach { shape ->
                     if (shape.fillColor != 0) {
                         paint.style = Paint.Style.FILL
@@ -300,6 +260,8 @@ object ExportManager {
                     paint.style = Paint.Style.STROKE
                     canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
                 }
+
+                renderCharts(canvas, layer.charts, paint, layerAlpha, backgroundColor)
 
                 layer.textBlocks.forEach { text ->
                     val textPaint = android.text.TextPaint().apply {
@@ -321,12 +283,8 @@ object ExportManager {
                     canvas.restore()
                 }
 
-                layer.charts.forEach { chart ->
-                    paint.strokeWidth = 2f
-                    paint.color = android.graphics.Color.GRAY
-                    paint.alpha = layerAlpha
-                    paint.style = Paint.Style.STROKE
-                    canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                    renderStrokeLayer(canvas, layer)
                 }
 
                 renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
@@ -406,6 +364,83 @@ object ExportManager {
         return sb.toString()
     }
 
+    private fun appendChartSvg(
+        sb: StringBuilder,
+        chart: ChartElementEntity,
+        pageBackgroundColor: Int
+    ) {
+        val darkPage = isDarkColor(pageBackgroundColor)
+        val background = when {
+            chart.backgroundColor != 0 -> colorToHex(chart.backgroundColor)
+            darkPage -> "#1E293B"
+            else -> "#F8FAFC"
+        }
+        val border = if (darkPage) "#475569" else "#CBD5E1"
+        val axis = if (darkPage) "#CBD5E1" else "#475569"
+        val grid = if (darkPage) "#FFFFFF" else "#000000"
+        val clipId = "chart-clip-${chart.id}"
+        val centerX = chart.x + chart.width / 2f
+        val centerY = chart.y + chart.height / 2f
+        val transform = if (chart.rotation != 0f) {
+            " transform=\"rotate(${chart.rotation} $centerX $centerY)\""
+        } else {
+            ""
+        }
+        val unit = chart.squarePixelsPerUnit()
+        val originX = chart.x + (chart.originOffsetX.takeIf { it >= 0f } ?: chart.width / 2f)
+        val originY = chart.y + (chart.originOffsetY.takeIf { it >= 0f } ?: chart.height / 2f)
+        val right = chart.x + chart.width
+        val bottom = chart.y + chart.height
+        val firstX = kotlin.math.ceil((chart.x - originX) / unit).toInt()
+        val lastX = kotlin.math.floor((right - originX) / unit).toInt()
+        val firstY = kotlin.math.ceil((chart.y - originY) / unit).toInt()
+        val lastY = kotlin.math.floor((bottom - originY) / unit).toInt()
+        val xAxisVisible = originY in chart.y..bottom
+        val yAxisVisible = originX in chart.x..right
+
+        sb.appendLine("""    <g$transform>""")
+        sb.appendLine("""      <clipPath id="$clipId"><rect x="${chart.x}" y="${chart.y}" width="${chart.width}" height="${chart.height}"/></clipPath>""")
+        sb.appendLine("""      <rect x="${chart.x}" y="${chart.y}" width="${chart.width}" height="${chart.height}" fill="$background" stroke="$border" stroke-width="1.5"/>""")
+        sb.appendLine("""      <g clip-path="url(#$clipId)">""")
+        for (index in firstX..lastX) {
+            val x = originX + index * unit
+            sb.appendLine("""        <line x1="$x" y1="${chart.y}" x2="$x" y2="$bottom" stroke="$grid" stroke-opacity="0.19" stroke-width="1"/>""")
+        }
+        for (index in firstY..lastY) {
+            val y = originY + index * unit
+            sb.appendLine("""        <line x1="${chart.x}" y1="$y" x2="$right" y2="$y" stroke="$grid" stroke-opacity="0.19" stroke-width="1"/>""")
+        }
+        if (xAxisVisible) sb.appendLine("""        <line x1="${chart.x}" y1="$originY" x2="$right" y2="$originY" stroke="$axis" stroke-width="2.5"/>""")
+        if (yAxisVisible) sb.appendLine("""        <line x1="$originX" y1="${chart.y}" x2="$originX" y2="$bottom" stroke="$axis" stroke-width="2.5"/>""")
+
+        val xTicks = chartAxisTickValues(-(originX - chart.x) / unit, (right - originX) / unit, chart.xStep)
+        val yTicks = chartAxisTickValues(-(bottom - originY) / unit, (originY - chart.y) / unit, chart.yStep)
+        if (xAxisVisible) for (index in firstX..lastX) {
+            val x = originX + index * unit
+            if (x in chart.x..right) sb.appendLine("""        <line x1="$x" y1="${originY - 4f}" x2="$x" y2="${originY + 4f}" stroke="$axis" stroke-width="2"/>""")
+        }
+        if (yAxisVisible) for (index in firstY..lastY) {
+            val y = originY + index * unit
+            if (y in chart.y..bottom) sb.appendLine("""        <line x1="${originX - 4f}" y1="$y" x2="${originX + 4f}" y2="$y" stroke="$axis" stroke-width="2"/>""")
+        }
+        if (chart.showAxisLabels && chart.axisLabelsVisible) {
+            val labelColor = if (darkPage) "#D1D5DB" else "#4B5563"
+            if (xAxisVisible) xTicks.forEach { value ->
+                val x = originX + value * unit
+                if (x in chart.x..right) sb.appendLine("""        <text x="${x - 6f}" y="${(originY + 14f).coerceAtMost(bottom - 4f)}" font-size="11" fill="$labelColor">${formatAxisValue(value)}</text>""")
+            }
+            if (yAxisVisible) yTicks.forEach { value ->
+                if (kotlin.math.abs(value) <= 0.0001f) return@forEach
+                val y = originY - value * unit
+                if (y in chart.y..bottom) sb.appendLine("""        <text x="${(originX + 4f).coerceAtMost(right - 12f)}" y="${y + 4f}" font-size="11" fill="$labelColor">${formatAxisValue(value)}</text>""")
+            }
+            if (xAxisVisible) sb.appendLine("""        <text x="${right - 18f}" y="${originY - 8f}" font-size="11" fill="$labelColor">X</text>""")
+            if (yAxisVisible) sb.appendLine("""        <text x="${originX + 8f}" y="${chart.y + 18f}" font-size="11" fill="$labelColor">Y</text>""")
+        }
+        sb.appendLine("""      </g>""")
+        sb.appendLine("""    </g>""")
+    }
+
     private fun colorToHex(color: Int): String {
         return String.format("#%06X", 0xFFFFFF and color)
     }
@@ -456,33 +491,6 @@ object ExportManager {
 
             renderLayerImages(context, canvas, layer.images, layerAlpha)
 
-                if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
-                    val saveCount = canvas.saveLayer(null, null)
-                    layer.strokes.forEach { stroke ->
-                        val path = DrawingEngine.createSmoothPath(stroke.points).asAndroidPath()
-                        paint.strokeWidth = stroke.baseWidth
-                        paint.color = stroke.colorHsla.toAndroidColor()
-                        paint.alpha = (stroke.colorHsla.alpha * layerAlpha / 255f * 255).toInt()
-                        paint.style = Paint.Style.STROKE
-                        canvas.drawPath(path, paint)
-                    }
-                    if (layer.eraserMarks.isNotEmpty()) {
-                        val clearPaint = Paint().apply {
-                            isAntiAlias = true
-                            style = Paint.Style.STROKE
-                            strokeCap = Paint.Cap.ROUND
-                            strokeJoin = Paint.Join.ROUND
-                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                        }
-                        layer.eraserMarks.forEach { mark ->
-                            val path = DrawingEngine.createSmoothPath(mark.points).asAndroidPath()
-                            clearPaint.strokeWidth = mark.width
-                            canvas.drawPath(path, clearPaint)
-                        }
-                    }
-                    canvas.restoreToCount(saveCount)
-                }
-
             layer.shapes.forEach { shape ->
                 paint.strokeWidth = shape.strokeWidth
                 paint.color = shape.strokeColor
@@ -490,6 +498,8 @@ object ExportManager {
                 paint.style = Paint.Style.STROKE
                 canvas.drawRect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height, paint)
             }
+
+            renderCharts(canvas, layer.charts, paint, layerAlpha, backgroundColor)
 
             layer.textBlocks.forEach { text ->
                 val textPaint = android.text.TextPaint().apply {
@@ -511,30 +521,184 @@ object ExportManager {
                 canvas.restore()
             }
 
-            layer.charts.forEach { chart ->
-                paint.style = Paint.Style.FILL
-                paint.color = if (chart.backgroundColor != 0) chart.backgroundColor else android.graphics.Color.parseColor("#1E293B")
-                paint.alpha = layerAlpha
-                canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
-
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 1.5f
-                paint.color = android.graphics.Color.parseColor("#475569")
-                canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
-
-                val cx = chart.x
-                val cy = chart.y
-                val cw = chart.width
-                val ch = chart.height
-                paint.strokeWidth = 2.5f
-                paint.color = android.graphics.Color.parseColor("#CBD5E1")
-                canvas.drawLine(cx, cy + ch / 2f, cx + cw, cy + ch / 2f, paint)
-                canvas.drawLine(cx + cw / 2f, cy, cx + cw / 2f, cy + ch, paint)
+            if (layer.strokes.isNotEmpty() || layer.eraserMarks.isNotEmpty()) {
+                renderStrokeLayer(canvas, layer)
             }
 
             renderCodeBlocks(canvas, layer.codeBlocks, layerAlpha)
         }
         return bitmap
+    }
+
+    private fun renderCharts(
+        canvas: Canvas,
+        charts: List<ChartElementEntity>,
+        paint: Paint,
+        alpha: Int,
+        pageBackgroundColor: Int
+    ) {
+        val darkPage = isDarkColor(pageBackgroundColor)
+        charts.forEach { chart ->
+            val background = when {
+                chart.backgroundColor != 0 -> chart.backgroundColor
+                darkPage -> android.graphics.Color.parseColor("#1E293B")
+                else -> android.graphics.Color.parseColor("#F8FAFC")
+            }
+            val border = if (darkPage) {
+                android.graphics.Color.parseColor("#475569")
+            } else {
+                android.graphics.Color.parseColor("#CBD5E1")
+            }
+            val axis = if (darkPage) {
+                android.graphics.Color.parseColor("#CBD5E1")
+            } else {
+                android.graphics.Color.parseColor("#475569")
+            }
+            canvas.save()
+            if (chart.rotation != 0f) {
+                canvas.rotate(chart.rotation, chart.x + chart.width / 2f, chart.y + chart.height / 2f)
+            }
+            paint.style = Paint.Style.FILL
+            paint.color = background
+            paint.alpha = alpha.coerceIn(0, 255)
+            canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.5f
+            paint.color = border
+            paint.alpha = alpha.coerceIn(0, 255)
+            canvas.drawRect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height, paint)
+            drawStableChartAxes(canvas, chart, paint, alpha, axis, darkPage)
+            canvas.restore()
+        }
+    }
+
+    /** Matches the editor's fixed coordinate origin so exports do not recenter X/Y axes. */
+    private fun drawStableChartAxes(
+        canvas: Canvas,
+        chart: ChartElementEntity,
+        paint: Paint,
+        alpha: Int,
+        axisColor: Int,
+        darkPage: Boolean
+    ) {
+        val unitsToPixelsX = chart.squarePixelsPerUnit()
+        val unitsToPixelsY = unitsToPixelsX
+        val originX = chart.x + (chart.originOffsetX.takeIf { it >= 0f } ?: chart.width / 2f)
+        val originY = chart.y + (chart.originOffsetY.takeIf { it >= 0f } ?: chart.height / 2f)
+        val right = chart.x + chart.width
+        val bottom = chart.y + chart.height
+        val xTicks = chartAxisTickValues(
+            minimum = -(originX - chart.x) / unitsToPixelsX,
+            maximum = (right - originX) / unitsToPixelsX,
+            step = chart.xStep
+        )
+        val yTicks = chartAxisTickValues(
+            minimum = -(bottom - originY) / unitsToPixelsY,
+            maximum = (originY - chart.y) / unitsToPixelsY,
+            step = chart.yStep
+        )
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1f
+        paint.alpha = alpha.coerceIn(0, 255) / 2
+        paint.color = axisColor
+        val firstX = kotlin.math.ceil((chart.x - originX) / unitsToPixelsX).toInt()
+        val lastX = kotlin.math.floor((right - originX) / unitsToPixelsX).toInt()
+        for (index in firstX..lastX) {
+            val x = originX + index * unitsToPixelsX
+            canvas.drawLine(x, chart.y, x, bottom, paint)
+        }
+        val firstY = kotlin.math.ceil((chart.y - originY) / unitsToPixelsY).toInt()
+        val lastY = kotlin.math.floor((bottom - originY) / unitsToPixelsY).toInt()
+        for (index in firstY..lastY) {
+            val y = originY + index * unitsToPixelsY
+            canvas.drawLine(chart.x, y, right, y, paint)
+        }
+
+        paint.strokeWidth = 2.5f
+        paint.alpha = alpha.coerceIn(0, 255)
+        val xAxisVisible = originY in chart.y..bottom
+        val yAxisVisible = originX in chart.x..right
+        if (xAxisVisible) canvas.drawLine(chart.x, originY, right, originY, paint)
+        if (yAxisVisible) canvas.drawLine(originX, chart.y, originX, bottom, paint)
+
+        val tickHalfLength = 4f
+        if (xAxisVisible) for (index in firstX..lastX) {
+            val x = originX + index * unitsToPixelsX
+            if (x in chart.x..right) {
+                canvas.drawLine(x, originY - tickHalfLength, x, originY + tickHalfLength, paint)
+            }
+        }
+        if (yAxisVisible) for (index in firstY..lastY) {
+            val y = originY + index * unitsToPixelsY
+            if (y in chart.y..bottom) {
+                canvas.drawLine(originX - tickHalfLength, y, originX + tickHalfLength, y, paint)
+            }
+        }
+
+        if (chart.showAxisLabels && chart.axisLabelsVisible) {
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (darkPage) android.graphics.Color.LTGRAY else android.graphics.Color.DKGRAY
+                this.alpha = alpha.coerceIn(0, 255)
+                textSize = 11f
+            }
+            if (xAxisVisible) xTicks.forEach { value ->
+                val x = originX + value * unitsToPixelsX
+                if (x in chart.x..right) {
+                    canvas.drawText(formatAxisValue(value), x - 6f, (originY + 14f).coerceAtMost(bottom - 4f), textPaint)
+                }
+            }
+            if (yAxisVisible) yTicks.forEach { value ->
+                if (kotlin.math.abs(value) <= 0.0001f) return@forEach
+                val y = originY - value * unitsToPixelsY
+                if (y in chart.y..bottom) {
+                    canvas.drawText(formatAxisValue(value), (originX + 4f).coerceAtMost(right - 12f), y + 4f, textPaint)
+                }
+            }
+            if (xAxisVisible) canvas.drawText("X", right - 18f, originY - 8f, textPaint)
+            if (yAxisVisible) canvas.drawText("Y", originX + 8f, chart.y + 18f, textPaint)
+        }
+    }
+
+    private fun chartAxisTickValues(minimum: Float, maximum: Float, step: Float): List<Float> {
+        val safeStep = step.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val first = kotlin.math.ceil(minimum / safeStep).toInt()
+        val last = kotlin.math.floor(maximum / safeStep).toInt()
+        if (last < first) return emptyList()
+        val stride = kotlin.math.ceil((last - first + 1) / 501f).toInt().coerceAtLeast(1)
+        return buildList {
+            for (index in first..last step stride) add(index * safeStep)
+        }
+    }
+
+    private fun formatAxisValue(value: Float): String =
+        if (value == value.toInt().toFloat()) value.toInt().toString()
+        else String.format(java.util.Locale.US, "%.1f", value)
+
+    private fun isDarkColor(color: Int): Boolean {
+        val red = android.graphics.Color.red(color) / 255f
+        val green = android.graphics.Color.green(color) / 255f
+        val blue = android.graphics.Color.blue(color) / 255f
+        return red * 0.299f + green * 0.587f + blue * 0.114f < 0.5f
+    }
+
+    private fun renderStrokeLayer(canvas: Canvas, layer: LayerEntity) {
+        if (layer.strokes.isEmpty()) return
+        val outerLayer = canvas.saveLayer(null, null)
+
+        layer.strokes.forEach { stroke ->
+            val masks = layer.eraserMarks.filter { mark ->
+                stroke.id in mark.affectedStrokeIds ||
+                    (mark.affectedStrokeIds.isEmpty() && DrawingEngine.doesEraserPathAffectStroke(
+                        mark.points,
+                        mark.width,
+                        stroke
+                    ))
+            }
+            RasterStrokeCompositor.drawRasterStroke(canvas, stroke, masks, layerAlpha = layer.opacity)
+        }
+        canvas.restoreToCount(outerLayer)
     }
 
     private fun renderCodeBlocks(
@@ -756,14 +920,4 @@ fun HslaColor.toHexColor(): String {
         (color.red * 255).toInt(),
         (color.green * 255).toInt(),
         (color.blue * 255).toInt())
-}
-
-fun HslaColor.toAndroidColor(): Int {
-    val color = this.toColor()
-    return android.graphics.Color.argb(
-        (color.alpha * 255).toInt(),
-        (color.red * 255).toInt(),
-        (color.green * 255).toInt(),
-        (color.blue * 255).toInt()
-    )
 }

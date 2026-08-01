@@ -1,0 +1,29 @@
+{
+  "mode": "ralph",
+  "active": false,
+  "iteration": 4,
+  "max_iterations": 10,
+  "current_phase": "complete",
+  "started_at": "2026-08-01T10:41:19Z",
+  "completed_at": "2026-08-01T13:31:00Z",
+  "run_outcome": "finish",
+  "completion_audit_path": ".omx/audits/canvas-raster-graph-completion-20260801.md",
+  "completion_audit": {
+    "passed": true,
+    "prompt_to_artifact_checklist": [
+      "Square graph cells and stable origin: CanvasModels.kt and CanvasInteractionMathTest.",
+      "Stable graph resize/selection/attachment/copy: InteractiveCanvas.kt, CanvasEditorViewModel.kt, and CanvasInteractionMathTest.",
+      "Paint-style 2 px raster erasing: RasterStrokeCompositor.kt, DrawingState.kt, and DrawingEngineEraserTest.",
+      "PNG/PDF/SVG chart and mask export parity: ExportManager.kt.",
+      "Mi-tablet delivery without data deletion: adb install -r on serial 89b62a34."
+    ],
+    "verification_evidence": [
+      "./gradlew.bat --no-daemon testDebugUnitTest assembleDebug completed with exit 0 and BUILD SUCCESSFUL.",
+      "Independent architect review returned APPROVE — Architectural Status: CLEAR.",
+      "adb install -r reported Success and pm path confirmed com.aistudio.mecanvas.noteapp."
+    ]
+  },
+  "state": {
+    "summary": "Fixed logical-pixel erasing, chart geometry and attachment handling, export parity, passed the complete unit suite and debug build, and installed the APK on Mi tablet 89b62a34."
+  }
+}
