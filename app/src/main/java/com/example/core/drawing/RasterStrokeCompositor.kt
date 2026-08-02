@@ -186,33 +186,9 @@ object RasterStrokeCompositor {
         scale: Float = 1f,
         panX: Float = 0f,
         panY: Float = 0f,
-        useCache: Boolean = true
+        useCache: Boolean = false
     ) {
-        val bounds = logicalRasterBounds(stroke) ?: return
-        if (bounds.width > MAX_RASTER_EDGE || bounds.height > MAX_RASTER_EDGE) {
-            // Extremely large legacy strokes remain safe to render. Ordinary handwriting uses
-            // the fixed logical-pixel cache below.
-            drawMaskedStroke(canvas, stroke, masks, layerAlpha, scale, panX, panY)
-            return
-        }
-        val cacheKey = "${stroke.hashCode()}:${masks.hashCode()}:${layerAlpha.toBits()}:${bounds.left}:${bounds.top}"
-        val bitmap = (if (useCache) rasterCache.get(cacheKey) else null)
-            ?: Bitmap.createBitmap(bounds.width, bounds.height, Bitmap.Config.ARGB_8888).also { raster ->
-                val rasterCanvas = Canvas(raster)
-                rasterCanvas.translate(-bounds.left.toFloat(), -bounds.top.toFloat())
-                drawMaskedStroke(rasterCanvas, stroke, masks, layerAlpha)
-                if (useCache) rasterCache.put(cacheKey, raster)
-            }
-        val destination = RectF(
-            bounds.left * scale + panX,
-            bounds.top * scale + panY,
-            bounds.right * scale + panX,
-            bounds.bottom * scale + panY
-        )
-        canvas.drawBitmap(bitmap, null, destination, Paint().apply {
-            isFilterBitmap = false
-            isAntiAlias = false
-        })
+        drawMaskedStroke(canvas, stroke, masks, layerAlpha, scale, panX, panY)
     }
 
     private fun logicalRasterBounds(stroke: StrokeEntity): RasterBounds? {

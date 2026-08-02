@@ -399,6 +399,21 @@ data class PageEntity(
                 textBlocks = textBlocks, images = images, charts = charts
             ))
         }
+        val hasTopLevel = strokes.isNotEmpty() || shapes.isNotEmpty() || textBlocks.isNotEmpty() || images.isNotEmpty() || charts.isNotEmpty()
+        if (hasTopLevel) {
+            val targetId = activeLayerId ?: layers.first().id
+            return layers.map { layer ->
+                if (layer.id == targetId) {
+                    layer.copy(
+                        strokes = layer.strokes + strokes,
+                        shapes = layer.shapes + shapes,
+                        textBlocks = layer.textBlocks + textBlocks,
+                        images = layer.images + images,
+                        charts = layer.charts + charts
+                    )
+                } else layer
+            }
+        }
         return layers
     }
 

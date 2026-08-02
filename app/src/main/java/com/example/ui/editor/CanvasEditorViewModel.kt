@@ -479,6 +479,16 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = list))
     }
 
+    fun ensureCurrentPageReady() {
+        val page = currentPage ?: return
+        val normalized = ensureLayersExist(page)
+        val targetLayerId = resolveWritableLayerId(normalized, _activeLayerId.value)
+        _activeLayerId.value = targetLayerId
+        if (normalized != page || normalized.activeLayerId != targetLayerId) {
+            updateCurrentPage(normalized.copy(activeLayerId = targetLayerId))
+        }
+    }
+
     fun addStrokeToCurrentPage(stroke: StrokeEntity) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
@@ -495,21 +505,27 @@ class CanvasEditorViewModel(
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
+    fun commitActiveStroke(stroke: StrokeEntity?) {
+        if (stroke != null) {
+            addStrokeToCurrentPage(stroke)
+        }
+    }
+
     fun eraseAtPoint(point: Offset, radius: Float) {
         val page = currentPage ?: return
         if (_eraserMode.value != EraserMode.OBJECT) return
         val migrated = ensureLayersExist(page)
         if (!eraserGestureUndoPushed) pushUndoState(migrated)
 
+        val effectiveR = radius.coerceAtLeast(48f)
+
         fun inRect(x: Float, y: Float, w: Float, h: Float): Boolean {
-            val effectiveR = radius.coerceAtLeast(12f)
             return point.x in (x - effectiveR)..(x + w + effectiveR) && point.y in (y - effectiveR)..(y + h + effectiveR)
         }
 
         var erasedAny = false
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.isVisible && !layer.isLocked) {
-                val effectiveR = radius.coerceAtLeast(12f)
                 val erasedStrokeIds = layer.strokes.filter { DrawingEngine.isPointInStroke(point, it, effectiveR) }.map { it.id }.toSet()
                 val erasedShapeIds = layer.shapes.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
                 val erasedTextIds = layer.textBlocks.filter { inRect(it.x, it.y, it.width, it.height) }.map { it.id }.toSet()
@@ -558,14 +574,20 @@ class CanvasEditorViewModel(
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         if (!eraserGestureUndoPushed) pushUndoState(migrated)
+        val targetLayerId = resolveWritableLayerId(migrated, _activeLayerId.value) ?: return
+        _activeLayerId.value = targetLayerId
+
         val updatedLayers = migrated.layers.map { layer ->
-            if (!layer.isVisible || layer.isLocked) return@map layer
-            val affectedIds = layer.strokes.map(StrokeEntity::id)
-            layer.copy(
-                eraserMarks = layer.eraserMarks + mark.copy(affectedStrokeIds = affectedIds)
-            )
+            if (layer.id == targetLayerId) {
+                val affectedIds = layer.strokes.map(StrokeEntity::id)
+                layer.copy(
+                    eraserMarks = layer.eraserMarks + mark.copy(affectedStrokeIds = affectedIds)
+                )
+            } else {
+                layer
+            }
         }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
     }
 
     fun fillElement(elementId: String?, elementType: String?, color: HslaColor = _currentColor.value) {

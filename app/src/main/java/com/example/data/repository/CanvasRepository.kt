@@ -10,6 +10,7 @@ import com.example.data.models.BackgroundPattern
 import com.example.data.models.CanvasEntity
 import com.example.data.models.ChartElementEntity
 import com.example.data.models.HslaColor
+import com.example.data.models.LayerEntity
 import com.example.data.models.PageEntity
 import com.example.data.models.PageSizePreset
 import com.example.data.models.ShapeEntity
@@ -76,10 +77,21 @@ class CanvasRepository(private val context: Context) {
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
+        val defaultLayer = LayerEntity(
+            id = "default",
+            name = context.getString(R.string.layer_number, 1),
+            isVisible = true,
+            isLocked = false,
+            opacity = 1f,
+            strokes = emptyList(),
+            eraserMarks = emptyList()
+        )
         val initialPage = PageEntity(
             id = UUID.randomUUID().toString(),
             canvasId = canvasId,
-            pageIndex = 0
+            pageIndex = 0,
+            layers = listOf(defaultLayer),
+            activeLayerId = "default"
         )
         canvasDao.insertCanvas(canvas)
         pageDao.insertPage(initialPage)

@@ -51,4 +51,19 @@ class CanvasRepositoryTest {
         assertEquals(1, allStrokes.size)
         assertEquals("persisted-stroke-1", allStrokes.first().id)
     }
+
+    @Test
+    fun `createNewCanvas initializes page with default active layer`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = CanvasRepository(context)
+
+        val canvasId = repository.createNewCanvas("New Canvas Layer Test")
+        val initialPages = repository.getPagesForCanvas(canvasId).first()
+        assertEquals(1, initialPages.size)
+
+        val initialPage = initialPages.first()
+        assertEquals("default", initialPage.activeLayerId)
+        assertEquals(1, initialPage.layers.size)
+        assertEquals("default", initialPage.layers.first().id)
+    }
 }

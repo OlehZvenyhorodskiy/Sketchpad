@@ -143,4 +143,45 @@ class DrawingEngineEraserTest {
         assertEquals(8f, DrawingEngine.eraserDiameter(8f), 0.001f)
         assertEquals(1f, DrawingEngine.eraserDiameter(1f), 0.001f)
     }
+
+    @Test
+    fun `isDrawingTool correctly identifies all regular brush tools`() {
+        val strokeTools = listOf(
+            ToolType.PEN,
+            ToolType.PENCIL,
+            ToolType.INK_PEN,
+            ToolType.FOUNTAIN_PEN,
+            ToolType.MARKER,
+            ToolType.AIRBRUSH,
+            ToolType.CRAYON,
+            ToolType.WATERCOLOR_BRUSH,
+            ToolType.LASER
+        )
+        strokeTools.forEach { tool ->
+            assertTrue("$tool should be recognized as a drawing tool", tool.isDrawingTool())
+        }
+        org.junit.Assert.assertFalse(ToolType.ERASER.isDrawingTool())
+        org.junit.Assert.assertFalse(ToolType.POINTER.isDrawingTool())
+        org.junit.Assert.assertFalse(ToolType.SELECTOR.isDrawingTool())
+    }
+
+    @Test
+    fun `isPointInStroke returns true near segment and false outside tolerance`() {
+        val stroke = horizontalStroke()
+        assertTrue(DrawingEngine.isPointInStroke(Offset(50f, 0f), stroke, radius = 1f))
+        org.junit.Assert.assertFalse(DrawingEngine.isPointInStroke(Offset(50f, 100f), stroke, radius = 1f))
+    }
+
+    @Test
+    fun `isPointInStroke handles single point stroke`() {
+        val singlePointStroke = StrokeEntity(
+            id = "single",
+            tool = ToolType.PEN,
+            colorHsla = HslaColor.BLACK,
+            baseWidth = 2f,
+            points = listOf(StrokePoint(50f, 50f))
+        )
+        assertTrue(DrawingEngine.isPointInStroke(Offset(50f, 50f), singlePointStroke, radius = 5f))
+        org.junit.Assert.assertFalse(DrawingEngine.isPointInStroke(Offset(100f, 100f), singlePointStroke, radius = 5f))
+    }
 }

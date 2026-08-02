@@ -23,6 +23,19 @@ enum class RulerMode {
     COMPASS
 }
 
+fun ToolType.isDrawingTool(): Boolean = when (this) {
+    ToolType.PEN,
+    ToolType.PENCIL,
+    ToolType.INK_PEN,
+    ToolType.FOUNTAIN_PEN,
+    ToolType.MARKER,
+    ToolType.AIRBRUSH,
+    ToolType.CRAYON,
+    ToolType.WATERCOLOR_BRUSH,
+    ToolType.LASER -> true
+    else -> false
+}
+
 data class RulerState(
     val isVisible: Boolean = false,
     val center: Offset = Offset(400f, 400f),

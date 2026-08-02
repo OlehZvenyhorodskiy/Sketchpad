@@ -238,7 +238,7 @@ fun InteractiveCanvas(
         modifier = modifier
             .fillMaxSize()
             .background(bgColor)
-            .pointerInput(drawWithFingers, palmRejectionEnabled) {
+            .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -273,7 +273,7 @@ fun InteractiveCanvas(
                     }
                 }
             }
-            .pointerInput(drawWithFingers, palmRejectionEnabled) {
+            .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val currentTool = latestCurrentTool
