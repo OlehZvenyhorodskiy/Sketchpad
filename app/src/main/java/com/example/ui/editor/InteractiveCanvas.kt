@@ -56,6 +56,7 @@ import com.example.R
 import com.example.core.drawing.DrawingEngine
 import com.example.core.drawing.RasterStrokeCompositor
 import com.example.core.drawing.RulerState
+import com.example.core.drawing.isDrawingTool
 import com.example.data.models.BackgroundPattern
 import com.example.data.models.CanvasEntity
 import com.example.data.models.ChartElementEntity
@@ -358,7 +359,7 @@ fun InteractiveCanvas(
                         activeStrokeChartId = null
                         pendingUtilityTap = null
                         transformPreview = null
-                        if (currentTool.isStrokeTool()) {
+                        if (currentTool.isDrawingTool()) {
                             if (rulerState.isVisible) {
                                 val g = rulerState.nearestEdge(screenPoint, guideZone = 18f)
                                 if (g != null) {
@@ -718,7 +719,7 @@ fun InteractiveCanvas(
                             }
                         }
                         pendingUtilityTap = null
-                        if (currentTool.isStrokeTool() && activeStrokePoints.isNotEmpty()) {
+                        if (currentTool.isDrawingTool() && activeStrokePoints.isNotEmpty()) {
                             val newStroke = StrokeEntity(
                                 tool = currentTool,
                                 colorHsla = currentColor.copy(alpha = strokeOpacity),
@@ -1815,18 +1816,7 @@ private fun isTouchOnRulerControls(point: Offset, ruler: RulerState): Boolean {
     return Math.hypot((touchX - leftX).toDouble(), (touchY - leftY).toDouble()) < 30.0
 }
 
-private fun ToolType.isStrokeTool(): Boolean = when (this) {
-    ToolType.PEN,
-    ToolType.PENCIL,
-    ToolType.INK_PEN,
-    ToolType.FOUNTAIN_PEN,
-    ToolType.MARKER,
-    ToolType.AIRBRUSH,
-    ToolType.CRAYON,
-    ToolType.WATERCOLOR_BRUSH,
-    ToolType.LASER -> true
-    else -> false
-}
+// isDrawingTool() already defined in DrawingState.kt
 
 private data class CanvasElementHit(val id: String, val type: String)
 

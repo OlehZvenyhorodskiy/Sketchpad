@@ -106,6 +106,16 @@ class CanvasRepository(private val context: Context) {
         var charts = emptyList<ChartElementEntity>()
         var textBlocks = emptyList<TextBlockEntity>()
 
+        val defaultLayer = LayerEntity(
+            id = "default",
+            name = context.getString(R.string.layer_number, 1),
+            isVisible = true,
+            isLocked = false,
+            opacity = 1f,
+            strokes = emptyList(),
+            eraserMarks = emptyList()
+        )
+
         when (templateType) {
             "GRID_CHART" -> {
                 title = context.getString(R.string.template_graph_canvas_title)
@@ -165,7 +175,9 @@ class CanvasRepository(private val context: Context) {
             pageIndex = 0,
             shapes = shapes,
             charts = charts,
-            textBlocks = textBlocks
+            textBlocks = textBlocks,
+            layers = listOf(defaultLayer),
+            activeLayerId = "default"
         )
 
         canvasDao.insertCanvas(canvas)
@@ -188,10 +200,21 @@ class CanvasRepository(private val context: Context) {
     suspend fun addPage(canvasId: String): PageEntity = withContext(Dispatchers.IO) {
         val existingPages = pageDao.getPagesForCanvasSync(canvasId)
         val nextIndex = existingPages.size
+        val defaultLayer = LayerEntity(
+            id = "default",
+            name = context.getString(R.string.layer_number, 1),
+            isVisible = true,
+            isLocked = false,
+            opacity = 1f,
+            strokes = emptyList(),
+            eraserMarks = emptyList()
+        )
         val newPage = PageEntity(
             id = UUID.randomUUID().toString(),
             canvasId = canvasId,
-            pageIndex = nextIndex
+            pageIndex = nextIndex,
+            layers = listOf(defaultLayer),
+            activeLayerId = "default"
         )
         pageDao.insertPage(newPage)
         val canvas = canvasDao.getCanvasByIdSync(canvasId)
