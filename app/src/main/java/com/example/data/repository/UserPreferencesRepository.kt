@@ -30,6 +30,7 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_THEME_STYLE_V2 = stringPreferencesKey("theme_style_v2")
         val KEY_ACCENT_COLOR = intPreferencesKey("accent_color") // ARGB int
         val KEY_LEFT_HANDED_MODE = booleanPreferencesKey("left_handed_mode")
+        val KEY_PALM_REJECTION = booleanPreferencesKey("palm_rejection")
         val KEY_SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
         val KEY_CURSOR_SHAPE = intPreferencesKey("cursor_shape") // 0: CIRCLE, 1: RING, 2: CROSSHAIR
         val KEY_CURSOR_SIZE = floatPreferencesKey("cursor_size") // dp
@@ -56,6 +57,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     val leftHandedMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_LEFT_HANDED_MODE] ?: false
+    }
+
+    val palmRejectionEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PALM_REJECTION] ?: true
     }
 
     val cursorShape: Flow<Int> = context.dataStore.data.map { prefs ->
@@ -188,6 +193,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setDrawWithFingers(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_DRAW_WITH_FINGERS] = enabled
+        }
+    }
+
+    suspend fun setPalmRejectionEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PALM_REJECTION] = enabled
         }
     }
 

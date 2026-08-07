@@ -38,9 +38,15 @@ enum class ToolType {
     INK_PEN,
     FOUNTAIN_PEN,
     MARKER,
+    AIRBRUSH,
+    CRAYON,
+    WATERCOLOR_BRUSH,
     LASER,
+    POINTER,
     SELECTOR,
     ERASER,
+    FILL,
+    EYEDROPPER,
     RULER,
     TEXT
 }
@@ -177,8 +183,11 @@ data class TextBlockEntity(
     val fontSize: Float = 18f,
     val isBold: Boolean = false,
     val isItalic: Boolean = false,
+    val isUnderline: Boolean = false,
+    val fontFamily: String = "SANS",
     val color: Int = 0xFF1E293B.toInt(),
-    val alignment: String = "LEFT"
+    val alignment: String = "LEFT",
+    val rotation: Float = 0f
 )
 
 @JsonClass(generateAdapter = true)

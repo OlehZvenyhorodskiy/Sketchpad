@@ -62,12 +62,18 @@
     <string name="accent_color">Accent color</string>
     <string name="left_handed_mode">Left-handed mode</string>
     <string name="mirror_tool_panels">Mirror the tool panels</string>
+    <string name="palm_rejection">Anti-palm detection</string>
+    <string name="palm_rejection_hint">Ignore accidental hand touches while a stylus is in use. Two-finger pan and zoom still work.</string>
     <string name="theme_system_default">Default</string>
     <string name="theme_paper_notebook">Notebook</string>
     <string name="theme_neumorphism">Neumorphism</string>
     <string name="theme_amoled">AMOLED</string>
     <string name="theme_chalkboard">Chalkboard</string>
     <string name="theme_sepia">Sepia</string>
+    <string name="theme_midnight_indigo">Midnight indigo</string>
+    <string name="theme_forest_study">Forest study</string>
+    <string name="theme_rose_quartz">Rose quartz</string>
+    <string name="theme_high_contrast">High contrast</string>
 
     <string name="page_background">Page background</string>
     <string name="custom_color">Custom color</string>
@@ -127,6 +133,16 @@
     <string name="pen">Pen</string>
     <string name="pencil">Pencil</string>
     <string name="ink_pen">Ink pen</string>
+    <string name="fountain_pen">Fountain pen</string>
+    <string name="ink_brush">Ink brush</string>
+    <string name="airbrush">Airbrush</string>
+    <string name="crayon">Crayon</string>
+    <string name="watercolor_brush">Watercolor brush</string>
+    <string name="laser">Laser pointer</string>
+    <string name="pointer_tool">Pointer / open links</string>
+    <string name="fill_tool">Fill</string>
+    <string name="eyedropper_tool">Eyedropper</string>
+    <string name="text_tool">Text</string>
     <string name="marker">Highlighter</string>
     <string name="selection_lasso">Selection (lasso)</string>
     <string name="selection_single">Selection (single)</string>

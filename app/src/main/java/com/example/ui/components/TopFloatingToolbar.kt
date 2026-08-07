@@ -58,77 +58,94 @@ fun TopFloatingToolbar(
             Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ═══════════════════════════════════════════════════════════
-        // LEFT PILL: Width Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
-        // ═══════════════════════════════════════════════════════════
         if (!isSlidersVertical) {
             ThemedPanel(
                 modifier = Modifier.weight(1f),
                 shadowElevation = 6.dp,
                 tonalElevation = 4.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WidthNormal,
-                        contentDescription = stringResource(R.string.thickness),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "${strokeWidth.toInt()} px",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        Icon(
+                            imageVector = Icons.Default.WidthNormal,
+                            contentDescription = stringResource(R.string.thickness),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        val isEraser = currentTool == ToolType.ERASER
+                        val previewOutline = if (currentColor.lightness > 0.82f) Color(0xFF334155)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                        ) {
+                            Text(
+                                text = "${if (isEraser) strokeWidth.coerceIn(1f, 50f).toInt() else strokeWidth.toInt()} px",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .border(1.dp, previewOutline.copy(alpha = 0.55f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isEraser) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
+                                        .border(2.dp, previewOutline, CircleShape)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
+                                        .clip(CircleShape)
+                                        .background(currentColor.copy(alpha = strokeOpacity).toColor())
+                                        .border(1.dp, previewOutline, CircleShape)
+                                )
+                            }
+                        }
+                        Slider(
+                            value = strokeWidth,
+                            onValueChange = onStrokeWidthChange,
+                            valueRange = 1f..50f,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
                         )
                     }
-                    val isEraser = currentTool == ToolType.ERASER
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                     ) {
-                        if (isEraser) {
-                            Box(
-                                modifier = Modifier
-                                    .size((strokeWidth * 2.5f).dp.coerceIn(4.dp, 28.dp))
-                                    .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
-                            )
+                        val presets = if (currentTool == ToolType.ERASER) {
+                            listOf(2f to 2, 6f to 6, 12f to 12)
                         } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(strokeWidth.dp.coerceIn(2.dp, 28.dp))
-                                    .clip(CircleShape)
-                                    .background(currentColor.copy(alpha = strokeOpacity).toColor())
+                            listOf(2f to 2, 5f to 5, 12f to 12)
+                        }
+                        presets.forEach { (preset, label) ->
+                            WidthPresetButton(
+                                label = label,
+                                selected = kotlin.math.abs(strokeWidth - preset) < 0.25f,
+                                onClick = { onStrokeWidthChange(preset) }
                             )
                         }
                     }
-                    Slider(
-                        value = strokeWidth,
-                        onValueChange = onStrokeWidthChange,
-                        valueRange = 1f..50f,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(36.dp)
-                    )
                 }
             }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // CENTER PILL: Drawing Tools — ЗАВЖДИ ВИДИМИЙ
-        // ═══════════════════════════════════════════════════════════
         ThemedPanel(
-            modifier = Modifier.wrapContentSize(),
+            modifier = if (isSlidersVertical) {
+                Modifier.widthIn(max = 760.dp)
+            } else Modifier.widthIn(max = 430.dp),
             shadowElevation = 8.dp,
             tonalElevation = 6.dp
         ) {
@@ -140,30 +157,68 @@ fun TopFloatingToolbar(
                 horizontalArrangement = Arrangement.Center
             ) {
                 ToolIconButton(
+                    icon = Icons.Default.TouchApp,
+                    label = stringResource(R.string.pointer_tool),
+                    isSelected = currentTool == ToolType.POINTER,
+                    onClick = { onToolSelect(ToolType.POINTER) }
+                )
+                ToolIconButton(
                     icon = Icons.Default.Create,
                     label = stringResource(R.string.pen),
                     isSelected = currentTool == ToolType.PEN,
                     onClick = { onToolSelect(ToolType.PEN) }
                 )
-                ToolIconButton(
-                    icon = Icons.Default.Brush,
-                    label = stringResource(R.string.pencil),
-                    isSelected = currentTool == ToolType.PENCIL,
-                    onClick = { onToolSelect(ToolType.PENCIL) }
-                )
-                ToolIconButton(
-                    icon = Icons.Default.FormatPaint,
-                    label = stringResource(R.string.ink_pen),
-                    isSelected = currentTool == ToolType.INK_PEN || currentTool == ToolType.FOUNTAIN_PEN,
-                    onClick = { onToolSelect(ToolType.INK_PEN) }
-                )
-                ToolIconButton(
-                    icon = Icons.Default.Highlight,
-                    label = stringResource(R.string.marker),
-                    isSelected = currentTool == ToolType.MARKER,
-                    onClick = { onToolSelect(ToolType.MARKER) }
-                )
-                val selectorIcon = if (selectionMode == com.example.data.models.SelectionMode.LASSO) Icons.Default.HighlightAlt else Icons.Default.CropSquare
+                if (isSlidersVertical) {
+                    ToolIconButton(
+                        icon = Icons.Default.Edit,
+                        label = stringResource(R.string.pencil),
+                        isSelected = currentTool == ToolType.PENCIL,
+                        onClick = { onToolSelect(ToolType.PENCIL) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.Brush,
+                        label = stringResource(R.string.ink_pen),
+                        isSelected = currentTool == ToolType.INK_PEN,
+                        onClick = { onToolSelect(ToolType.INK_PEN) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.Draw,
+                        label = stringResource(R.string.fountain_pen),
+                        isSelected = currentTool == ToolType.FOUNTAIN_PEN,
+                        onClick = { onToolSelect(ToolType.FOUNTAIN_PEN) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.Highlight,
+                        label = stringResource(R.string.marker),
+                        isSelected = currentTool == ToolType.MARKER,
+                        onClick = { onToolSelect(ToolType.MARKER) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.GraphicEq,
+                        label = stringResource(R.string.laser),
+                        isSelected = currentTool == ToolType.LASER,
+                        onClick = { onToolSelect(ToolType.LASER) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.Gradient,
+                        label = stringResource(R.string.ink_brush),
+                        isSelected = currentTool == ToolType.AIRBRUSH,
+                        onClick = { onToolSelect(ToolType.AIRBRUSH) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.Texture,
+                        label = stringResource(R.string.crayon),
+                        isSelected = currentTool == ToolType.CRAYON,
+                        onClick = { onToolSelect(ToolType.CRAYON) }
+                    )
+                    ToolIconButton(
+                        icon = Icons.Default.WaterDrop,
+                        label = stringResource(R.string.watercolor_brush),
+                        isSelected = currentTool == ToolType.WATERCOLOR_BRUSH,
+                        onClick = { onToolSelect(ToolType.WATERCOLOR_BRUSH) }
+                    )
+                }
+                val selectorIcon = if (selectionMode == com.example.data.models.SelectionMode.LASSO) Icons.Default.Gesture else Icons.Default.SelectAll
                 ToolIconButton(
                     icon = selectorIcon,
                     label = if (selectionMode == com.example.data.models.SelectionMode.LASSO) stringResource(R.string.selection_lasso) else stringResource(R.string.selection_single),
@@ -173,15 +228,32 @@ fun TopFloatingToolbar(
                         else onToolSelect(ToolType.SELECTOR)
                     }
                 )
-                val eraserIcon = if (eraserMode == EraserMode.PIXEL) Icons.Default.Circle else Icons.Default.CropSquare
                 ToolIconButton(
-                    icon = eraserIcon,
+                    icon = Icons.Default.Backspace,
                     label = if (eraserMode == EraserMode.OBJECT) stringResource(R.string.eraser_object) else stringResource(R.string.eraser_pixel),
                     isSelected = currentTool == ToolType.ERASER,
                     onClick = {
                         if (currentTool == ToolType.ERASER) onEraserModeToggle()
                         else onToolSelect(ToolType.ERASER)
                     }
+                )
+                ToolIconButton(
+                    icon = Icons.Default.FormatColorFill,
+                    label = stringResource(R.string.fill_tool),
+                    isSelected = currentTool == ToolType.FILL,
+                    onClick = { onToolSelect(ToolType.FILL) }
+                )
+                ToolIconButton(
+                    icon = Icons.Default.Colorize,
+                    label = stringResource(R.string.eyedropper_tool),
+                    isSelected = currentTool == ToolType.EYEDROPPER,
+                    onClick = { onToolSelect(ToolType.EYEDROPPER) }
+                )
+                ToolIconButton(
+                    icon = Icons.Default.Title,
+                    label = stringResource(R.string.text_tool),
+                    isSelected = currentTool == ToolType.TEXT,
+                    onClick = { onToolSelect(ToolType.TEXT) }
                 )
                 ToolIconButton(
                     icon = Icons.Default.Straighten,
@@ -196,7 +268,12 @@ fun TopFloatingToolbar(
                         .size(32.dp)
                         .clip(CircleShape)
                         .background(currentColor.toColor())
-                        .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        .border(
+                            2.dp,
+                            if (currentColor.lightness > 0.82f) Color(0xFF334155)
+                            else MaterialTheme.colorScheme.outline,
+                            CircleShape
+                        )
                         .clickable { onColorPickerClick() }
                 )
 
@@ -219,9 +296,6 @@ fun TopFloatingToolbar(
             }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // RIGHT PILL: Opacity Slider — ВИДИМИЙ ЛИШЕ у горизонтальному режимі
-        // ═══════════════════════════════════════════════════════════
         if (!isSlidersVertical) {
             ThemedPanel(
                 modifier = Modifier.weight(1f),
@@ -289,5 +363,22 @@ fun ToolIconButton(
                 modifier = Modifier.size(20.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun WidthPresetButton(label: Int, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest
+    ) {
+        Text(
+            text = label.toString(),
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+        )
     }
 }

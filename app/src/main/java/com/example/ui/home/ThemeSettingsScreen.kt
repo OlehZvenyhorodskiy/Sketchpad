@@ -67,10 +67,12 @@ fun ThemeSettingsScreen(
     currentThemeOrdinal: Int,
     currentAccentArgb: Int,
     isLeftHanded: Boolean,
+    palmRejectionEnabled: Boolean = true,
     currentLanguage: AppLanguage,
     onThemeSelected: (Int) -> Unit,
     onAccentColorChanged: (Int) -> Unit,
     onLeftHandedChanged: (Boolean) -> Unit,
+    onPalmRejectionChanged: (Boolean) -> Unit = {},
     onLanguageSelected: (AppLanguage) -> Unit,
     onBack: () -> Unit
 ) {
@@ -87,6 +89,7 @@ fun ThemeSettingsScreen(
         mutableFloatStateOf(hsv[0])
     }
     var leftHanded by remember { mutableStateOf(isLeftHanded) }
+    var palmRejection by remember { mutableStateOf(palmRejectionEnabled) }
 
     val themeEntries = AppThemeStyle.entries.toList()
 
@@ -271,6 +274,33 @@ fun ThemeSettingsScreen(
                     }
                 )
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.palm_rejection),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.palm_rejection_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Switch(
+                    checked = palmRejection,
+                    onCheckedChange = {
+                        palmRejection = it
+                        onPalmRejectionChanged(it)
+                    }
+                )
+            }
         }
     }
 }
@@ -374,4 +404,8 @@ private fun themeDisplayName(style: AppThemeStyle): String = when (style) {
     AppThemeStyle.AMOLED_BLACK -> stringResource(R.string.theme_amoled)
     AppThemeStyle.CHALKBOARD -> stringResource(R.string.theme_chalkboard)
     AppThemeStyle.SEPIA_EINK -> stringResource(R.string.theme_sepia)
+    AppThemeStyle.MIDNIGHT_INDIGO -> stringResource(R.string.theme_midnight_indigo)
+    AppThemeStyle.FOREST_STUDY -> stringResource(R.string.theme_forest_study)
+    AppThemeStyle.ROSE_QUARTZ -> stringResource(R.string.theme_rose_quartz)
+    AppThemeStyle.HIGH_CONTRAST -> stringResource(R.string.theme_high_contrast)
 }

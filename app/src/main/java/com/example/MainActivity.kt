@@ -98,6 +98,7 @@ fun SketchpadApp(
     val themeStyleOrdinal = userPrefsRepository.themeStyle.collectAsState(initial = 0).value
     val accentColorArgb = userPrefsRepository.accentColor.collectAsState(initial = 0xFF38BDF8.toInt()).value
     val isLeftHanded = userPrefsRepository.leftHandedMode.collectAsState(initial = false).value
+    val palmRejectionEnabled = userPrefsRepository.palmRejectionEnabled.collectAsState(initial = true).value
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var pendingReferenceCapture by remember { mutableStateOf<CanvasReferenceCaptureSession?>(null) }
@@ -121,6 +122,7 @@ fun SketchpadApp(
                 currentThemeOrdinal = themeStyleOrdinal,
                 currentAccentArgb = accentColorArgb,
                 isLeftHanded = isLeftHanded,
+                palmRejectionEnabled = palmRejectionEnabled,
                 currentLanguage = currentLanguage,
                 onThemeSelected = { style ->
                     scope.launch {
@@ -135,6 +137,11 @@ fun SketchpadApp(
                 onLeftHandedChanged = { enabled ->
                     scope.launch {
                         userPrefsRepository.setLeftHandedMode(enabled)
+                    }
+                },
+                onPalmRejectionChanged = { enabled ->
+                    scope.launch {
+                        userPrefsRepository.setPalmRejectionEnabled(enabled)
                     }
                 },
                 onLanguageSelected = onLanguageSelected,

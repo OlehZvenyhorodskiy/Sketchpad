@@ -123,7 +123,7 @@ fun FloatingAiWindow(
     ) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
             tonalElevation = 12.dp,
             shadowElevation = 8.dp,
             modifier = Modifier
@@ -136,7 +136,7 @@ fun FloatingAiWindow(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f))
                         .then(dragHandleModifier)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically

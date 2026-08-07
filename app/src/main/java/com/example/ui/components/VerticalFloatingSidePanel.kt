@@ -76,17 +76,19 @@ fun VerticalFloatingSidePanel(
             }
 
             if (panelType == PanelType.WIDTH) {
+                val previewOutline = if (currentColor.lightness > 0.82f) androidx.compose.ui.graphics.Color(0xFF334155)
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
+                        .border(1.dp, previewOutline.copy(alpha = 0.55f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isEraser) {
                         Box(
                             modifier = Modifier
-                                .size((value * 2.5f).dp.coerceIn(4.dp, 36.dp))
-                                .border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+                                .size(value.dp.coerceIn(2.dp, 36.dp))
+                                .border(2.dp, previewOutline, CircleShape)
                         )
                     } else {
                         Box(
@@ -94,12 +96,37 @@ fun VerticalFloatingSidePanel(
                                 .size(value.dp.coerceIn(3.dp, 36.dp))
                                 .clip(CircleShape)
                                 .background(currentColor.copy(alpha = opacity).toColor())
+                                .border(1.dp, previewOutline, CircleShape)
                         )
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    val presets = if (isEraser) {
+                        listOf(2f to 2, 6f to 6, 12f to 12)
+                    } else {
+                        listOf(2f to 2, 5f to 5, 12f to 12)
+                    }
+                    presets.forEach { (preset, label) ->
+                        Surface(
+                            onClick = { onValueChange(preset) },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (kotlin.math.abs(value - preset) < 0.25f)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceContainerHighest
+                        ) {
+                            Text(
+                                text = label.toString(),
+                                fontSize = 9.sp,
+                                color = if (kotlin.math.abs(value - preset) < 0.25f)
+                                    MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Вертикальний слайдер з розтягуванням track на всю висоту BoxWithConstraints
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)

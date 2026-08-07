@@ -243,7 +243,17 @@ class CanvasEditorViewModel(
         viewModelScope.launch {
             repository.getPagesForCanvas(canvasId).collect { pList ->
                 _pages.value = pList.map { persisted ->
-                    localPageOverrides[persisted.id] ?: persisted
+                    val local = localPageOverrides[persisted.id]
+                    if (local != null) {
+                        if (local == persisted) {
+                            localPageOverrides.remove(persisted.id)
+                            persisted
+                        } else {
+                            local
+                        }
+                    } else {
+                        persisted
+                    }
                 }
                 if (pList.isNotEmpty() && _currentPageIndex.value >= pList.size) {
                     _currentPageIndex.value = 0
@@ -580,14 +590,9 @@ class CanvasEditorViewModel(
         pendingPageWrites[page.id] = page
         if (pageWriteJobs[page.id]?.isActive == true) return
         pageWriteJobs[page.id] = viewModelScope.launch {
-            var lastWritten: PageEntity? = null
             while (true) {
                 val next = pendingPageWrites.remove(page.id) ?: break
                 repository.updatePage(next)
-                lastWritten = next
-            }
-            if (lastWritten != null && localPageOverrides[page.id] == lastWritten) {
-                localPageOverrides.remove(page.id)
             }
             pageWriteJobs.remove(page.id)
         }
@@ -688,6 +693,42 @@ class CanvasEditorViewModel(
         val updatedLayers = migrated.layers.map { layer ->
             if (layer.id == targetLayerId) layer.copy(textBlocks = layer.textBlocks + newText)
             else layer
+        }
+        _canvasVersion.value++
+        updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))
+    }
+
+    fun insertTextAt(
+        text: String,
+        worldPosition: androidx.compose.ui.geometry.Offset,
+        fontSize: Float = 24f,
+        isBold: Boolean = false,
+        isItalic: Boolean = false,
+        isUnderline: Boolean = false,
+        fontFamily: String = "SANS",
+        alignment: String = "LEFT",
+        width: Float = 280f
+    ) {
+        if (text.isBlank()) return
+        val page = currentPage ?: return
+        val migrated = ensureLayersExist(page)
+        pushUndoState(migrated)
+        val targetLayerId = _activeLayerId.value ?: migrated.activeLayerId ?: "default"
+        val newText = TextBlockEntity(
+            text = text,
+            x = worldPosition.x,
+            y = worldPosition.y,
+            width = width.coerceIn(120f, 900f),
+            fontSize = fontSize.coerceIn(10f, 120f),
+            isBold = isBold,
+            isItalic = isItalic,
+            isUnderline = isUnderline,
+            fontFamily = fontFamily,
+            alignment = alignment,
+            color = _currentColor.value.toArgbInt()
+        )
+        val updatedLayers = migrated.layers.map { layer ->
+            if (layer.id == targetLayerId) layer.copy(textBlocks = layer.textBlocks + newText) else layer
         }
         _canvasVersion.value++
         updateCurrentPage(migrated.copy(layers = updatedLayers, activeLayerId = targetLayerId))

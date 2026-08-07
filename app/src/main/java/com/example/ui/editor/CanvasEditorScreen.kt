@@ -133,6 +133,8 @@ import com.example.ui.components.PageStripBottomSheet
 import com.example.ui.components.RightSideToolPanel
 import com.example.ui.components.RulerOverlayComponent
 import com.example.ui.components.StudyDeckDialog
+import com.example.ui.components.TextInputDialog
+import com.example.ui.components.TextFormatting
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -1253,39 +1255,31 @@ fun CanvasEditorScreen(
 
     // Text Input Dialog
     if (showTextInputDialog) {
-        AlertDialog(
-            onDismissRequest = { showTextInputDialog = false },
-            title = { Text(stringResource(R.string.insert_text)) },
-            text = {
-                OutlinedTextField(
-                    value = textInputVal,
-                    onValueChange = { textInputVal = it },
-                    label = { Text(stringResource(R.string.your_text)) },
-                    modifier = Modifier.fillMaxWidth()
+        TextInputDialog(
+            initialText = textInputVal,
+            initialFormatting = TextFormatting(),
+            onConfirm = { text, formatting ->
+                val position = androidx.compose.ui.geometry.Offset(
+                    (viewportWidthPx / 2f - panOffset.x) / zoomScale,
+                    (viewportHeightPx / 2f - panOffset.y) / zoomScale
                 )
+                viewModel.insertTextAt(
+                    text = text,
+                    worldPosition = position,
+                    fontSize = formatting.fontSize,
+                    isBold = formatting.isBold,
+                    isItalic = formatting.isItalic,
+                    isUnderline = formatting.isUnderline,
+                    fontFamily = formatting.fontFamily,
+                    alignment = formatting.alignment,
+                    width = formatting.width
+                )
+                textInputVal = ""
+                showTextInputDialog = false
             },
-            confirmButton = {
-                Button(onClick = {
-                    if (textInputVal.isNotBlank()) {
-                        viewModel.insertText(
-                            text = textInputVal.trim(),
-                            viewportWidth = viewportWidthPx,
-                            viewportHeight = viewportHeightPx,
-                            panOffsetX = panOffset.x,
-                            panOffsetY = panOffset.y,
-                            scale = zoomScale
-                        )
-                        textInputVal = ""
-                    }
-                    showTextInputDialog = false
-                }) {
-                    Text(stringResource(R.string.insert))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTextInputDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
+            onDismiss = {
+                textInputVal = ""
+                showTextInputDialog = false
             }
         )
     }

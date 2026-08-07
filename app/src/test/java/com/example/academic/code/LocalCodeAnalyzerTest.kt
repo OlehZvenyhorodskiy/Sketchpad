@@ -8,6 +8,14 @@ import org.junit.Test
 
 class LocalCodeAnalyzerTest {
     @Test
+    fun `runs hello world from a canvas code card`() {
+        val result = LocalCodeAnalyzer.run("print(\"Hello world\")", CodeLanguage.PYTHON)
+
+        assertTrue(result.isSuccess)
+        assertEquals("Hello world", result.output)
+    }
+
+    @Test
     fun `runs basic Python assignments and print`() {
         val result = LocalCodeAnalyzer.run(
             """

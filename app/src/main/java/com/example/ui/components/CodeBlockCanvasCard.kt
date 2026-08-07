@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +48,7 @@ fun CodeBlockCanvasCard(
     onEdit: () -> Unit,
     onRun: () -> Unit,
     onDelete: () -> Unit,
+    onSelect: () -> Unit = {},
     isSelected: Boolean = false,
     isInteractive: Boolean = true,
     modifier: Modifier = Modifier
@@ -62,8 +65,6 @@ fun CodeBlockCanvasCard(
     }
 
     Surface(
-        onClick = onEdit,
-        enabled = isInteractive,
         modifier = modifier
             .offset {
                 IntOffset(
@@ -73,6 +74,8 @@ fun CodeBlockCanvasCard(
             }
             .width(widthDp.coerceAtLeast(80.dp))
             .height(heightDp.coerceAtLeast(56.dp))
+            .graphicsLayer(rotationZ = codeBlock.rotation)
+            .clickable(enabled = isInteractive, onClick = onSelect)
             .then(
                 if (isSelected) {
                     Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp))
@@ -100,7 +103,7 @@ fun CodeBlockCanvasCard(
                     fontSize = if (isCompact) 10.sp else 12.sp,
                     modifier = Modifier.weight(1f)
                 )
-                if (!isCompact && isInteractive) {
+                if (isInteractive) {
                     IconButton(onClick = onRun, modifier = Modifier.size(30.dp)) {
                         Icon(Icons.Default.PlayArrow, "Run", tint = Color.White, modifier = Modifier.size(18.dp))
                     }

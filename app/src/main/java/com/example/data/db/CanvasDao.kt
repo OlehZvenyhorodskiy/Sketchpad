@@ -30,7 +30,7 @@ interface CanvasDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCanvas(canvas: CanvasEntity)
 
-    @Update
+    @Update(onConflict = OnConflictStrategy.REPLACE)
     suspend fun updateCanvas(canvas: CanvasEntity)
 
     @Query("DELETE FROM canvases WHERE id = :id")
@@ -54,7 +54,7 @@ interface PageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPages(pages: List<PageEntity>)
 
-    @Update
+    @Update(onConflict = OnConflictStrategy.REPLACE)
     suspend fun updatePage(page: PageEntity)
 
     @Query("DELETE FROM pages WHERE id = :id")

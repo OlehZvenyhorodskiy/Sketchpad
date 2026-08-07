@@ -55,6 +55,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -289,8 +293,8 @@ fun AiChatContent(
                         color = if (msg.isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                         modifier = Modifier.fillMaxWidth(0.85f)
                     ) {
-                        Text(
-                            text = msg.text,
+                        MarkdownText(
+                            markdown = msg.text,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(12.dp),
                             color = if (msg.isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
@@ -350,6 +354,60 @@ fun AiChatContent(
             }
         }
     }
+}
+
+@Composable
+private fun MarkdownText(
+    markdown: String,
+    style: androidx.compose.ui.text.TextStyle,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    val normalized = markdown.lineSequence().joinToString("\n") { line ->
+        when {
+            line.startsWith("### ") -> line.removePrefix("### ")
+            line.startsWith("## ") -> line.removePrefix("## ")
+            line.startsWith("# ") -> line.removePrefix("# ")
+            line.startsWith("- ") -> "• ${line.removePrefix("- ")}"
+            else -> line
+        }
+    }
+    val annotated = buildAnnotatedString {
+        var index = 0
+        while (index < normalized.length) {
+            when {
+                normalized.startsWith("**", index) -> {
+                    val end = normalized.indexOf("**", index + 2)
+                    if (end > index) {
+                        pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                        append(normalized.substring(index + 2, end))
+                        pop()
+                        index = end + 2
+                    } else { append("**"); index += 2 }
+                }
+                normalized[index] == '`' -> {
+                    val end = normalized.indexOf('`', index + 1)
+                    if (end > index) {
+                        pushStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = MaterialTheme.colorScheme.surfaceVariant))
+                        append(normalized.substring(index + 1, end))
+                        pop()
+                        index = end + 1
+                    } else { append('`'); index++ }
+                }
+                normalized[index] == '*' -> {
+                    val end = normalized.indexOf('*', index + 1)
+                    if (end > index) {
+                        pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                        append(normalized.substring(index + 1, end))
+                        pop()
+                        index = end + 1
+                    } else { append('*'); index++ }
+                }
+                else -> { append(normalized[index]); index++ }
+            }
+        }
+    }
+    Text(text = annotated, style = style, color = color, modifier = modifier)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
