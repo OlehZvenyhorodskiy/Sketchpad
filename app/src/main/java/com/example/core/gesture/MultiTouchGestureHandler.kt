@@ -26,8 +26,11 @@ class MultiTouchGestureHandler {
     }
 
     fun onTransform(centroid: Offset, pan: Offset, zoom: Float, rotationDelta: Float) {
-        scale = (lastScale * zoom).coerceIn(0.1f, 10f)
-        offset = lastPan + pan
+        val oldScale = scale
+        val newScale = (lastScale * zoom).coerceIn(0.1f, 10f)
+        val zoomFactor = if (oldScale > 0f) newScale / oldScale else 1f
+        offset = centroid - (centroid - offset) * zoomFactor + pan
+        scale = newScale
         rotation = lastRotation + rotationDelta
     }
 

@@ -84,8 +84,8 @@ class CanvasEditorViewModel(
     )
     val recentColors: StateFlow<List<HslaColor>> = _recentColors.asStateFlow()
 
-    private val _drawWithFingers = MutableStateFlow(false)
-    val drawWithFingers: StateFlow<Boolean> = _drawWithFingers.asStateFlow()
+    val drawWithFingers: StateFlow<Boolean> = userPrefs.drawWithFingers
+        .stateIn(viewModelScope, SharingStarted.Lazily, true)
 
     private val _zoomScale = MutableStateFlow(3f)
     val zoomScale: StateFlow<Float> = _zoomScale.asStateFlow()
@@ -306,7 +306,9 @@ class CanvasEditorViewModel(
     }
 
     fun setDrawWithFingers(enabled: Boolean) {
-        _drawWithFingers.value = enabled
+        viewModelScope.launch {
+            userPrefs.setDrawWithFingers(enabled)
+        }
     }
 
     fun setZoomScale(scale: Float) {

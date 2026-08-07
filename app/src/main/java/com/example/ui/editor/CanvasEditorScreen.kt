@@ -20,6 +20,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.PanelType
 import com.example.ui.components.VerticalFloatingSidePanel
 import androidx.compose.material3.RadioButton
@@ -209,6 +210,13 @@ fun CanvasEditorScreen(
 
     val showLayersPanel by viewModel.showLayersPanel.collectAsState()
     val activeLayerId by viewModel.activeLayerId.collectAsState()
+
+    val userPrefsRepository = remember(context) { com.example.data.repository.UserPreferencesRepository(context) }
+    val palmRejectionEnabled by userPrefsRepository.palmRejectionEnabled.collectAsState(initial = true)
+    val pixelModeEnabled by userPrefsRepository.pixelModeEnabled.collectAsState(initial = true)
+    val pixelCanvas = remember { com.example.core.drawing.PixelCanvas(1920, 1080) }
+    var isDrawingActive by remember { mutableStateOf(false) }
+    val toolbarAlpha by animateFloatAsState(targetValue = if (isDrawingActive) 0.35f else 1.0f, label = "toolbar_alpha")
 
     // Bottom sheets state
     var showTopMenuSheet by remember { mutableStateOf(false) }
@@ -570,7 +578,16 @@ fun CanvasEditorScreen(
                     editingCodeBlockId = id
                     showCodeLab = true
                 },
-                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) }
+                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) },
+                pixelCanvas = if (pixelModeEnabled) pixelCanvas else null,
+                onColorPicked = { hsla -> viewModel.setColor(hsla) },
+                onPerformFloodFill = { offset, hsla ->
+                    if (!pixelModeEnabled) {
+                        viewModel.setColor(hsla)
+                    }
+                },
+                palmRejectionEnabled = palmRejectionEnabled,
+                onDrawingStateChanged = { active -> isDrawingActive = active }
             )
             }
 
@@ -615,7 +632,9 @@ fun CanvasEditorScreen(
                 onColorPickerClick = { showColorPickerSheet = true },
                 onToggleSliderOrientation = { viewModel.toggleSliderOrientation() },
                 isLandscape = isLandscape,
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .graphicsLayer { alpha = toolbarAlpha }
             )
 
             // Вертикальні бічні панелі (Width & Opacity)

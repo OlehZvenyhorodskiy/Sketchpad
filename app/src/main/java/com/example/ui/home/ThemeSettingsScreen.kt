@@ -68,11 +68,13 @@ fun ThemeSettingsScreen(
     currentAccentArgb: Int,
     isLeftHanded: Boolean,
     palmRejectionEnabled: Boolean = true,
+    pixelModeEnabled: Boolean = true,
     currentLanguage: AppLanguage,
     onThemeSelected: (Int) -> Unit,
     onAccentColorChanged: (Int) -> Unit,
     onLeftHandedChanged: (Boolean) -> Unit,
     onPalmRejectionChanged: (Boolean) -> Unit = {},
+    onPixelModeChanged: (Boolean) -> Unit = {},
     onLanguageSelected: (AppLanguage) -> Unit,
     onBack: () -> Unit
 ) {
@@ -90,6 +92,7 @@ fun ThemeSettingsScreen(
     }
     var leftHanded by remember { mutableStateOf(isLeftHanded) }
     var palmRejection by remember { mutableStateOf(palmRejectionEnabled) }
+    var pixelMode by remember { mutableStateOf(pixelModeEnabled) }
 
     val themeEntries = AppThemeStyle.entries.toList()
 
@@ -275,6 +278,9 @@ fun ThemeSettingsScreen(
                 )
             }
 
+            // ──────────────────────────────────────────────
+            // Section: Palm Rejection Mode
+            // ──────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -299,6 +305,79 @@ fun ThemeSettingsScreen(
                         palmRejection = it
                         onPalmRejectionChanged(it)
                     }
+                )
+            }
+
+            // ──────────────────────────────────────────────
+            // Section: Pixel Canvas Mode & Demo Animation
+            // ──────────────────────────────────────────────
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Піксельний режим малювання (Pixel Mode)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Використовує растрове малювання (PixelCanvas) для точного Flood Fill, стирання та зчитування кольорів",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Switch(
+                        checked = pixelMode,
+                        onCheckedChange = {
+                            pixelMode = it
+                            onPixelModeChanged(it)
+                        }
+                    )
+                }
+
+                if (pixelMode) {
+                    Spacer(Modifier.height(12.dp))
+                    PixelDrawingDemoPreview(accentColor = accentColor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PixelDrawingDemoPreview(accentColor: Color) {
+    var step by remember { mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(120)
+            step = (step + 1) % 16
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(70.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val pixelSize = 10.dp.toPx()
+            val startX = size.width / 4f
+            val startY = size.height / 2f
+            for (i in 0..step) {
+                val px = startX + i * pixelSize
+                val py = startY + Math.sin(i * 0.4).toFloat() * 15.dp.toPx()
+                drawRect(
+                    color = accentColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(px, py),
+                    size = androidx.compose.ui.geometry.Size(pixelSize - 2f, pixelSize - 2f)
                 )
             }
         }

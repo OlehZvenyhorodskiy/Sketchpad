@@ -115,6 +115,11 @@ fun InteractiveCanvas(
     onPreloadImage: (String) -> Unit = {},
     onEditCodeBlock: (String) -> Unit = {},
     onRunCodeBlock: (String) -> Unit = {},
+    pixelCanvas: com.example.core.drawing.PixelCanvas? = null,
+    onColorPicked: (HslaColor) -> Unit = {},
+    onPerformFloodFill: (Offset, HslaColor) -> Unit = { _, _ -> },
+    palmRejectionEnabled: Boolean = true,
+    onDrawingStateChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -248,65 +253,91 @@ fun InteractiveCanvas(
                             else -> continue
                         }
                         val screenPoint = change.position
-                // ═══════════════════════════════════════════════════════
-                // 0a. Перевірка касання у верхній зоні тулбара (TopFloatingToolbar)
-                // ═══════════════════════════════════════════════════════
-                val topToolbarHeightPx = with(density) { 90.dp.toPx() }
-                if (screenPoint.y <= topToolbarHeightPx && selectedElementId == null) {
-                    continue
-                }
 
-                // ═══════════════════════════════════════════════════════
-                // 0b. Перевірка касання в області лінійки — пропускаємо до RulerOverlayComponent
-                // ═══════════════════════════════════════════════════════
-                if (rulerState.isVisible && isTouchInsideRuler(screenPoint, rulerState)) {
-                    continue
-                }
+                        // Palm Rejection check
+                        if (palmRejectionEnabled) {
+                            val isTouch = change.type == androidx.compose.ui.input.pointer.PointerType.Touch
+                            if (!drawWithFingers && isTouch) {
+                                // Ignore touch when drawWithFingers is disabled
+                                continue
+                            }
+                        }
 
-                // ═══════════════════════════════════════════════════════
-                // 1. Мультитач (2+ пальці) — скасовуємо штрих, даємо зуму працювати
-                // ═══════════════════════════════════════════════════════
-                if (pointerEvent.changes.count { it.pressed } > 1) {
-                    activeStrokePoints.clear()
-                    activeEraserPoints.clear()
-                    if (isObjectEraserGesture) onEndEraserGesture()
-                    isObjectEraserGesture = false
-                    eraserTouchPos = null
-                    cursorPos = null
-                    continue
-                }
+                        // Top toolbar area check (allow drawing tools through toolbar zone with transparency effect)
+                        val topToolbarHeightPx = with(density) { 90.dp.toPx() }
+                        val isDrawingTool = currentTool != ToolType.SELECTOR && currentTool != ToolType.POINTER
+                        if (screenPoint.y <= topToolbarHeightPx && selectedElementId == null && !isDrawingTool) {
+                            continue
+                        }
+                        if (isDrawingTool && action == PointerAction.DOWN) {
+                            onDrawingStateChanged(true)
+                        }
 
-                val safeScale = currentScale.coerceIn(0.1f, 10.0f)
-                val x = (screenPoint.x - panOffset.x) / safeScale
-                val y = (screenPoint.y - panOffset.y) / safeScale
-                var rawPoint = Offset(x, y)
+                        // Ruler touch check (pass through to ruler overlay except when snapping drawing edge)
+                        if (rulerState.isVisible && isTouchInsideRuler(screenPoint, rulerState) && !isDrawingTool) {
+                            continue
+                        }
 
-                val pressure = if (change.pressure > 0f) change.pressure else 0.5f
-                val tilt = 0f
+                        // Multitouch cancel stroke
+                        if (pointerEvent.changes.count { it.pressed } > 1) {
+                            activeStrokePoints.clear()
+                            activeEraserPoints.clear()
+                            if (isObjectEraserGesture) onEndEraserGesture()
+                            isObjectEraserGesture = false
+                            eraserTouchPos = null
+                            cursorPos = null
+                            onDrawingStateChanged(false)
+                            continue
+                        }
 
-                when (action) {
-                    PointerAction.DOWN -> {
-                        activeStrokePoints.clear()
-                        activeEraserPoints.clear()
-                        transformPreview = null
-                        if (currentTool != ToolType.SELECTOR && currentTool != ToolType.ERASER) {
-                            if (rulerState.isVisible) {
-                                val g = rulerState.nearestEdge(rawPoint, guideZone = (40f / safeScale + rulerState.width / 2f))
-                                if (g != null) {
-                                    rulerGuideEdge = g.second
-                                    rawPoint = g.first
+                        val safeScale = currentScale.coerceIn(0.1f, 10.0f)
+                        val x = (screenPoint.x - panOffset.x) / safeScale
+                        val y = (screenPoint.y - panOffset.y) / safeScale
+                        var rawPoint = Offset(x, y)
+
+                        val pressure = if (change.pressure > 0f) change.pressure else 0.5f
+                        val tilt = 0f
+
+                        when (action) {
+                            PointerAction.DOWN -> {
+                                activeStrokePoints.clear()
+                                activeEraserPoints.clear()
+                                transformPreview = null
+                                if (currentTool == ToolType.EYEDROPPER) {
+                                    cursorPos = rawPoint
+                                    val argb = pixelCanvas?.getPixel(rawPoint.x.toInt(), rawPoint.y.toInt()) ?: currentColor.toArgbInt()
+                                    onColorPicked(HslaColor.fromArgb(argb))
+                                } else if (currentTool == ToolType.FILL) {
+                                    cursorPos = rawPoint
+                                    pixelCanvas?.floodFill(rawPoint.x.toInt(), rawPoint.y.toInt(), currentColor.toArgbInt())
+                                    onPerformFloodFill(rawPoint, currentColor)
+                                } else if (currentTool != ToolType.SELECTOR && currentTool != ToolType.ERASER) {
+                                    if (rulerState.isVisible) {
+                                        val g = rulerState.nearestEdge(rawPoint, guideZone = (40f / safeScale + rulerState.width / 2f))
+                                        if (g != null) {
+                                            rulerGuideEdge = g.second
+                                            rawPoint = g.first
+                                        } else {
+                                            rulerGuideEdge = null
+                                            rulerState.snapPointIfClose(rawPoint, thresholdDp = 16f, scale = safeScale)?.let { snapped -> rawPoint = snapped }
+                                        }
+                                    } else {
+                                        rulerGuideEdge = null
+                                    }
+                                    cursorPos = rawPoint
+                                    activeStrokePoints.add(
+                                        StrokePoint(
+                                            x = rawPoint.x,
+                                            y = rawPoint.y,
+                                            pressure = pressure,
+                                            tilt = tilt,
+                                            timestampMs = System.currentTimeMillis()
+                                        )
+                                    )
                                 } else {
                                     rulerGuideEdge = null
-                                    rulerState.snapPointIfClose(rawPoint, thresholdDp = 16f, scale = safeScale)?.let { snapped -> rawPoint = snapped }
+                                    if (currentTool == ToolType.ERASER) cursorPos = rawPoint
                                 }
-                            } else {
-                                rulerGuideEdge = null
-                            }
-                            cursorPos = rawPoint
-                        } else {
-                            rulerGuideEdge = null
-                            if (currentTool == ToolType.ERASER) cursorPos = rawPoint
-                        }
 
                         if (currentTool == ToolType.SELECTOR) {
                             dragStartOffset = rawPoint
@@ -520,6 +551,14 @@ fun InteractiveCanvas(
                                     onElementSelected(hitId, hitType)
                                 }
                             }
+                            ToolType.EYEDROPPER -> {
+                                cursorPos = rawPoint
+                                val argb = pixelCanvas?.getPixel(rawPoint.x.toInt(), rawPoint.y.toInt()) ?: currentColor.toArgbInt()
+                                onColorPicked(HslaColor.fromArgb(argb))
+                            }
+                            ToolType.FILL -> {
+                                cursorPos = rawPoint
+                            }
                             ToolType.ERASER -> {
                                 cursorPos = rawPoint
                                 eraserTouchPos = rawPoint
@@ -557,7 +596,8 @@ fun InteractiveCanvas(
                         }
                     }
                     PointerAction.UP -> {
-                        if (currentTool != ToolType.ERASER && currentTool != ToolType.SELECTOR && activeStrokePoints.isNotEmpty()) {
+                        onDrawingStateChanged(false)
+                        if (currentTool != ToolType.ERASER && currentTool != ToolType.SELECTOR && currentTool != ToolType.EYEDROPPER && currentTool != ToolType.FILL && activeStrokePoints.isNotEmpty()) {
                             val newStroke = StrokeEntity(
                                 tool = currentTool,
                                 colorHsla = currentColor.copy(alpha = strokeOpacity),
@@ -1172,7 +1212,19 @@ fun InteractiveCanvas(
                 )
             }
 
-            // 4. Precision Circle Eraser Preview Indicator
+            // 4. Pixel Canvas Layer Rendering
+            pixelCanvas?.let { pix ->
+                drawIntoCanvas { canvas ->
+                    val nc = canvas.nativeCanvas
+                    nc.save()
+                    nc.translate(panOffset.x, panOffset.y)
+                    nc.scale(currentScale, currentScale)
+                    nc.drawBitmap(pix.getBitmap(), 0f, 0f, null)
+                    nc.restore()
+                }
+            }
+
+            // 4b. Precision Circle Eraser Preview Indicator
             eraserTouchPos?.let { pos ->
                 val screenX = pos.x * currentScale + panOffset.x
                 val screenY = pos.y * currentScale + panOffset.y
@@ -1189,6 +1241,26 @@ fun InteractiveCanvas(
                     center = Offset(screenX, screenY),
                     style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f))
                 )
+            }
+
+            // 4c. Eyedropper Color Lens Preview Overlay
+            cursorPos?.let { pos ->
+                if (currentTool == ToolType.EYEDROPPER) {
+                    val screenX = pos.x * currentScale + panOffset.x
+                    val screenY = pos.y * currentScale + panOffset.y
+                    val lensCenter = Offset(screenX, screenY - 60f)
+                    drawCircle(
+                        color = currentColor.toColor(),
+                        radius = 36f,
+                        center = lensCenter
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = 38f,
+                        center = lensCenter,
+                        style = Stroke(width = 4f)
+                    )
+                }
             }
 
             // 5. Highlight Selected Element Bounding Box
