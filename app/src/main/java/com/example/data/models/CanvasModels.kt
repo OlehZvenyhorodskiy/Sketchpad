@@ -48,7 +48,8 @@ enum class ToolType {
     FILL,
     EYEDROPPER,
     RULER,
-    TEXT
+    TEXT,
+    PIXEL
 }
 
 enum class EraserMode {

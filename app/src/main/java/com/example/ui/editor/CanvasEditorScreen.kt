@@ -20,6 +20,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.PanelType
 import com.example.ui.components.VerticalFloatingSidePanel
 import androidx.compose.material3.RadioButton
@@ -210,6 +211,19 @@ fun CanvasEditorScreen(
     val showLayersPanel by viewModel.showLayersPanel.collectAsState()
     val activeLayerId by viewModel.activeLayerId.collectAsState()
 
+    val userPrefsRepository = remember(context) { com.example.data.repository.UserPreferencesRepository(context) }
+    val palmRejectionEnabled by userPrefsRepository.palmRejectionEnabled.collectAsState(initial = true)
+    val pixelModeEnabled by userPrefsRepository.pixelModeEnabled.collectAsState(initial = true)
+    val pixelCanvas = remember { com.example.core.drawing.PixelCanvas(1920, 1080) }
+    var isDrawingActive by remember { mutableStateOf(false) }
+    val toolbarAlpha by animateFloatAsState(targetValue = if (isDrawingActive) 0.35f else 1.0f, label = "toolbar_alpha")
+
+    val isWhiteCanvasMode by viewModel.isWhiteCanvasMode.collectAsState()
+    val isSketchLinkConnected by viewModel.isSketchLinkConnected.collectAsState()
+    var showSketchLinkDialog by remember { mutableStateOf(false) }
+    var sketchLinkHost by remember { mutableStateOf("192.168.1.5") }
+    var sketchLinkPin by remember { mutableStateOf("") }
+
     // Bottom sheets state
     var showTopMenuSheet by remember { mutableStateOf(false) }
     var showColorPickerSheet by remember { mutableStateOf(false) }
@@ -394,115 +408,137 @@ fun CanvasEditorScreen(
             } else false
         },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = canvas?.title ?: stringResource(R.string.canvas_fallback),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-                    }
-                },
-                actions = {
-                    // Audio Recorder Button & Waveform
-                    val isRecording = audioStatus is RecordingStatus.Recording
-                    if (isRecording) {
-                        val recStatus = audioStatus as RecordingStatus.Recording
-                        val totalSeconds = recStatus.durationMs / 1000
-                        val mins = totalSeconds / 60
-                        val secs = totalSeconds % 60
-                        val formattedTime = String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
-
-                        com.example.ui.components.AudioWaveformVisualizer(
-                            isRecording = true,
-                            recordingTimeText = formattedTime,
-                            amplitudes = recStatus.amplitudes,
-                            strokeWidth = strokeWidth
+            if (!isWhiteCanvasMode) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = canvas?.title ?: stringResource(R.string.canvas_fallback),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
-                    }
-                    IconButton(
-                        onClick = {
-                            if (isRecording) {
-                                viewModel.stopAudioRecording()
-                                Toast.makeText(context, context.getString(R.string.lecture_recording_saved), Toast.LENGTH_SHORT).show()
-                            } else {
-                                val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-                                    context,
-                                    android.Manifest.permission.RECORD_AUDIO
-                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBackClick) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                        }
+                    },
+                    actions = {
+                        // SketchLink PC Connect Button
+                        IconButton(onClick = { showSketchLinkDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Link,
+                                contentDescription = "SketchLink PC",
+                                tint = if (isSketchLinkConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
 
-                                if (hasPermission) {
-                                    viewModel.startAudioRecording()
-                                    Toast.makeText(context, audioStartedText, Toast.LENGTH_SHORT).show()
+                        // White Canvas Mode Toggle
+                        IconButton(onClick = { viewModel.toggleWhiteCanvasMode() }) {
+                            Icon(
+                                imageVector = Icons.Default.Create,
+                                contentDescription = "Біле полотно",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        // Audio Recorder Button & Waveform
+                        val isRecording = audioStatus is RecordingStatus.Recording
+                        if (isRecording) {
+                            val recStatus = audioStatus as RecordingStatus.Recording
+                            val totalSeconds = recStatus.durationMs / 1000
+                            val mins = totalSeconds / 60
+                            val secs = totalSeconds % 60
+                            val formattedTime = String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
+
+                            com.example.ui.components.AudioWaveformVisualizer(
+                                isRecording = true,
+                                recordingTimeText = formattedTime,
+                                amplitudes = recStatus.amplitudes,
+                                strokeWidth = strokeWidth
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                if (isRecording) {
+                                    viewModel.stopAudioRecording()
+                                    Toast.makeText(context, context.getString(R.string.lecture_recording_saved), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.RECORD_AUDIO
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                                    if (hasPermission) {
+                                        viewModel.startAudioRecording()
+                                        Toast.makeText(context, audioStartedText, Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    }
                                 }
                             }
+                        ) {
+                            Icon(
+                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = stringResource(R.string.record_audio),
+                                tint = if (isRecording) Color.Red else MaterialTheme.colorScheme.onSurface
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                            contentDescription = stringResource(R.string.record_audio),
-                            tint = if (isRecording) Color.Red else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
 
-                    // Audio Recording List
-                    IconButton(onClick = { showAudioSheet = true }) {
-                        Icon(imageVector = Icons.Default.GraphicEq, contentDescription = stringResource(R.string.audio_notes))
-                    }
+                        // Audio Recording List
+                        IconButton(onClick = { showAudioSheet = true }) {
+                            Icon(imageVector = Icons.Default.GraphicEq, contentDescription = stringResource(R.string.audio_notes))
+                        }
 
-                    // Layers Panel Button
-                    IconButton(onClick = { viewModel.toggleLayersPanel() }) {
-                        Icon(imageVector = Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
-                    }
+                        // Layers Panel Button
+                        IconButton(onClick = { viewModel.toggleLayersPanel() }) {
+                            Icon(imageVector = Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
+                        }
 
-                    // Undo
-                    IconButton(onClick = { viewModel.undo() }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-                    }
+                        // Undo
+                        IconButton(onClick = { viewModel.undo() }) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
+                        }
 
-                    // Redo
-                    IconButton(onClick = { viewModel.redo() }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-                    }
+                        // Redo
+                        IconButton(onClick = { viewModel.redo() }) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
+                        }
 
-                    // Export Share Button
-                    IconButton(onClick = { showExportDialog = true }) {
-                        Icon(imageVector = Icons.Default.Share, contentDescription = stringResource(R.string.export))
-                    }
+                        // Export Share Button
+                        IconButton(onClick = { showExportDialog = true }) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = stringResource(R.string.export))
+                        }
 
-                    // Three Dots Top Menu
-                    IconButton(onClick = { showTopMenuSheet = true }) {
-                        Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.canvas_page_settings))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        // Three Dots Top Menu
+                        IconButton(onClick = { showTopMenuSheet = true }) {
+                            Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.canvas_page_settings))
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
                 )
-            )
+            }
         },
         floatingActionButton = {
-            // AI Assistant FAB
-            FloatingActionButton(
-                onClick = {
-                    val id = viewModel.getSelectedProviderIdSync()
-                    val hasKey = viewModel.getApiKeyForProvider(id).isNotBlank()
-                    if (id.isBlank() || (id == "GEMINI" && !viewModel.hasExplicitProviderChoice()) || !hasKey) {
-                        showProviderPicker = true
-                    } else {
-                        viewModel.showAiWindow()
-                    }
-                },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ) {
-                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.ai_assistant))
+            if (!isWhiteCanvasMode) {
+                // AI Assistant FAB
+                FloatingActionButton(
+                    onClick = {
+                        val id = viewModel.getSelectedProviderIdSync()
+                        val hasKey = viewModel.getApiKeyForProvider(id).isNotBlank()
+                        if (id.isBlank() || (id == "GEMINI" && !viewModel.hasExplicitProviderChoice()) || !hasKey) {
+                            showProviderPicker = true
+                        } else {
+                            viewModel.showAiWindow()
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.ai_assistant))
+                }
             }
         }
     ) { padding ->
@@ -570,7 +606,16 @@ fun CanvasEditorScreen(
                     editingCodeBlockId = id
                     showCodeLab = true
                 },
-                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) }
+                onRunCodeBlock = { id -> viewModel.runCodeBlock(id) },
+                pixelCanvas = if (pixelModeEnabled) pixelCanvas else null,
+                onColorPicked = { hsla -> viewModel.setColor(hsla) },
+                onPerformFloodFill = { offset, hsla ->
+                    if (!pixelModeEnabled) {
+                        viewModel.setColor(hsla)
+                    }
+                },
+                palmRejectionEnabled = palmRejectionEnabled,
+                onDrawingStateChanged = { active -> isDrawingActive = active }
             )
             }
 
@@ -592,35 +637,64 @@ fun CanvasEditorScreen(
             )
 
             // 3. Top Floating Drawing Toolbar with Left (Width) & Right (Opacity) Sliders
-            com.example.ui.components.TopFloatingToolbar(
-                currentTool = currentTool,
-                eraserMode = eraserMode,
-                strokeWidth = strokeWidth,
-                strokeOpacity = strokeOpacity,
-                currentColor = currentColor,
-                rulerVisible = rulerState.isVisible,
-                isSlidersVertical = isSlidersVertical,
-                selectionMode = selectionMode,
-                onToolSelect = { viewModel.selectTool(it, viewportWidthPx, viewportHeightPx) },
-                onEraserModeToggle = {
-                    val nextMode = if (eraserMode == EraserMode.OBJECT) EraserMode.PIXEL else EraserMode.OBJECT
-                    viewModel.setEraserMode(nextMode)
-                },
-                onSelectionModeToggle = {
-                    val nextMode = if (selectionMode == com.example.data.models.SelectionMode.SINGLE) com.example.data.models.SelectionMode.LASSO else com.example.data.models.SelectionMode.SINGLE
-                    viewModel.setSelectionMode(nextMode)
-                },
-                onStrokeWidthChange = { viewModel.setStrokeWidth(it) },
-                onStrokeOpacityChange = { viewModel.setStrokeOpacity(it) },
-                onColorPickerClick = { showColorPickerSheet = true },
-                onToggleSliderOrientation = { viewModel.toggleSliderOrientation() },
-                isLandscape = isLandscape,
+            AnimatedVisibility(
+                visible = !isWhiteCanvasMode,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
                 modifier = Modifier.align(Alignment.TopCenter)
-            )
+            ) {
+                com.example.ui.components.TopFloatingToolbar(
+                    currentTool = currentTool,
+                    eraserMode = eraserMode,
+                    strokeWidth = strokeWidth,
+                    strokeOpacity = strokeOpacity,
+                    currentColor = currentColor,
+                    rulerVisible = rulerState.isVisible,
+                    isSlidersVertical = isSlidersVertical,
+                    selectionMode = selectionMode,
+                    onToolSelect = { viewModel.selectTool(it, viewportWidthPx, viewportHeightPx) },
+                    onEraserModeToggle = {
+                        val nextMode = if (eraserMode == EraserMode.OBJECT) EraserMode.PIXEL else EraserMode.OBJECT
+                        viewModel.setEraserMode(nextMode)
+                    },
+                    onSelectionModeToggle = {
+                        val nextMode = if (selectionMode == com.example.data.models.SelectionMode.SINGLE) com.example.data.models.SelectionMode.LASSO else com.example.data.models.SelectionMode.SINGLE
+                        viewModel.setSelectionMode(nextMode)
+                    },
+                    onStrokeWidthChange = { viewModel.setStrokeWidth(it) },
+                    onStrokeOpacityChange = { viewModel.setStrokeOpacity(it) },
+                    onColorPickerClick = { showColorPickerSheet = true },
+                    onToggleSliderOrientation = { viewModel.toggleSliderOrientation() },
+                    isLandscape = isLandscape,
+                    modifier = Modifier.graphicsLayer { alpha = toolbarAlpha }
+                )
+            }
+
+            // Floating Restore Button when in White Canvas Mode
+            AnimatedVisibility(
+                visible = isWhiteCanvasMode,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = { viewModel.toggleWhiteCanvasMode() },
+                    modifier = Modifier.size(44.dp),
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Вийти з режиму білого полотна",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
 
             // Вертикальні бічні панелі (Width & Opacity)
             AnimatedVisibility(
-                visible = isSlidersVertical,
+                visible = isSlidersVertical && !isWhiteCanvasMode,
                 enter = fadeIn() + slideInHorizontally(initialOffsetX = { -it }),
                 exit = fadeOut() + slideOutHorizontally(targetOffsetX = { -it }),
                 modifier = Modifier.align(Alignment.CenterStart)
@@ -634,12 +708,13 @@ fun CanvasEditorScreen(
                     opacity = strokeOpacity,
                     onValueChange = { viewModel.setStrokeWidth(it) },
                     isEraser = currentTool == ToolType.ERASER,
+                    surfaceAlpha = if (isDrawingActive) 0.3f else 0.95f,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
 
             AnimatedVisibility(
-                visible = isSlidersVertical,
+                visible = isSlidersVertical && !isWhiteCanvasMode,
                 enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
                 exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
                 modifier = Modifier.align(Alignment.CenterEnd)
@@ -652,6 +727,7 @@ fun CanvasEditorScreen(
                     currentColor = currentColor,
                     opacity = strokeOpacity,
                     onValueChange = { viewModel.setStrokeOpacity(it) },
+                    surfaceAlpha = if (isDrawingActive) 0.3f else 0.95f,
                     modifier = Modifier.padding(end = 8.dp)
                 )
             }
@@ -1494,6 +1570,57 @@ fun CanvasEditorScreen(
             dismissButton = {
                 TextButton(onClick = { showChartDialog = false }) {
                     Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showSketchLinkDialog) {
+        AlertDialog(
+            onDismissRequest = { showSketchLinkDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("SketchLink PC Трансляція")
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Підключення планшета до ПК для малювання на великому екрані в режимі реального часу (120Hz, <16ms).", fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = sketchLinkHost,
+                        onValueChange = { sketchLinkHost = it },
+                        label = { Text("IP-адреса ПК (або 127.0.0.1 для USB)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = sketchLinkPin,
+                        onValueChange = { sketchLinkPin = it },
+                        label = { Text("6-значний PIN-код") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isSketchLinkConnected) {
+                        Text("🟢 Підключено до ПК! Трансляція активна.", color = Color(0xFF22C55E), fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.connectToSketchLink(sketchLinkHost, 8765, sketchLinkPin)
+                    showSketchLinkDialog = false
+                }) {
+                    Text("Підключитися")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (isSketchLinkConnected) viewModel.disconnectSketchLink()
+                    showSketchLinkDialog = false
+                }) {
+                    Text(if (isSketchLinkConnected) "Відключити" else "Закрити")
                 }
             }
         )

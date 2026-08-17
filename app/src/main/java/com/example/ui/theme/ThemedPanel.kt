@@ -41,7 +41,7 @@ fun ThemedPanel(
                 modifier = modifier
                     .neumorphic(cornerRadius = spec.cornerRadius)
                     .clip(shape)
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = surfaceAlpha)),
                 content = content
             )
         }
@@ -61,7 +61,7 @@ fun ThemedPanel(
             Surface(
                 modifier = modifier.border(1.dp, Color(0xFF262626), shape),
                 shape = shape,
-                color = Color.Black,
+                color = Color.Black.copy(alpha = surfaceAlpha),
                 shadowElevation = 0.dp,
                 tonalElevation = 0.dp,
                 content = { Box(content = content) }
@@ -72,7 +72,7 @@ fun ThemedPanel(
             Surface(
                 modifier = modifier.border(1.5.dp, Color(0xFF2D5A49), shape),
                 shape = shape,
-                color = Color(0xFF142B23),
+                color = Color(0xFF142B23).copy(alpha = surfaceAlpha),
                 shadowElevation = 0.dp,
                 tonalElevation = 0.dp,
                 content = { Box(content = content) }
@@ -83,7 +83,7 @@ fun ThemedPanel(
             Surface(
                 modifier = modifier.border(1.dp, Color(0xFFB8A88A), shape),
                 shape = shape,
-                color = Color(0xFFEDE4D3),
+                color = Color(0xFFEDE4D3).copy(alpha = surfaceAlpha),
                 shadowElevation = 2.dp,
                 tonalElevation = 1.dp,
                 content = { Box(content = content) }

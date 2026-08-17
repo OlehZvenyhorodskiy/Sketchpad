@@ -34,10 +34,12 @@ fun VerticalFloatingSidePanel(
     opacity: Float,
     onValueChange: (Float) -> Unit,
     isEraser: Boolean = false,
+    surfaceAlpha: Float = 0.95f,
     modifier: Modifier = Modifier
 ) {
     ThemedPanel(
         modifier = modifier.fillMaxHeight(0.65f),
+        surfaceAlpha = surfaceAlpha,
         shadowElevation = 8.dp,
         tonalElevation = 6.dp
     ) {

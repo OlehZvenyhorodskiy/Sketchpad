@@ -45,9 +45,15 @@ fun TopFloatingToolbar(
     onStrokeOpacityChange: (Float) -> Unit,
     onColorPickerClick: () -> Unit,
     onToggleSliderOrientation: () -> Unit,
+    surfaceAlpha: Float? = null,
     isLandscape: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val effectiveAlpha = surfaceAlpha ?: when (currentTool) {
+        ToolType.EYEDROPPER -> 0.4f
+        ToolType.SELECTOR, ToolType.POINTER -> 0.95f
+        else -> 0.7f
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -61,6 +67,7 @@ fun TopFloatingToolbar(
         if (!isSlidersVertical) {
             ThemedPanel(
                 modifier = Modifier.weight(1f),
+                surfaceAlpha = effectiveAlpha,
                 shadowElevation = 6.dp,
                 tonalElevation = 4.dp
             ) {

@@ -49,6 +49,7 @@ class CanvasEditorViewModel(
     private val context: Context
 ) : ViewModel() {
 
+    val renderCache = com.example.core.render.CanvasRenderCache()
     private val userPrefs = com.example.data.repository.UserPreferencesRepository(context)
     private val audioRecorderManager = AudioRecorderManager(context)
     private val geminiService = GeminiAssistantService()
@@ -84,8 +85,8 @@ class CanvasEditorViewModel(
     )
     val recentColors: StateFlow<List<HslaColor>> = _recentColors.asStateFlow()
 
-    private val _drawWithFingers = MutableStateFlow(false)
-    val drawWithFingers: StateFlow<Boolean> = _drawWithFingers.asStateFlow()
+    val drawWithFingers: StateFlow<Boolean> = userPrefs.drawWithFingers
+        .stateIn(viewModelScope, SharingStarted.Lazily, true)
 
     private val _zoomScale = MutableStateFlow(3f)
     val zoomScale: StateFlow<Float> = _zoomScale.asStateFlow()
@@ -151,6 +152,26 @@ class CanvasEditorViewModel(
 
     fun toggleSliderOrientation() {
         _isSlidersVertical.value = !_isSlidersVertical.value
+    }
+
+    // Tablet White Canvas Mode (clean canvas streaming & zero UI distractions)
+    private val _isWhiteCanvasMode = MutableStateFlow(false)
+    val isWhiteCanvasMode: StateFlow<Boolean> = _isWhiteCanvasMode.asStateFlow()
+
+    fun toggleWhiteCanvasMode() { _isWhiteCanvasMode.value = !_isWhiteCanvasMode.value }
+    fun setWhiteCanvasMode(enabled: Boolean) { _isWhiteCanvasMode.value = enabled }
+
+    // SketchLink High-Performance Tablet-to-PC Client
+    val sketchLinkClient = com.example.shared.network.SketchLinkClient(viewModelScope)
+    val isSketchLinkConnected: StateFlow<Boolean> = sketchLinkClient.isConnected
+    val sketchLinkLatencyMs: StateFlow<Long> = sketchLinkClient.latencyMs
+
+    fun connectToSketchLink(host: String, port: Int = 8765, pin: String) {
+        sketchLinkClient.connect(host, port, pin)
+    }
+
+    fun disconnectSketchLink() {
+        sketchLinkClient.disconnect()
     }
 
     // Command Pattern Undo / Redo history
@@ -225,6 +246,7 @@ class CanvasEditorViewModel(
     }
 
     init {
+        renderCache.clear()
         viewModelScope.launch {
             try {
                 val initial = repository.getCanvasById(canvasId).first()
@@ -306,7 +328,9 @@ class CanvasEditorViewModel(
     }
 
     fun setDrawWithFingers(enabled: Boolean) {
-        _drawWithFingers.value = enabled
+        viewModelScope.launch {
+            userPrefs.setDrawWithFingers(enabled)
+        }
     }
 
     fun setZoomScale(scale: Float) {
@@ -505,6 +529,29 @@ class CanvasEditorViewModel(
             commandUndoStack.addLast(command)
             if (commandUndoStack.size > MAX_UNDO_DEPTH) commandUndoStack.removeFirst()
             commandRedoStack.clear()
+        }
+        if (command is com.example.data.models.AddStrokeCommand && sketchLinkClient.isConnected.value) {
+            command.stroke.points.forEach { pt ->
+                val strokeEv = com.example.shared.protocol.SketchLinkStrokeEvent(
+                    strokeId = command.stroke.id,
+                    tool = com.example.shared.model.ToolType.valueOf(command.stroke.tool.name),
+                    color = com.example.shared.model.HslaColor(
+                        hue = command.stroke.colorHsla.hue,
+                        saturation = command.stroke.colorHsla.saturation,
+                        lightness = command.stroke.colorHsla.lightness,
+                        alpha = command.stroke.colorHsla.alpha
+                    ),
+                    baseWidth = command.stroke.baseWidth,
+                    point = com.example.shared.model.StrokePoint(
+                        x = pt.x,
+                        y = pt.y,
+                        pressure = pt.pressure,
+                        tilt = pt.tilt,
+                        timestampMs = pt.timestampMs
+                    )
+                )
+                sketchLinkClient.sendStrokeEvent(strokeEv)
+            }
         }
         updateCurrentPage(newPage)
     }
@@ -1161,56 +1208,35 @@ class CanvasEditorViewModel(
         resizeChart(chartId, newWidth, newHeight, strAnchor)
     }
 
-    fun updateShapePosition(shapeId: String, newX: Float, newY: Float) {
-        val page = currentPage ?: return
-        val migrated = ensureLayersExist(page)
-        val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(shapes = layer.shapes.map {
-                if (it.id == shapeId) it.copy(x = newX, y = newY) else it
-            })
+    private fun getElementBounds(page: PageEntity, id: String, type: String): Rect? {
+        return when (type) {
+            "SHAPE" -> page.findShape(id)?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+            "IMAGE" -> page.findImage(id)?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+            "TEXT" -> page.findText(id)?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+            "CHART" -> page.findChart(id)?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) }
+            else -> null
         }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
     }
 
-    fun updateTextPosition(textId: String, newX: Float, newY: Float) {
+    private fun moveElementWithStrokes(id: String, type: String, newX: Float, newY: Float) {
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
-        val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(textBlocks = layer.textBlocks.map {
-                if (it.id == textId) it.copy(x = newX, y = newY) else it
-            })
-        }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
-    }
-
-    fun updateImagePosition(imageId: String, newX: Float, newY: Float) {
-        val page = currentPage ?: return
-        val migrated = ensureLayersExist(page)
-        val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(images = layer.images.map {
-                if (it.id == imageId) it.copy(x = newX, y = newY) else it
-            })
-        }
-        updateCurrentPage(migrated.copy(layers = updatedLayers))
-    }
-
-    fun updateChartPosition(chartId: String, newX: Float, newY: Float) {
-        val page = currentPage ?: return
-        val migrated = ensureLayersExist(page)
-        val original = migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == chartId }
-            ?: return
-        val originalBounds = Rect(original.x, original.y, original.x + original.width, original.y + original.height)
+        val originalBounds = getElementBounds(migrated, id, type) ?: return
         val attachedIds = migrated.getEffectiveLayers().flatMap { it.strokes }
             .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, originalBounds) } == true }
             .mapTo(mutableSetOf()) { it.id }
-        val dx = newX - original.x
-        val dy = newY - original.y
+        val dx = newX - originalBounds.left
+        val dy = newY - originalBounds.top
         val updatedLayers = migrated.layers.map { layer ->
-            layer.copy(
-                charts = layer.charts.map {
-                    if (it.id == chartId) it.copy(x = newX, y = newY) else it
-                },
-                strokes = layer.strokes.map { stroke ->
+            val updatedLayer = when (type) {
+                "SHAPE" -> layer.copy(shapes = layer.shapes.map { if (it.id == id) it.copy(x = newX, y = newY) else it })
+                "IMAGE" -> layer.copy(images = layer.images.map { if (it.id == id) it.copy(x = newX, y = newY) else it })
+                "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map { if (it.id == id) it.copy(x = newX, y = newY) else it })
+                "CHART" -> layer.copy(charts = layer.charts.map { if (it.id == id) it.copy(x = newX, y = newY) else it })
+                else -> layer
+            }
+            if (attachedIds.isEmpty()) updatedLayer else updatedLayer.copy(
+                strokes = updatedLayer.strokes.map { stroke ->
                     if (stroke.id in attachedIds) stroke.copy(points = stroke.points.map { point ->
                         point.copy(x = point.x + dx, y = point.y + dy)
                     }) else stroke
@@ -1218,6 +1244,22 @@ class CanvasEditorViewModel(
             )
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
+    }
+
+    fun updateShapePosition(shapeId: String, newX: Float, newY: Float) {
+        moveElementWithStrokes(shapeId, "SHAPE", newX, newY)
+    }
+
+    fun updateTextPosition(textId: String, newX: Float, newY: Float) {
+        moveElementWithStrokes(textId, "TEXT", newX, newY)
+    }
+
+    fun updateImagePosition(imageId: String, newX: Float, newY: Float) {
+        moveElementWithStrokes(imageId, "IMAGE", newX, newY)
+    }
+
+    fun updateChartPosition(chartId: String, newX: Float, newY: Float) {
+        moveElementWithStrokes(chartId, "CHART", newX, newY)
     }
 
     fun resizeAndMoveElement(
@@ -1232,59 +1274,79 @@ class CanvasEditorViewModel(
         val page = currentPage ?: return
         val migrated = ensureLayersExist(page)
         pushUndoState(migrated)
-        val originalChart = if (type == "CHART") {
-            migrated.getEffectiveLayers().flatMap { it.charts }.firstOrNull { it.id == id }
-        } else null
-        val attachedStrokeIds = originalChart?.let { chart ->
-            val bounds = Rect(chart.x, chart.y, chart.x + chart.width, chart.y + chart.height)
+        val originalBounds = getElementBounds(migrated, id, type)
+        val attachedStrokeIds = originalBounds?.let { bounds ->
             migrated.getEffectiveLayers().flatMap { it.strokes }
                 .filter { stroke -> strokeBounds(stroke)?.let { rectanglesOverlap(it, bounds) } == true }
                 .mapTo(mutableSetOf()) { it.id }
         }.orEmpty()
+
+        val clampedW = when (type) {
+            "SHAPE" -> newW.coerceAtLeast(30f)
+            "IMAGE" -> newW.coerceAtLeast(50f)
+            "TEXT" -> newW.coerceAtLeast(60f)
+            "CHART" -> newW.coerceAtLeast(100f)
+            else -> newW.coerceAtLeast(30f)
+        }
+        val clampedH = when (type) {
+            "SHAPE" -> newH.coerceAtLeast(30f)
+            "IMAGE" -> newH.coerceAtLeast(50f)
+            "TEXT" -> newH.coerceAtLeast(30f)
+            "CHART" -> newH.coerceAtLeast(100f)
+            else -> newH.coerceAtLeast(30f)
+        }
+
         val updatedLayers = migrated.layers.map { layer ->
-            when (type) {
+            val modifiedLayer = when (type) {
                 "SHAPE" -> layer.copy(shapes = layer.shapes.map {
-                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(30f), height = newH.coerceAtLeast(30f)) else it
+                    if (it.id == id) it.copy(x = newX, y = newY, width = clampedW, height = clampedH) else it
                 })
                 "IMAGE" -> layer.copy(images = layer.images.map {
-                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(50f), height = newH.coerceAtLeast(50f)) else it
+                    if (it.id == id) it.copy(x = newX, y = newY, width = clampedW, height = clampedH) else it
                 })
                 "TEXT" -> layer.copy(textBlocks = layer.textBlocks.map {
-                    if (it.id == id) it.copy(x = newX, y = newY, width = newW.coerceAtLeast(60f), height = newH.coerceAtLeast(30f)) else it
+                    if (it.id == id) it.copy(x = newX, y = newY, width = clampedW, height = clampedH) else it
                 })
-                "CHART" -> {
-                    val clampedW = newW.coerceAtLeast(100f)
-                    val clampedH = newH.coerceAtLeast(100f)
-                    layer.copy(
-                        charts = layer.charts.map { chart ->
-                            if (chart.id == id) {
-                                val xSpan = (chart.xMax - chart.xMin).takeIf { it > 0f } ?: 20f
-                                val ySpan = (chart.yMax - chart.yMin).takeIf { it > 0f } ?: 20f
-                                chart.copy(
-                                    x = newX, y = newY,
-                                    width = clampedW, height = clampedH,
-                                    pixelsPerUnitX = clampedW / xSpan,
-                                    pixelsPerUnitY = clampedH / ySpan
-                                )
-                            } else chart
-                        },
-                        strokes = layer.strokes.map { stroke ->
-                            if (stroke.id !in attachedStrokeIds || originalChart == null) {
-                                stroke
-                            } else {
-                                val oldWidth = originalChart.width.coerceAtLeast(1f)
-                                val oldHeight = originalChart.height.coerceAtLeast(1f)
-                                stroke.copy(points = stroke.points.map { point ->
-                                    point.copy(
-                                        x = newX + (point.x - originalChart.x) / oldWidth * clampedW,
-                                        y = newY + (point.y - originalChart.y) / oldHeight * clampedH
-                                    )
-                                })
-                            }
-                        }
-                    )
-                }
+                "CHART" -> layer.copy(charts = layer.charts.map { chart ->
+                    if (chart.id == id) {
+                        val scaleX = clampedW / chart.width.coerceAtLeast(1f)
+                        val scaleY = clampedH / chart.height.coerceAtLeast(1f)
+                        val newXMin = chart.xMin * scaleX
+                        val newXMax = chart.xMax * scaleX
+                        val newYMin = chart.yMin * scaleY
+                        val newYMax = chart.yMax * scaleY
+                        val xSpan = (newXMax - newXMin).takeIf { it > 0f } ?: 20f
+                        val ySpan = (newYMax - newYMin).takeIf { it > 0f } ?: 20f
+                        chart.copy(
+                            x = newX, y = newY,
+                            width = clampedW, height = clampedH,
+                            xMin = newXMin, xMax = newXMax,
+                            yMin = newYMin, yMax = newYMax,
+                            pixelsPerUnitX = clampedW / xSpan,
+                            pixelsPerUnitY = clampedH / ySpan
+                        )
+                    } else chart
+                })
                 else -> layer
+            }
+
+            if (attachedStrokeIds.isEmpty() || originalBounds == null) {
+                modifiedLayer
+            } else {
+                val oldW = originalBounds.width.coerceAtLeast(1f)
+                val oldH = originalBounds.height.coerceAtLeast(1f)
+                modifiedLayer.copy(
+                    strokes = modifiedLayer.strokes.map { stroke ->
+                        if (stroke.id in attachedStrokeIds) {
+                            stroke.copy(points = stroke.points.map { point ->
+                                point.copy(
+                                    x = newX + (point.x - originalBounds.left) / oldW * clampedW,
+                                    y = newY + (point.y - originalBounds.top) / oldH * clampedH
+                                )
+                            })
+                        } else stroke
+                    }
+                )
             }
         }
         updateCurrentPage(migrated.copy(layers = updatedLayers))
