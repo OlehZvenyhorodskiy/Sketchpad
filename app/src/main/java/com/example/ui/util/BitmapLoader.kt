@@ -26,19 +26,39 @@ class BitmapLoader(private val context: Context) {
 
         runCatching {
             val uri = Uri.parse(uriString)
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use { stream ->
-                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeStream(stream, null, options)
-
-                options.inSampleSize = calculateInSampleSize(options, maxDimension, maxDimension)
-                options.inJustDecodeBounds = false
-
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    BitmapFactory.decodeStream(inputStream, null, options)?.also { loadedBitmap ->
-                        memoryCache.put(uriString, loadedBitmap)
-                    }
-                }
             }
+
+            options.inSampleSize = calculateInSampleSize(options, maxDimension, maxDimension)
+            options.inJustDecodeBounds = false
+
+            val decodedBitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, options)
+            } ?: return@runCatching null
+
+            val rotationDegrees = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                runCatching {
+                    val exif = android.media.ExifInterface(inputStream)
+                    when (exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                        else -> 0f
+                    }
+                }.getOrDefault(0f)
+            } ?: 0f
+
+            val finalBitmap = if (rotationDegrees != 0f) {
+                val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees) }
+                Bitmap.createBitmap(decodedBitmap, 0, 0, decodedBitmap.width, decodedBitmap.height, matrix, true).also {
+                    if (it != decodedBitmap) decodedBitmap.recycle()
+                }
+            } else decodedBitmap
+
+            memoryCache.put(uriString, finalBitmap)
+            finalBitmap
         }.getOrNull()
     }
 

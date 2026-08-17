@@ -1,11 +1,11 @@
-package com.example.data.models
+package com.example.shared.model
 
-import androidx.compose.ui.graphics.Color
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import com.squareup.moshi.JsonClass
+import kotlinx.serialization.Serializable
 import java.util.UUID
+import kotlin.math.max
+import kotlin.math.min
 
+@Serializable
 enum class PageSizePreset {
     UNLIMITED,
     A4_VERTICAL,
@@ -16,6 +16,7 @@ enum class PageSizePreset {
     CUSTOM
 }
 
+@Serializable
 enum class BackgroundPattern {
     BLANK,
     NONE,
@@ -32,6 +33,7 @@ enum class BackgroundPattern {
     ISO_3D
 }
 
+@Serializable
 enum class ToolType {
     PEN,
     PENCIL,
@@ -52,16 +54,19 @@ enum class ToolType {
     PIXEL
 }
 
+@Serializable
 enum class EraserMode {
     OBJECT,
     PIXEL
 }
 
+@Serializable
 enum class SelectionMode {
     SINGLE,
     LASSO
 }
 
+@Serializable
 enum class ShapeType {
     CIRCLE,
     SQUARE,
@@ -75,39 +80,67 @@ enum class ShapeType {
     SPEECH_BUBBLE
 }
 
-@JsonClass(generateAdapter = true)
+@Serializable
+enum class BlendMode {
+    NORMAL,
+    MULTIPLY,
+    SCREEN,
+    OVERLAY
+}
+
+@Serializable
+enum class SymmetryMode {
+    NONE,
+    HORIZONTAL,
+    VERTICAL,
+    QUAD
+}
+
+@Serializable
 data class StrokePoint(
     val x: Float,
     val y: Float,
     val pressure: Float = 0.5f,
     val tilt: Float = 0f,
+    val azimuth: Float = 0f,
     val timestampMs: Long = System.currentTimeMillis()
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class HslaColor(
     val hue: Float,        // 0..360
     val saturation: Float, // 0..1
     val lightness: Float,  // 0..1
     val alpha: Float = 1.0f  // 0..1
 ) {
-    fun toColor(): Color {
-        return Color.hsl(
-            hue = hue.coerceIn(0f, 360f),
-            saturation = saturation.coerceIn(0f, 1f),
-            lightness = lightness.coerceIn(0f, 1f),
-            alpha = alpha.coerceIn(0f, 1f)
-        )
+    fun toArgbInt(): Int {
+        val h = hue.coerceIn(0f, 360f)
+        val s = saturation.coerceIn(0f, 1f)
+        val l = lightness.coerceIn(0f, 1f)
+        val a = alpha.coerceIn(0f, 1f)
+
+        val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
+        val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+        val m = l - c / 2f
+
+        val (rPrime, gPrime, bPrime) = when {
+            h < 60f -> Triple(c, x, 0f)
+            h < 120f -> Triple(x, c, 0f)
+            h < 180f -> Triple(0f, c, x)
+            h < 240f -> Triple(0f, x, c)
+            h < 300f -> Triple(x, 0f, c)
+            else -> Triple(c, 0f, x)
+        }
+
+        val r = ((rPrime + m) * 255f).toInt().coerceIn(0, 255)
+        val g = ((gPrime + m) * 255f).toInt().coerceIn(0, 255)
+        val b = ((bPrime + m) * 255f).toInt().coerceIn(0, 255)
+        val alphaInt = (a * 255f).toInt().coerceIn(0, 255)
+
+        return (alphaInt shl 24) or (r shl 16) or (g shl 8) or b
     }
 
-    fun toArgbInt(): Int {
-        val c = toColor()
-        val a = (c.alpha * 255).toInt() and 0xFF
-        val r = (c.red * 255).toInt() and 0xFF
-        val g = (c.green * 255).toInt() and 0xFF
-        val b = (c.blue * 255).toInt() and 0xFF
-        return (a shl 24) or (r shl 16) or (g shl 8) or b
-    }
+    fun toHex(): String = String.format("#%08X", toArgbInt())
 
     companion object {
         val BLACK = HslaColor(0f, 0f, 0f, 1f)
@@ -117,6 +150,8 @@ data class HslaColor(
         val GREEN = HslaColor(120f, 0.8f, 0.4f, 1f)
         val YELLOW = HslaColor(50f, 0.9f, 0.5f, 1f)
         val PURPLE = HslaColor(270f, 0.8f, 0.5f, 1f)
+        val CYAN = HslaColor(180f, 0.8f, 0.5f, 1f)
+        val ORANGE = HslaColor(30f, 0.9f, 0.5f, 1f)
 
         fun fromArgb(argb: Int): HslaColor {
             val a = ((argb shr 24) and 0xFF) / 255f
@@ -124,17 +159,17 @@ data class HslaColor(
             val g = ((argb shr 8) and 0xFF) / 255f
             val b = (argb and 0xFF) / 255f
 
-            val max = maxOf(r, g, b)
-            val min = minOf(r, g, b)
-            val delta = max - min
+            val maxVal = max(r, max(g, b))
+            val minVal = min(r, min(g, b))
+            val delta = maxVal - minVal
 
-            val l = (max + min) / 2f
+            val l = (maxVal + minVal) / 2f
             var h = 0f
             var s = 0f
 
             if (delta != 0f) {
-                s = if (l < 0.5f) delta / (max + min) else delta / (2f - max - min)
-                h = when (max) {
+                s = if (l < 0.5f) delta / (maxVal + minVal) else delta / (2f - maxVal - minVal)
+                h = when (maxVal) {
                     r -> ((g - b) / delta) + (if (g < b) 6 else 0)
                     g -> ((b - r) / delta) + 2
                     else -> ((r - g) / delta) + 4
@@ -146,20 +181,19 @@ data class HslaColor(
     }
 }
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class StrokeEntity(
     val id: String = UUID.randomUUID().toString(),
     val tool: ToolType,
     val colorHsla: HslaColor,
-    val baseWidth: Float, // 1..22
+    val baseWidth: Float,
     val points: List<StrokePoint>,
     val snappedToRuler: Boolean = false,
-    /** Natural stroke tips stay round; pixel-erased cut edges are rendered flat. */
     val startCapRound: Boolean = true,
     val endCapRound: Boolean = true
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class ShapeEntity(
     val id: String = UUID.randomUUID().toString(),
     val shapeType: ShapeType,
@@ -168,12 +202,12 @@ data class ShapeEntity(
     val width: Float,
     val height: Float,
     val rotation: Float = 0f,
-    val fillColor: Int = 0x336366F1, // semi-transparent
+    val fillColor: Int = 0x336366F1,
     val strokeColor: Int = 0xFF6366F1.toInt(),
     val strokeWidth: Float = 3f
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class TextBlockEntity(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
@@ -191,7 +225,7 @@ data class TextBlockEntity(
     val rotation: Float = 0f
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class ImageElementEntity(
     val id: String = UUID.randomUUID().toString(),
     val sourceUri: String,
@@ -203,14 +237,14 @@ data class ImageElementEntity(
     val opacity: Float = 1.0f
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class EraserMark(
     val id: String = UUID.randomUUID().toString(),
     val points: List<StrokePoint>,
     val width: Float
 )
 
-@JsonClass(generateAdapter = true)
+@Serializable
 data class ChartElementEntity(
     val id: String = UUID.randomUUID().toString(),
     val x: Float,
@@ -234,43 +268,28 @@ data class ChartElementEntity(
     val backgroundColor: Int = 0
 )
 
-@JsonClass(generateAdapter = true)
-data class SyncMarker(
-    val timestampInAudioMs: Long,
-    val timestampInWritingMs: Long,
-    val posX: Float = 0f,
-    val posY: Float = 0f
+@Serializable
+enum class CodeLanguage(val displayName: String) {
+    PYTHON("Python"),
+    C("C"),
+    CPP("C++")
+}
+
+@Serializable
+data class CodeBlockEntity(
+    val id: String = UUID.randomUUID().toString(),
+    val x: Float,
+    val y: Float,
+    val width: Float = 420f,
+    val height: Float = 260f,
+    val language: CodeLanguage = CodeLanguage.PYTHON,
+    val source: String = "print(\"Hello, Sketchpad!\")",
+    val consoleOutput: String = "",
+    val diagnostics: List<String> = emptyList(),
+    val lastExecutedAt: Long? = null
 )
 
-@Entity(tableName = "audio_recordings")
-@JsonClass(generateAdapter = true)
-data class AudioRecordingEntity(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val canvasId: String,
-    val filePath: String,
-    val name: String = "",
-    val durationMs: Long,
-    val recordedAt: Long = System.currentTimeMillis(),
-    val syncMarkers: List<SyncMarker> = emptyList()
-) {
-    fun formattedDuration(): String {
-        val totalSec = durationMs / 1000
-        return String.format(java.util.Locale.US, "%02d:%02d", totalSec / 60, totalSec % 60)
-    }
-
-    fun formattedDate(): String {
-        val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date(recordedAt))
-    }
-
-    fun displayName(): String = name.ifBlank { "Запис ${formattedDate()}" }
-}
-
-enum class BlendMode {
-    NORMAL, MULTIPLY, SCREEN, OVERLAY
-}
-
-@JsonClass(generateAdapter = true)
+@Serializable
 data class LayerEntity(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "Шар",
@@ -290,10 +309,9 @@ data class LayerEntity(
         get() = strokes.size + shapes.size + textBlocks.size + images.size + charts.size + codeBlocks.size + eraserMarks.size
 }
 
-@Entity(tableName = "pages")
-@JsonClass(generateAdapter = true)
+@Serializable
 data class PageEntity(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val canvasId: String,
     val pageIndex: Int,
     val strokes: List<StrokeEntity> = emptyList(),
@@ -308,12 +326,18 @@ data class PageEntity(
     val backgroundLineColor: Int = 0xFFE0E0E0.toInt()
 ) {
     fun getEffectiveLayers(): List<LayerEntity> {
-        if (layers.isEmpty()) {
-            return listOf(LayerEntity(
-                id = "default", name = "Шар 1",
-                strokes = strokes, shapes = shapes,
-                textBlocks = textBlocks, images = images, charts = charts
-            ))
+        if (layers.isEmpty() || (layers.size == 1 && layers[0].totalElements == 0 && (strokes.isNotEmpty() || shapes.isNotEmpty() || textBlocks.isNotEmpty()))) {
+            return listOf(
+                LayerEntity(
+                    id = layers.firstOrNull()?.id ?: "default",
+                    name = layers.firstOrNull()?.name ?: "Шар 1",
+                    strokes = if (layers.firstOrNull()?.strokes.isNullOrEmpty()) strokes else layers[0].strokes,
+                    shapes = if (layers.firstOrNull()?.shapes.isNullOrEmpty()) shapes else layers[0].shapes,
+                    textBlocks = if (layers.firstOrNull()?.textBlocks.isNullOrEmpty()) textBlocks else layers[0].textBlocks,
+                    images = if (layers.firstOrNull()?.images.isNullOrEmpty()) images else layers[0].images,
+                    charts = if (layers.firstOrNull()?.charts.isNullOrEmpty()) charts else layers[0].charts
+                )
+            )
         }
         return layers
     }
@@ -339,39 +363,11 @@ data class PageEntity(
             layer.copy(strokes = layer.strokes + stroke)
         }
     }
-
-    fun withAddedShape(shape: ShapeEntity): PageEntity {
-        val targetLayerId = activeLayerId ?: "default"
-        return withUpdatedLayer(targetLayerId) { layer ->
-            layer.copy(shapes = layer.shapes + shape)
-        }
-    }
-
-    fun withAddedImage(image: ImageElementEntity): PageEntity {
-        val targetLayerId = activeLayerId ?: "default"
-        return withUpdatedLayer(targetLayerId) { layer ->
-            layer.copy(images = layer.images + image)
-        }
-    }
-
-    fun withAddedChart(chart: ChartElementEntity): PageEntity {
-        val targetLayerId = activeLayerId ?: "default"
-        return withUpdatedLayer(targetLayerId) { layer ->
-            layer.copy(charts = layer.charts + chart)
-        }
-    }
-
-    fun withAddedCodeBlock(codeBlock: CodeBlockEntity): PageEntity {
-        val targetLayerId = activeLayerId ?: "default"
-        return withUpdatedLayer(targetLayerId) { layer ->
-            layer.copy(codeBlocks = layer.codeBlocks + codeBlock)
-        }
-    }
 }
 
-@Entity(tableName = "canvases")
+@Serializable
 data class CanvasEntity(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val title: String,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
@@ -379,7 +375,7 @@ data class CanvasEntity(
     val pageSizePreset: PageSizePreset = PageSizePreset.UNLIMITED,
     val customWidth: Float? = null,
     val customHeight: Float? = null,
-    val backgroundColor: Int = 0xFFFFFFFF.toInt(), // white default
+    val backgroundColor: Int = 0xFFFFFFFF.toInt(),
     val backgroundPattern: BackgroundPattern = BackgroundPattern.BLANK,
     val driveFileId: String? = null
 )

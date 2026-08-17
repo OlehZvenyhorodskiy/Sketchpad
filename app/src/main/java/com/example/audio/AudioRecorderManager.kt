@@ -86,12 +86,15 @@ class AudioRecorderManager(private val context: Context) {
                     smoothedAmp = smoothedAmp * 0.3f + targetAmp * 0.7f
                     amplitudeHistory.add(smoothedAmp)
                     if (amplitudeHistory.size > 28) amplitudeHistory.removeAt(0)
-                    _status.value = RecordingStatus.Recording(
+                    val newStatus = RecordingStatus.Recording(
                         durationMs = duration,
                         filePath = currentOutputFilePath ?: "",
                         amplitudes = amplitudeHistory.toList(),
                         currentAmplitude = smoothedAmp
                     )
+                    withContext(Dispatchers.Main) {
+                        _status.value = newStatus
+                    }
                 }
             }
             return outputFile.absolutePath
