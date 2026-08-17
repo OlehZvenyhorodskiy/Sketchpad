@@ -1,86 +1,92 @@
-# Sketchpad (MeCanvas) — Multiplatform Tablet & Desktop Studio
+# Sketchpad (MeCanvas)
 
-[![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-blue.svg?logo=kotlin)](https://kotlinlang.org/)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform%201.7.3-8A2BE2.svg?logo=jetpackcompose)](https://www.jetbrains.com/lp/compose-multiplatform/)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-green.svg)](https://github.com/OlehZvenyhorodskiy/Sketchpad)
-[![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg)]()
+A multiplatform drawing and note-taking application for Android tablets and Windows PC, built with Kotlin Multiplatform and Compose Multiplatform.
 
-**Sketchpad (MeCanvas)** is an academic sketchpad, mathematics whiteboard, and digital illustration studio engineered for tablet creators and desktop professionals. Built with **Kotlin Multiplatform (KMP)** and **Compose Multiplatform**, it delivers a seamless ecosystem across Android tablets and Windows PC workstations.
+It supports pressure-sensitive stylus drawing, layers with blend modes, vector/raster export, and real-time canvas mirroring between a tablet and PC over a local network.
 
----
+## Project Structure
 
-## 🚀 Key Features
+The project is organized into three Gradle modules:
 
-### 💻 Windows Native Desktop Version (`:desktopApp`)
-- **Skiko GPU-Accelerated Canvas**: Butter-smooth vector drawing with Catmull-Rom spline curves.
-- **10 Curated Themes**: Midnight Obsidian, AMOLED Neon, Solar Flare, Cyberpunk Terminal, Dracula Studio, Nordic Frost, Academic Paper, Rose Gold Velvet, Forest Emerald, Deep Abyss.
-- **Layers & Blend Modes**: Multi-layer stack with opacity, visibility locks, and Porter-Duff blend modes (`Multiply`, `Screen`, `Overlay`).
-- **Comprehensive Hotkeys**: Instant switching (`B`, `E`, `P`, `M`, `S`, `R`), brush size controls (`[` / `]`), undo/redo (`Ctrl+Z` / `Ctrl+Y`), fullscreen (`F11`), and space-drag panning.
-- **Multi-Format Export Engine**: Export to **SVG**, vector **PDF** (via OpenPDF), high-res **PNG/JPEG** (up to 4x scaling), Windows **.ico**, and portable **`.sketchpad`** ZIP project bundles.
-- **Stylus & Digitizer Support**: Full Windows Ink API integration supporting active pen pressure and tilt angles.
+- `:shared` - Common domain models, math (Catmull-Rom splines, RDP polyline simplification), undo/redo command stack, and the SketchLink protocol.
+- `:desktopApp` - Windows desktop application using Compose for Desktop (Skiko/Skia). Includes Windows Ink stylus support, hotkeys, and export tools.
+- `:app` - Android application optimized for tablets with S-Pen/stylus input and White Canvas mode.
 
-### 📱 Android Tablet Version (`:app`)
-- **White Canvas Mode**: One-tap distraction-free canvas hiding all buttons and system navigation for pure stylus sketching.
-- **SketchLink Streaming**: Casts in-flight stylus strokes in real time to the desktop workstation at 120Hz.
-- **AI Academic Assistant**: Powered by Firebase & Gemini vision for equation solving and diagram analysis.
-- **Low-Latency Pen Input**: Hardware-accelerated palm rejection and velocity-adaptive stroke dynamics.
+## Features
 
-### ⚡ SketchLink (Tablet ↔ PC Real-Time Mirroring)
-- **120 Hz Continuous Dispatch**: High-speed stroke streaming with sub-16ms latency.
-- **PIN-Secured Handshake**: Instant 4-digit code pairing over local Wi-Fi or USB tethering (`adb forward`).
-- **Offline Resilience**: Automatically buffers up to 30 seconds of strokes during network drops, ensuring zero lost strokes.
+### Desktop (Windows)
+- Skia-accelerated drawing canvas.
+- Multiple layers with visibility, opacity, and blend modes (Normal, Multiply, Screen, Overlay).
+- Export to SVG, PDF, PNG, JPEG, ICO, and `.sketchpad` project files.
+- Windows Ink API integration (pen pressure and tilt).
+- Keyboard shortcuts for tools, brush sizes, and actions.
+- 10 UI themes (Dark, Light, AMOLED, Midnight, Cyberpunk, Dracula, etc.).
 
----
+### Tablet (Android)
+- White Canvas mode: hides all UI chrome to use the entire screen as a digitizer surface.
+- S-Pen and active stylus pressure sensitivity.
+- Low-latency drawing loop with palm rejection.
 
-## 📦 Production Binaries
+### SketchLink (Tablet to PC Mirroring)
+- Streams stroke events over WebSocket (120 Hz) from the tablet to the PC.
+- 4-digit PIN pairing over local Wi-Fi or USB (`adb forward`).
+- Offline buffer (up to 30 seconds) in case of temporary connection drops.
 
-Ready-to-run release binaries are generated in the `releases/` directory:
+## Desktop Shortcuts
 
-| Binary | Platform | Size | Description |
-|---|---|---|---|
-| **`releases/Sketchpad-Android.apk`** | Android 8.0+ Tablet | ~19 MB | Production Android APK with White Canvas & SketchLink client |
-| **`releases/Sketchpad-Windows.exe`** | Windows 10/11 x64 | ~540 KB | Standalone executable launcher |
-| **`releases/Sketchpad-v2.0.0-windows-x64.zip`** | Windows 10/11 x64 | ~116 MB | Full portable standalone distribution with bundled OpenJDK 21 LTS |
+| Key | Action |
+| --- | --- |
+| `B` | Brush tool |
+| `E` | Eraser tool |
+| `P` | Pen tool |
+| `M` | Math / Graph tool |
+| `S` | Select tool |
+| `R` | Ruler guide |
+| `[` / `]` | Decrease / increase brush size |
+| `1` - `9` | Select color swatch |
+| `Ctrl + Z` / `Ctrl + Y` | Undo / Redo |
+| `Ctrl + S` | Export project |
+| `Space + Drag` | Pan canvas |
+| `F11` | Toggle fullscreen |
 
----
+## Building & Running
 
-## 🛠️ Build & Development Commands
+### Requirements
+- JDK 21
+- Android SDK (API 34/35)
 
-### Prerequisites
-- **JDK 21 LTS** (e.g. Eclipse Adoptium Temurin 21)
-- **Android SDK** (API 35)
-
-### Running Desktop App Locally
+### Desktop App
+Run locally:
 ```bash
 ./gradlew :desktopApp:run
 ```
 
-### Creating Desktop Standalone Distributable
+Create standalone Windows package:
 ```bash
 ./gradlew :desktopApp:createDistributable
 ```
+Output will be generated in `desktopApp/build/compose/binaries/main/app/`.
 
-### Building Android Release APK
+### Android App
+Build release APK:
 ```bash
 ./gradlew :app:assembleRelease
 ```
+Output will be generated in `app/build/outputs/apk/release/`.
 
-### Running Complete Test Suite
+### Running Tests
 ```bash
 ./gradlew test :app:testDebugUnitTest
 ```
 
----
+## Documentation
 
-## 📚 Technical Documentation
+- [Architecture](docs/ARCHITECTURE.md)
+- [SketchLink Protocol](docs/PROTOCOL.md)
+- [Developer API Reference](docs/API.md)
+- [System Requirements](SYSTEM_REQUIREMENTS.md)
+- [Changelog](CHANGELOG.md)
 
-- [Architecture & Design Guide](file:///c:/Projects/00util/docs/ARCHITECTURE.md)
-- [SketchLink Protocol Specification](file:///c:/Projects/00util/docs/PROTOCOL.md)
-- [Developer API Reference](file:///c:/Projects/00util/docs/API.md)
-- [System Requirements](file:///c:/Projects/00util/SYSTEM_REQUIREMENTS.md)
-- [Changelog](file:///c:/Projects/00util/CHANGELOG.md)
+## License
 
----
-
-## 📄 License
-Copyright © 2026 Oleh Zvenyhorodskiy. Released under the Apache 2.0 License.
+Apache License 2.0. See LICENSE for details.
