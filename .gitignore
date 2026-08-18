@@ -29,3 +29,7 @@ releases/
 *PROMPT*.md
 prompt_*.md
 
+bin/
+**/bin/
+
+

@@ -28,6 +28,8 @@ dependencies {
     implementation("org.apache.xmlgraphics:batik-transcoder:1.17")
     implementation("org.apache.xmlgraphics:batik-codec:1.17")
     implementation("com.github.librepdf:openpdf:2.0.3")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.json:json:20240303")
 
     testImplementation(libs.junit)
     testImplementation(compose.desktop.uiTestJUnit4)

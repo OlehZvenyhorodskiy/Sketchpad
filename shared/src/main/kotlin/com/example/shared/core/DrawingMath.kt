@@ -297,4 +297,19 @@ object DrawingMath {
         val distanceY = point.y - closestY
         return distanceX * distanceX + distanceY * distanceY
     }
+
+    fun strokeIntersectsCircle(stroke: StrokeEntity, centerX: Float, centerY: Float, radius: Float): Boolean {
+        if (stroke.points.isEmpty()) return false
+        val radiusSq = radius * radius
+        val testPoint = StrokePoint(centerX, centerY)
+        if (stroke.points.size == 1) {
+            return squaredDistance(testPoint, stroke.points.first()) <= radiusSq
+        }
+        for (index in 0 until stroke.points.lastIndex) {
+            if (squaredDistanceToSegment(testPoint, stroke.points[index], stroke.points[index + 1]) <= radiusSq) {
+                return true
+            }
+        }
+        return false
+    }
 }

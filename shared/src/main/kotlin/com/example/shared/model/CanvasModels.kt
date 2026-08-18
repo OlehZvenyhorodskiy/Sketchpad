@@ -159,8 +159,8 @@ data class HslaColor(
             val g = ((argb shr 8) and 0xFF) / 255f
             val b = (argb and 0xFF) / 255f
 
-            val maxVal = max(r, max(g, b))
-            val minVal = min(r, min(g, b))
+            val maxVal = maxOf(r, g, b)
+            val minVal = minOf(r, g, b)
             val delta = maxVal - minVal
 
             val l = (maxVal + minVal) / 2f
@@ -278,8 +278,8 @@ enum class CodeLanguage(val displayName: String) {
 @Serializable
 data class CodeBlockEntity(
     val id: String = UUID.randomUUID().toString(),
-    val x: Float,
-    val y: Float,
+    val x: Float = 100f,
+    val y: Float = 100f,
     val width: Float = 420f,
     val height: Float = 260f,
     val language: CodeLanguage = CodeLanguage.PYTHON,
@@ -287,6 +287,49 @@ data class CodeBlockEntity(
     val consoleOutput: String = "",
     val diagnostics: List<String> = emptyList(),
     val lastExecutedAt: Long? = null
+) {
+    val code: String get() = source
+    val output: String get() = consoleOutput
+}
+
+@Serializable
+data class SyncMarker(
+    val timestampInAudioMs: Long,
+    val timestampInWritingMs: Long,
+    val posX: Float = 0f,
+    val posY: Float = 0f
+)
+
+@Serializable
+data class AudioRecordingEntity(
+    val id: String = UUID.randomUUID().toString(),
+    val canvasId: String = "",
+    val filePath: String,
+    val name: String = "",
+    val durationMs: Long = 0L,
+    val recordedAt: Long = System.currentTimeMillis(),
+    val syncMarkers: List<SyncMarker> = emptyList()
+) {
+    fun formattedDuration(): String {
+        val totalSec = durationMs / 1000
+        return String.format("%02d:%02d", totalSec / 60, totalSec % 60)
+    }
+    fun displayName(): String = name.ifBlank { "Запис (${formattedDuration()})" }
+}
+
+@Serializable
+data class FlashcardEntity(
+    val id: String = UUID.randomUUID().toString(),
+    val deckId: String = "default",
+    val front: String,
+    val back: String,
+    val hint: String = "",
+    val easeFactor: Float = 2.5f,
+    val intervalDays: Int = 0,
+    val repetitions: Int = 0,
+    val lapses: Int = 0,
+    val dueAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Serializable
@@ -361,6 +404,27 @@ data class PageEntity(
         val targetLayerId = activeLayerId ?: "default"
         return withUpdatedLayer(targetLayerId) { layer ->
             layer.copy(strokes = layer.strokes + stroke)
+        }
+    }
+
+    fun withAddedShape(shape: ShapeEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(shapes = layer.shapes + shape)
+        }
+    }
+
+    fun withAddedChart(chart: ChartElementEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(charts = layer.charts + chart)
+        }
+    }
+
+    fun withAddedCodeBlock(codeBlock: CodeBlockEntity): PageEntity {
+        val targetLayerId = activeLayerId ?: "default"
+        return withUpdatedLayer(targetLayerId) { layer ->
+            layer.copy(codeBlocks = layer.codeBlocks + codeBlock)
         }
     }
 }
